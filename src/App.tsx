@@ -1,8 +1,6 @@
-export default function App() {
-  return (
-    <div className="text-white min-h-screen bg-black p-6">
-      import React, { useState, useMemo, useEffect } from 'react';
-import { 
+// @ts-nocheck
+import React, { useState, useMemo, useEffect } from 'react';
+import {
   Search, Bell, Calendar, ChevronDown, Eye, ArrowUpRight, ChevronRight,
   Home, FileText, PieChart, Wallet, PenLine, BarChart2, PieChart as PieChartIcon,
   ArrowRightLeft, AlertTriangle, ArrowDownRight, TrendingUp, X, ArrowUp, Info,
@@ -1252,7 +1250,4 @@ export default function App() {
       </div>
     </>
   );
-}
-    </div>
-  )
 }
