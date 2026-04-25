@@ -10,7 +10,6 @@ html, body, #root {
   min-height: -webkit-fill-available;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: none;
   background-color: #fdfdfd;
   -webkit-font-smoothing: antialiased;
 }
