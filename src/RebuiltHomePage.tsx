@@ -19,10 +19,34 @@ const LogoIcon = () => (
   </svg>
 );
 
-const AppleIcon = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-[14px] h-[14px] text-white"><path d="M12 2C12 2 12 3.5 13.5 4.5C15 5.5 16.5 5 16.5 5C16.5 5 15.5 8 12.5 8C9.5 8 8.5 6 8.5 6C8.5 6 6.5 6.5 5.5 9C4.5 11.5 5 16.5 7 19.5C9 22.5 11.5 22.5 12.5 21.5C13.5 20.5 14.5 20.5 16.5 21.5C18.5 22.5 20.5 19.5 21.5 16.5C21.5 16.5 19 16 18 13.5C17 11 18.5 9 18.5 9C18.5 9 16.5 7 13.5 7.5C12.5 7.5 12 2 12 2Z" /></svg>;
-const OkxIcon = () => <div className="grid grid-cols-2 gap-[1px]"><div className="w-[5px] h-[5px] bg-white rounded-[1px]"></div><div className="w-[5px] h-[5px] bg-white rounded-[1px]"></div><div className="w-[5px] h-[5px] bg-white rounded-[1px]"></div><div className="w-[5px] h-[5px] bg-white rounded-[1px]"></div></div>;
-const HuobiIcon = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-[12px] h-[12px] text-white"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" /></svg>;
-const AlipayIcon = () => <div className="text-white font-bold text-[12px] tracking-tighter leading-none">支</div>;
+const HOME_BRAND_LOGOS = {
+  apple:   { url: 'https://cdn.simpleicons.org/apple/ffffff',     bg: '#000000' },
+  openai:  { url: 'https://cdn.simpleicons.org/openai/ffffff',    bg: '#10a37f' },
+  alipay:  { url: 'https://cdn.simpleicons.org/alipay/ffffff',    bg: '#1677ff' },
+  okx:     { url: 'https://cdn.simpleicons.org/okx/ffffff',       bg: '#000000' },
+  bitget:  { url: 'https://logo.clearbit.com/bitget.com',         bg: '#00e5c0' },
+  huobi:   { url: 'https://logo.clearbit.com/htx.com',           bg: '#1853db' },
+  usdt:    { url: 'https://cdn.simpleicons.org/tether/ffffff',    bg: '#26A17B' },
+};
+
+const HomeBrandLogo = ({ type, size = 28 }) => {
+  const [error, setError] = useState(false);
+  const config = HOME_BRAND_LOGOS[type];
+  const imgSize = Math.round(size * 0.6);
+  if (!config) return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: size, height: size }}>
+      <ArrowRightLeft style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+    </div>
+  );
+  return (
+    <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
+      {error
+        ? <ShoppingBag style={{ width: imgSize, height: imgSize }} className="text-white" />
+        : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
+      }
+    </div>
+  );
+};
 const ProfileAvatarButton = () => (
   <button aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
     <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
@@ -50,7 +74,7 @@ const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time
   return (
     <div className="flex items-center justify-between py-[10px]">
       <div className="flex items-center space-x-[10px] flex-1 min-w-0">
-        <div className={`w-[28px] h-[28px] rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>{Icon}</div>
+        <div className="w-[28px] h-[28px] flex items-center justify-center shrink-0">{Icon}</div>
         <div className="flex flex-col justify-center min-w-0">
           <div className="text-[13px] font-medium text-[#1c1c1e] truncate mb-[1px]">{title}</div>
           <div className="flex items-center space-x-[6px]">
@@ -137,26 +161,17 @@ const formatMoney = (val) => {
 // 主应用页面 (App)
 // ==========================================
 const getHomeTransactionIcon = (tx) => {
-  switch (tx.iconType) {
-    case 'apple':
-      return <AppleIcon />;
-    case 'okx':
-      return <OkxIcon />;
-    case 'huobi':
-      return <HuobiIcon />;
-    case 'alipay':
-      return <AlipayIcon />;
-    case 'bitget':
-      return <div className="scale-75"><LogoIcon /></div>;
-    case 'openai':
-      return <Sparkles className="w-[14px] h-[14px] text-white" />;
-    case 'landmark':
-      return <ArrowRightLeft className="w-[14px] h-[14px] text-white" />;
-    case 'usdt':
-      return <Wallet className="w-[14px] h-[14px] text-white" />;
-    default:
-      return <ShoppingBag className="w-[14px] h-[14px] text-white" />;
-  }
+  if (tx.iconType === 'landmark') return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: 28, height: 28 }}>
+      <ArrowRightLeft className="w-[14px] h-[14px] text-white" strokeWidth={2.5} />
+    </div>
+  );
+  if (tx.iconType === 'cash') return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#e6f4ff] border-2 border-[#52c41a]" style={{ width: 28, height: 28 }}>
+      <Wallet className="w-[14px] h-[14px] text-[#52c41a]" />
+    </div>
+  );
+  return <HomeBrandLogo type={tx.iconType} size={28} />;
 };
 
 const formatTransactionDate = (date) => {

@@ -165,55 +165,74 @@ const LogoIcon = () => (
   </svg>
 );
 
-// Crypto & Tech Icons
-const AppleIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-white"><path d="M12 2C12 2 12 3.5 13.5 4.5C15 5.5 16.5 5 16.5 5C16.5 5 15.5 8 12.5 8C9.5 8 8.5 6 8.5 6C8.5 6 6.5 6.5 5.5 9C4.5 11.5 5 16.5 7 19.5C9 22.5 11.5 22.5 12.5 21.5C13.5 20.5 14.5 20.5 16.5 21.5C18.5 22.5 20.5 19.5 21.5 16.5C21.5 16.5 19 16 18 13.5C17 11 18.5 9 18.5 9C18.5 9 16.5 7 13.5 7.5C12.5 7.5 12 2 12 2Z" /></svg>);
-const OpenAiIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[16px] h-[16px] text-white"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2057 5.9847 5.9847 0 0 0 3.989-2.9 6.051 6.051 0 0 0-.7388-7.0732ZM13.2599 22.4278a4.4842 4.4842 0 0 1-2.9022-1.0664l.0567-.0333 4.8872-2.8223a.7925.7925 0 0 0 .3962-.684v-6.0416l2.1274 1.2284v5.334a4.526 4.526 0 0 1-4.5653 4.0852ZM5.2891 19.34a4.4842 4.4842 0 0 1-.6283-3.0315l.0614.0284 4.8919 2.8223a.7925.7925 0 0 0 .7925 0l5.2319-3.0208v2.4568L10.364 21.645A4.5308 4.5308 0 0 1 5.2891 19.34ZM2.8687 11.2359a4.4842 4.4842 0 0 1 2.274-2.1002v6.1031a.7925.7925 0 0 0 .3962.6888l5.2319 3.0208-2.1274 1.2284-5.2698-3.0397a4.5308 4.5308 0 0 1-.5049-5.8912h.0048ZM18.711 11.2359a4.4842 4.4842 0 0 1-2.274 2.1002V7.233a.7925.7925 0 0 0-.3962-.6888L10.8089 3.5234l2.1274-1.2284 5.2698 3.0397a4.5308 4.5308 0 0 1 .5049 5.8912h-.0048ZM10.7402 1.5722a4.4842 4.4842 0 0 1 2.9022 1.0664l-.0567.0333-4.8872 2.8223a.7925.7925 0 0 0-.3962.684v6.0416L6.1749 10.991V5.6571A4.526 4.526 0 0 1 10.7402 1.5722ZM18.711 4.66a4.4842 4.4842 0 0 1 .6283 3.0315l-.0614-.0284-4.8919-2.8223a.7925.7925 0 0 0-.7925 0l-5.2319 3.0208V5.4048l5.2746-3.054A4.5308 4.5308 0 0 1 18.711 4.66ZM14.9213 11.4582l-2.9211 1.6868-2.9211-1.6868v-3.3783l2.9211-1.6868 2.9211 1.6868v3.3783Z" /></svg>);
-const UsdtIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-white"><path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z" fill="#26A17B"/><path d="M13.435 10.822v2.855c1.64.088 2.923.447 3.527.915.688.535 1.066 1.258 1.066 2.04 0 .783-.378 1.505-1.066 2.04-.604.468-1.887.827-3.527.915v2.855h-2.87v-2.855c-1.64-.088-2.923-.447-3.527-.915-.688-.535-1.066-1.258-1.066-2.04 0-.783.378-1.505 1.066-2.04.604-.468 1.887-.827 3.527-.915v-2.855h2.87zm-1.435 4.39c2.518 0 4.56-1.12 4.56-2.5s-2.042-2.5-4.56-2.5-4.56 1.12-4.56 2.5 2.042 2.5 4.56 2.5z" fill="white"/></svg>);
-const TetherIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#26A17B" /><path d="M13.25 10.25V17.5h-2.5v-7.25H7v-2.5h10v2.5h-3.75z" fill="white" /></svg>);
-const BitcoinIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#F7931A" /><path d="M16.5 12.3c.4-.6.6-1.3.6-2.1 0-2.2-1.6-3.4-4.5-3.4H8v11h4.8c3.2 0 5-1.4 5-3.6 0-1.2-.5-2.2-1.3-2.9zM10.2 8.5h2.2c1.4 0 2.2.6 2.2 1.6 0 1.1-.8 1.7-2.3 1.7h-2.1V8.5zm2.5 7.6h-2.5v-3.5h2.6c1.6 0 2.5.7 2.5 1.8 0 1.2-.9 1.7-2.6 1.7z" fill="white" /></svg>);
-const EthereumIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#627EEA" /><path d="M11.8 4L7 11.9l4.8 2.8 4.8-2.8L11.8 4zm0 15.5l-4.8-6.7 4.8 2.8 4.8-2.8-4.8 6.7z" fill="white" opacity="0.8"/><path d="M11.8 14.7V4l-4.8 7.9 4.8 2.8z" fill="white" /></svg>);
-const OkxIcon = ({ size = 20, innerSize = 13 }) => (<div className={`bg-black rounded-full flex items-center justify-center shrink-0`} style={{width: size, height: size}}><svg viewBox="0 0 24 24" fill="currentColor" className="text-white" style={{width: innerSize, height: innerSize}}><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" /></svg></div>);
-const BitgetIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-[#00e5c0] shrink-0"><path d="M12 2L22 12L12 22L2 12L12 2Z" /><circle cx="12" cy="12" r="4" fill="black" /></svg>);
-const HuobiIcon = () => (<div className="w-[18px] h-[18px] bg-[#1853db] rounded-full flex items-center justify-center shrink-0"><svg viewBox="0 0 24 24" fill="currentColor" className="w-[12px] h-[12px] text-white"><path d="M12 2C12 2 8 8 8 12C8 16 11.5 19 12 19C12.5 19 16 16 16 12C16 8 12 2 12 2ZM12 16C11 16 10.5 15 10.5 14C10.5 13 12 10 12 10C12 10 13.5 13 13.5 14C13.5 15 13 16 12 16Z" /></svg></div>);
-const BinanceLogo = ({ size = 20 }) => (<div className={`bg-[#fcd535] rounded-[6px] flex items-center justify-center shrink-0`} style={{ width: size, height: size }}><svg viewBox="0 0 24 24" fill="#1e2329" style={{ width: size * 0.6, height: size * 0.6 }}><path d="M12 2l-5 5 2 2 3-3 3 3 2-2-5-5zm0 20l5-5-2-2-3 3-3-3-2 2 5 5zm-7-7l-3-3 3-3 2 2-3 3 3 3-2 2zm14 0l3-3-3-3-2 2 3 3-3 3 2 2zM12 9l-3 3 3 3 3-3-3-3z"/></svg></div>);
-const BybitIcon = ({ size = 20 }) => (<div className={`bg-[#121214] rounded-[6px] flex items-center justify-center shrink-0`} style={{ width: size, height: size }}><span className="text-white font-bold tracking-tighter uppercase" style={{ fontSize: size * 0.3 }}>BYBIT</span></div>);
-const GateIoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#0d6efd] shrink-0"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="45 15" strokeLinecap="round"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>);
-const KuCoinIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#24ae8f] shrink-0"><path d="M12 2L22 7V17L12 22L2 17V7L12 2Z" fill="currentColor" opacity="0.2"/><path d="M7 8V16L12 13L17 16V8L12 11L7 8Z" fill="currentColor"/></svg>);
-const MexcIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#2152f3] shrink-0"><path d="M3 18L12 6L21 18H16L12 11.5L8 18H3Z" fill="currentColor"/></svg>);
-const HexagonCryptoIcon = () => (<svg viewBox="0 0 24 24" fill="none" className="w-[18px] h-[18px] text-[#f59e0b]"><path d="M12 2L20.6603 7V17L12 22L3.33975 17V7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M12 7L16.3301 9.5V14.5L12 17L7.66987 14.5V9.5L12 7Z" fill="currentColor"/></svg>);
+// ==========================================
+// BRAND LOGO API CONFIGURATION
+// ==========================================
+const BRAND_LOGOS = {
+  apple:      { url: 'https://cdn.simpleicons.org/apple/ffffff',       bg: '#000000' },
+  openai:     { url: 'https://cdn.simpleicons.org/openai/ffffff',      bg: '#10a37f' },
+  alipay:     { url: 'https://cdn.simpleicons.org/alipay/ffffff',      bg: '#1677ff' },
+  wechat:     { url: 'https://cdn.simpleicons.org/wechat/ffffff',      bg: '#07c160' },
+  okx:        { url: 'https://cdn.simpleicons.org/okx/ffffff',         bg: '#000000' },
+  binance:    { url: 'https://cdn.simpleicons.org/binance/1e2329',     bg: '#fcd535' },
+  bitget:     { url: 'https://logo.clearbit.com/bitget.com',           bg: '#00e5c0' },
+  huobi:      { url: 'https://logo.clearbit.com/htx.com',             bg: '#1853db' },
+  gateio:     { url: 'https://logo.clearbit.com/gate.io',             bg: '#0d6efd' },
+  kucoin:     { url: 'https://logo.clearbit.com/kucoin.com',          bg: '#24ae8f' },
+  mexc:       { url: 'https://logo.clearbit.com/mexc.com',            bg: '#2152f3' },
+  bybit:      { url: 'https://logo.clearbit.com/bybit.com',           bg: '#121214' },
+  mashreq:    { url: 'https://logo.clearbit.com/mashreq.com',         bg: '#f37021' },
+  adcb:       { url: 'https://logo.clearbit.com/adcb.com',            bg: '#ffffff' },
+  ccb:        { url: 'https://logo.clearbit.com/ccb.com',             bg: '#003B90' },
+  usdt:       { url: 'https://cdn.simpleicons.org/tether/ffffff',      bg: '#26A17B' },
+  bitcoin:    { url: 'https://cdn.simpleicons.org/bitcoin/ffffff',     bg: '#F7931A' },
+  ethereum:   { url: 'https://cdn.simpleicons.org/ethereum/ffffff',    bg: '#627EEA' },
+  amazon:     { url: 'https://cdn.simpleicons.org/amazon/ff9900',      bg: '#232f3e' },
+  mastercard: { url: 'https://logo.clearbit.com/mastercard.com',      bg: '#ffffff' },
+  noon:       { url: 'https://logo.clearbit.com/noon.com',            bg: '#fee000' },
+};
 
-// Bank & Wallet & Payment Icons
-const AmazonIcon = () => (<div className="text-white font-bold text-[14px] leading-none" style={{ fontFamily: 'Georgia, serif' }}>a</div>);
-const MastercardIcon = () => (<div className="flex -space-x-[6px]"><div className="w-[11px] h-[11px] rounded-full bg-[#ff3b30] opacity-90 mix-blend-multiply"></div><div className="w-[11px] h-[11px] rounded-full bg-[#ffcc00] opacity-90 mix-blend-multiply"></div></div>);
-const MashreqLogoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><path d="M12 2C17.52 2 22 6.48 22 12c0 1.66-.41 3.22-1.14 4.6l-5.6-3.23c.47-.85.74-1.84.74-2.87 0-3.31-2.69-6-6-6-1.03 0-2.02.27-2.87.74L3.9 1.64C5.28.91 6.84.5 8.5.5h3.5z" fill="#f37021"/><path d="M2.5 8.5c-.91 1.38-1.5 2.94-1.5 4.6 0 5.52 4.48 10 10 10 1.66 0 3.22-.59 4.6-1.5l-3.23-5.6c-.85.47-1.84.74-2.87.74-3.31 0-6-2.69-6-6 0-1.03.27-2.02.74-2.87L1.01 8.5z" fill="#ffb612"/></svg>);
-const AdcbLogoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><path d="M12 2L2 20h20L12 2z" fill="#ed1c24" opacity="0.9"/><path d="M12 8l-5 9h10l-5-9z" fill="white"/><path d="M12 11l-2 4h4l-2-4z" fill="#1c1c1e"/></svg>);
-const CCBLogo = () => (<svg viewBox="0 0 24 24" className="w-[18px] h-[18px] shrink-0" fill="none"><circle cx="12" cy="12" r="11" fill="#003B90" /><circle cx="12" cy="12" r="8" fill="white" /><circle cx="12" cy="12" r="5" fill="#003B90" /><path d="M 12 7 L 17 12 L 12 17 L 7 12 Z" fill="white" /></svg>);
-const AlipayLogo = () => (<div className="w-[18px] h-[18px] bg-[#1677ff] rounded-full text-white font-bold text-[11px] flex items-center justify-center leading-none shrink-0" style={{ fontFamily: 'sans-serif' }}>支</div>);
-const WeChatLogo = () => (<div className="w-[20px] h-[20px] bg-[#07c160] rounded-full flex items-center justify-center relative shrink-0"><div className="w-[10px] h-[8px] bg-white rounded-full absolute top-[5px] left-[3px] shadow-sm"></div><div className="w-[7px] h-[5px] bg-white rounded-full absolute bottom-[4px] right-[3px] shadow-sm"></div></div>);
-const CashIcon = () => (<div className="w-[18px] h-[18px] bg-[#e6f4ff] border border-[#52c41a] rounded-[4px] flex items-center justify-center shrink-0"><div className="w-[9px] h-[5px] border border-[#52c41a] rounded-[2px] flex items-center justify-center"><div className="w-[3px] h-[1.5px] bg-[#52c41a] rounded-full"></div></div></div>);
+const BrandLogo = ({ type, size = 36 }) => {
+  const [error, setError] = useState(false);
+  const config = BRAND_LOGOS[type];
+  const imgSize = Math.round(size * 0.6);
+  const fallback = (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#8e8e93]" style={{ width: size, height: size }}>
+      <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+    </div>
+  );
+  if (!config) return fallback;
+  return (
+    <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
+      {error
+        ? <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+        : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
+      }
+    </div>
+  );
+};
+
+const CashIcon = ({ size = 36 }) => (
+  <div className="rounded-full flex items-center justify-center shrink-0 bg-[#e6f4ff] border-2 border-[#52c41a]" style={{ width: size, height: size }}>
+    <Banknote style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5) }} className="text-[#52c41a]" />
+  </div>
+);
+
 const CNYIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#E60012" /><text x="12" y="16.5" fontSize="13" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="sans-serif">¥</text></svg>);
+const TetherIcon = () => <BrandLogo type="usdt" size={20} />;
+const BitcoinIcon = () => <BrandLogo type="bitcoin" size={20} />;
+const EthereumIcon = () => <BrandLogo type="ethereum" size={20} />;
 
 // Helper for dynamic icon loading
 const getIconByString = (type, size = 'small') => {
-  switch(type) {
-    case 'apple': return <AppleIcon />;
-    case 'openai': return <OpenAiIcon />;
-    case 'usdt': return <UsdtIcon />;
-    case 'landmark': return <Landmark className={size === 'large' ? "w-[24px] h-[24px] text-white" : "w-[16px] h-[16px] text-white"} strokeWidth={2.5} />;
-    case 'alipay': return <AlipayLogo />;
-    case 'bitget': return size === 'large' ? <div className="transform scale-[2.4]"><BitgetIcon /></div> : <BitgetIcon />;
-    case 'noon': return <div className="w-[16px] h-[16px] bg-black text-[#fee000] rounded-[4px] flex items-center justify-center font-bold text-[11px]">n</div>;
-    case 'cash': return size === 'large' ? <div className="transform scale-[2.4]"><CashIcon /></div> : <CashIcon />;
-    case 'amazon': return <AmazonIcon />;
-    case 'mastercard': return <MastercardIcon />;
-    case 'mashreq': return <MashreqLogoIcon />;
-    case 'ccb': return <CCBLogo />;
-    case 'wechat': return <WeChatLogo />;
-    case 'okx': return size === 'large' ? <OkxIcon size={48} innerSize={30} /> : <OkxIcon size={20} innerSize={13} />;
-    case 'binance': return size === 'large' ? <BinanceLogo size={48} /> : <BinanceLogo size={20} />;
-    case 'huobi': return size === 'large' ? <div className="transform scale-[2.4]"><HuobiIcon /></div> : <HuobiIcon />;
-    default: return <Landmark className="w-[16px] h-[16px] text-gray-500" />;
-  }
+  const px = size === 'large' ? 48 : 36;
+  if (type === 'cash') return <CashIcon size={px} />;
+  if (type === 'landmark') return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: px, height: px }}>
+      <Landmark style={{ width: Math.round(px * 0.5), height: Math.round(px * 0.5) }} className="text-white" strokeWidth={2.5} />
+    </div>
+  );
+  return <BrandLogo type={type} size={px} />;
 };
 
 // UI Detail Icons
@@ -327,11 +346,14 @@ const STATS_DETAIL_MODAL_DATA = [
 ];
 
 const BILLS_FILTER_OPTIONS = [
-  { id: 'all', name: '全部支付方式', icon: <CheckCircleSolid /> }, { id: 'ADCB', name: 'ADCB', icon: <AdcbLogoIcon /> },
-  { id: 'Apple Pay', name: 'Apple Pay', icon: <div className="w-[20px] h-[20px] bg-black rounded-full flex items-center justify-center"><AppleIcon /></div> },
-  { id: 'Mashreq Bank', name: 'Mashreq Bank', icon: <MashreqLogoIcon /> }, { id: '支付宝', name: '支付宝', icon: <AlipayLogo /> },
-  { id: 'OKX', name: 'OKX', icon: <OkxIcon size={20} innerSize={13} /> }, { id: 'Bitget', name: 'Bitget', icon: <div className="w-[20px] h-[20px] bg-black rounded-full flex items-center justify-center"><BitgetIcon /></div> },
-  { id: '现金', name: '现金', icon: <CashIcon /> },
+  { id: 'all', name: '全部支付方式', icon: <CheckCircleSolid /> },
+  { id: 'ADCB', name: 'ADCB', icon: <BrandLogo type="adcb" size={20} /> },
+  { id: 'Apple Pay', name: 'Apple Pay', icon: <BrandLogo type="apple" size={20} /> },
+  { id: 'Mashreq Bank', name: 'Mashreq Bank', icon: <BrandLogo type="mashreq" size={20} /> },
+  { id: '支付宝', name: '支付宝', icon: <BrandLogo type="alipay" size={20} /> },
+  { id: 'OKX', name: 'OKX', icon: <BrandLogo type="okx" size={20} /> },
+  { id: 'Bitget', name: 'Bitget', icon: <BrandLogo type="bitget" size={20} /> },
+  { id: '现金', name: '现金', icon: <CashIcon size={20} /> },
 ];
 
 const BILLS_CALENDAR_DAYS = [
@@ -593,7 +615,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
           <div className="flex flex-col">
             {transactions.slice(0, 4).map((tx, idx) => (
               <button key={tx.id || idx} onClick={() => openBills(`已打开 ${tx.title}`)} className="w-full flex items-center px-[20px] py-[14px] border-b border-[#f4f5f8] active:bg-[#f9f9f9] transition-colors text-left">
-                <div className={`w-[38px] h-[38px] rounded-full flex items-center justify-center shrink-0 ${tx.iconBg}`}>{getIconByString(tx.iconType)}</div>
+                <div className="w-[38px] h-[38px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType)}</div>
                 <div className="flex-1 ml-[12px] flex justify-between items-center">
                    <div className="flex flex-col justify-center space-y-[2px]"><span className="text-[14px] font-bold text-[#1c1c1e]">{tx.title}</span><div className="flex items-center space-x-[6px]"><span className={`text-[10px] px-[4px] py-[1px] rounded-[4px] ${tx.isIncome ? 'bg-[#ecfdf5] text-[#10b981]' : 'bg-[#e6f4ff] text-[#1677ff]'}`}>{tx.isIncome ? '收入' : '支出'}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.tag}</span></div></div>
                    <div className="flex flex-col items-end justify-center space-y-[2px]"><span className={`text-[15px] font-bold ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.time}</span></div>
@@ -1056,7 +1078,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
                 {group.transactions.map((tx, tIdx) => (
                   <button key={tx.id} onClick={() => handleOpenModal(tx)} className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${tIdx !== group.transactions.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
-                    <div className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 ${tx.iconBg}`}>{getIconByString(tx.iconType)}</div>
+                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType)}</div>
                     <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
                     <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
                     <div className="flex items-center justify-end space-x-[4px] min-w-0">
@@ -1078,7 +1100,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
                 <div className="absolute top-[10px] left-1/2 transform -translate-x-1/2 w-[36px] h-[4px] bg-[#e5e5ea] rounded-full"></div>
                 <h3 className="text-[16px] font-bold text-[#1c1c1e] mt-[4px]">账单详情</h3>
                 <button onClick={() => setSelectedTx(null)} className="absolute top-[18px] right-[16px] active:scale-90 transition-transform"><X className="w-[22px] h-[22px] text-[#3a3a3c]" strokeWidth={2} /></button>
-                <div className="flex items-center mt-[24px] mb-[20px]"><div className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${selectedTx.iconBg}`}>{getIconByString(selectedTx.iconType, 'large')}</div><div className="flex-1 ml-[12px] text-[15px] font-semibold text-[#1c1c1e] truncate">{selectedTx.title}</div><div className={`text-[16px] font-bold shrink-0 ml-[8px] ${selectedTx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{selectedTx.amount} <span className="text-[12px] font-medium">{selectedTx.currency}</span></div></div>
+                <div className="flex items-center mt-[24px] mb-[20px]"><div className="w-[48px] h-[48px] flex items-center justify-center shrink-0 overflow-hidden rounded-full">{getIconByString(selectedTx.iconType, 'large')}</div><div className="flex-1 ml-[12px] text-[15px] font-semibold text-[#1c1c1e] truncate">{selectedTx.title}</div><div className={`text-[16px] font-bold shrink-0 ml-[8px] ${selectedTx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{selectedTx.amount} <span className="text-[12px] font-medium">{selectedTx.currency}</span></div></div>
                 <div className="flex flex-col">
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><CreditCard className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">账户</span></div><span className="text-[13px] font-medium text-[#1c1c1e]">{selectedTx.subtitle}</span></div>
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><TagIcon className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">分类</span></div><Tag type={selectedTx.tagType} text={selectedTx.tag} /></div>
@@ -1270,28 +1292,28 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
           <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => notify('已查看全部资产变动')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
           <div className="flex flex-col">
             <button onClick={() => notify('已打开 Mashreq Bank 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><MashreqLogoIcon /></div>
+              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="mashreq" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">Mashreq Bank</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+5,000.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">AED</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 09:23</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">存款</div>
               </div>
             </button>
             <button onClick={() => notify('已打开微信到支付宝变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><WeChatLogo /></div>
+              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="wechat" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">微信 → 支付宝</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#ff3b30] text-right tracking-tight">-200.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">CNY</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 08:45</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">转入支付宝</div>
               </div>
             </button>
             <button onClick={() => notify('已打开 OKX 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><OkxIcon size={20} innerSize={13} /></div>
+              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="okx" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">OKX</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+28.74</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 22:16</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">现货交易收益</div>
               </div>
             </button>
             <button onClick={() => notify('已打开币安变动')} className="w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><BinanceLogo size={20} /></div>
+              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="binance" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">币安</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+500.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 20:35</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">充值</div>
@@ -1310,7 +1332,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
               <h3 className="text-[14px] font-bold text-[#5c5c5e] mb-[12px]">选择账户类型</h3>
               <div className="grid grid-cols-2 gap-[10px]">
                 <button onClick={() => handleOpenCustomAccount('银行账户', <Landmark className="w-[24px] h-[24px] text-[#1677ff]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Landmark className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">银行账户</span></button>
-                <button onClick={() => handleOpenAddExchange()} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><HexagonCryptoIcon /><span className="text-[13px] font-medium text-[#1c1c1e]">交易所账户</span></button>
+                <button onClick={() => handleOpenAddExchange()} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><BrandLogo type="okx" size={16} /><span className="text-[13px] font-medium text-[#1c1c1e]">交易所账户</span></button>
                 <button onClick={() => handleOpenCustomAccount('电子钱包', <Wallet className="w-[24px] h-[24px] text-[#10b981]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Wallet className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">电子钱包</span></button>
                 <button onClick={() => handleOpenCustomAccount('现金账户', <Banknote className="w-[24px] h-[24px] text-[#22c55e]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Banknote className="w-[16px] h-[16px] text-[#22c55e]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">现金账户</span></button>
                 <button onClick={() => handleOpenCustomAccount('信用卡', <CreditCard className="w-[24px] h-[24px] text-[#8b5cf6]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><CreditCard className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">信用卡</span></button>
@@ -1320,11 +1342,11 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
             <div className="mb-[20px]">
               <h3 className="text-[14px] font-bold text-[#5c5c5e] mb-[8px]">快速添加</h3>
               <div className="flex flex-col">
-                <QuickAddRow icon={<OkxIcon size={24} innerSize={16}/>} name="OKX" type="交易所账户" onClick={() => handleOpenAddExchange('OKX')} />
-                <QuickAddRow icon={<BinanceLogo size={24}/>} name="币安 Binance" type="交易所账户" onClick={() => handleOpenAddExchange('Binance')} />
-                <QuickAddRow icon={<BybitIcon size={24}/>} name="Bybit" type="交易所账户" onClick={() => handleOpenAddExchange('Bybit')} />
-                <QuickAddRow icon={<div className="w-[24px] h-[24px] bg-[#1677ff] flex items-center justify-center"><span className="text-white text-[14px] font-bold leading-none">支</span></div>} name="支付宝" type="电子钱包" onClick={() => handleOpenCustomAccount('支付宝', <AlipayLogo />, 'CNY')} />
-                <QuickAddRow icon={<div className="w-[24px] h-[24px] bg-[#07c160] flex items-center justify-center relative"><div className="w-[12px] h-[9px] bg-white rounded-full absolute top-[6px] left-[4px]"></div><div className="w-[8.5px] h-[6.5px] bg-white rounded-full absolute bottom-[4.5px] right-[3px]"></div></div>} name="微信钱包" type="电子钱包" onClick={() => handleOpenCustomAccount('微信钱包', <WeChatLogo />, 'CNY')} />
+                <QuickAddRow icon={<BrandLogo type="okx" size={24} />} name="OKX" type="交易所账户" onClick={() => handleOpenAddExchange('OKX')} />
+                <QuickAddRow icon={<BrandLogo type="binance" size={24} />} name="币安 Binance" type="交易所账户" onClick={() => handleOpenAddExchange('Binance')} />
+                <QuickAddRow icon={<BrandLogo type="bybit" size={24} />} name="Bybit" type="交易所账户" onClick={() => handleOpenAddExchange('Bybit')} />
+                <QuickAddRow icon={<BrandLogo type="alipay" size={24} />} name="支付宝" type="电子钱包" onClick={() => handleOpenCustomAccount('支付宝', <BrandLogo type="alipay" size={24} />, 'CNY')} />
+                <QuickAddRow icon={<BrandLogo type="wechat" size={24} />} name="微信钱包" type="电子钱包" onClick={() => handleOpenCustomAccount('微信钱包', <BrandLogo type="wechat" size={24} />, 'CNY')} />
               </div>
             </div>
             <button onClick={() => handleOpenCustomAccount('自定义账户', <MoreHorizontal className="w-[24px] h-[24px] text-[#8e8e93]" strokeWidth={2.5} />)} className="w-full py-[14px] bg-[#f0f6ff] rounded-[14px] text-[15px] font-bold text-[#1677ff] active:bg-[#e6f0ff] transition-colors mt-[4px]">自定义账户</button>
@@ -1341,7 +1363,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择交易所</h3>
                 <div className="grid grid-cols-3 gap-[8px]">
-                   {[{ id: 'OKX', icon: <OkxIcon size={20} innerSize={13}/>, name: 'OKX' },{ id: 'Binance', icon: <BinanceLogo size={20}/>, name: '币安 Binance' },{ id: 'Bybit', icon: <BybitIcon size={20}/>, name: 'Bybit' },{ id: 'Bitget', icon: <BitgetIcon />, name: 'Bitget' },{ id: 'Gateio', icon: <GateIoIcon />, name: 'Gate.io' },{ id: 'KuCoin', icon: <KuCoinIcon />, name: 'KuCoin' },{ id: 'MEXC', icon: <MexcIcon />, name: 'MEXC' },{ id: 'HTX', icon: <HuobiIcon />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
+                   {[{ id: 'OKX', icon: <BrandLogo type="okx" size={20} />, name: 'OKX' },{ id: 'Binance', icon: <BrandLogo type="binance" size={20} />, name: '币安 Binance' },{ id: 'Bybit', icon: <BrandLogo type="bybit" size={20} />, name: 'Bybit' },{ id: 'Bitget', icon: <BrandLogo type="bitget" size={20} />, name: 'Bitget' },{ id: 'Gateio', icon: <BrandLogo type="gateio" size={20} />, name: 'Gate.io' },{ id: 'KuCoin', icon: <BrandLogo type="kucoin" size={20} />, name: 'KuCoin' },{ id: 'MEXC', icon: <BrandLogo type="mexc" size={20} />, name: 'MEXC' },{ id: 'HTX', icon: <BrandLogo type="huobi" size={20} />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
                      const isSelected = exchangeSelected === ex.id;
                      return (<button key={ex.id} onClick={() => { setExchangeSelected(ex.id); notify(`已选择 ${ex.name}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
                    })}
