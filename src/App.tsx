@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import RebuiltHomePage from './RebuiltHomePage';
 import {
   Search, Bell, Calendar, ChevronDown, Eye, ArrowUpRight, ChevronRight,
   Home, FileText, PieChart, Wallet, PenLine, BarChart2, PieChart as PieChartIcon,
@@ -11,10 +12,13 @@ import {
 // ==========================================
 // 0. SUPABASE REST API CONFIGURATION
 // ==========================================
-const SUPABASE_URL = "https://jnspnymlvcxalsnzdulb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impuc3BueW1sdmN4YWxzbnpkdWxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDI4NDcsImV4cCI6MjA5MjQ3ODg0N30.jDvIeI5tBBbuysDkuFOQgM3eOXAQ8mgeL82C1NxVViA";
+const SUPABASE_URL = import.meta.env.NEXT_PUBLIC_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const fetchSupabase = async (endpoint, method = "GET", body = null) => {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Missing Supabase environment variables");
+  }
   const options = {
     method,
     headers: {
@@ -55,6 +59,32 @@ const SEED_TRANSACTIONS = [
   { dateLabel: '4月21日 星期一', iconBg: 'bg-white border border-gray-200', iconType: 'mastercard', title: 'Careem', subtitle: 'Mashreq **** 5678', tag: '交通', tagType: 'transport', amount: '-35.00', isIncome: false, time: '18:08', fullDate: '2026年4月21日 18:08', currency: 'AED', paymentMethod: 'Mashreq Bank', note: '' },
   { dateLabel: '4月21日 星期一', iconBg: 'bg-[#26A17B]', iconType: 'usdt', title: 'OKX 理财收益', subtitle: 'OKX 资金账户', tag: '理财', tagType: 'investment', amount: '+2,300.00', isIncome: true, time: '10:30', fullDate: '2026年4月21日 10:30', currency: 'USDT', paymentMethod: 'OKX', note: '' }
 ];
+
+const parseTransactionDate = (fullDate) => {
+  const match = String(fullDate || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+};
+
+const isSameDay = (a, b) => (
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate()
+);
+
+const getWeekRange = (referenceDate) => {
+  const start = new Date(referenceDate);
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
 
 function useSupabaseData() {
   const [accounts, setAccounts] = useState([]);
@@ -101,7 +131,26 @@ function useSupabaseData() {
     }
   };
 
-  return { accounts, transactions, loading, updateTransaction };
+  const createTransaction = async (payload) => {
+    const [created] = await fetchSupabase("transactions", "POST", payload);
+    setTransactions(prev => [created, ...prev]);
+    return created;
+  };
+
+  const createAccount = async (payload) => {
+    const [created] = await fetchSupabase("accounts", "POST", payload);
+    setAccounts(prev => [created, ...prev]);
+    return created;
+  };
+
+  const updateAccount = async (id, updates) => {
+    setAccounts(prev => prev.map(account => account.id === id ? { ...account, ...updates } : account));
+    if (id && String(id).length > 10) {
+      await fetchSupabase(`accounts?id=eq.${id}`, "PATCH", updates);
+    }
+  };
+
+  return { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount };
 }
 
 // ==========================================
@@ -564,10 +613,14 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
   const [detailTab, setDetailTab] = useState('本月');
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isTrendRangeOpen, setIsTrendRangeOpen] = useState(false);
+  const [trendRange, setTrendRange] = useState({ start: 1, end: 4 });
   const switchStatsTab = (tab) => {
     setActiveTab(tab);
     notify(`统计已切换为${tab}视图`);
   };
+  const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
+  const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
 
   return (
     <div className="bg-[#f7f8fa] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -618,7 +671,55 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       <div className="mx-[16px] mt-[16px] bg-white rounded-[20px] p-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
         <div className="flex items-center justify-between mb-[20px]">
           <h2 className="text-[16px] font-bold text-[#1c1c1e]">收支趋势</h2>
-          <div className="flex items-center text-[12px] text-[#8e8e93] bg-[#f7f8fa] px-[8px] py-[4px] rounded-[6px]">本年 <ChevronDown className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></div>
+          <div className="relative">
+            <button onClick={() => setIsTrendRangeOpen((prev) => !prev)} className="flex items-center text-[12px] text-[#8e8e93] bg-[#f7f8fa] px-[8px] py-[4px] rounded-[6px] active:scale-95 transition-transform">
+              {trendRangeLabel} <ChevronDown className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} />
+            </button>
+            {isTrendRangeOpen && (
+              <>
+                <div className="fixed inset-0 z-[40]" onClick={() => setIsTrendRangeOpen(false)}></div>
+                <div className="absolute right-0 top-[34px] z-[50] w-[220px] rounded-[16px] bg-white p-[14px] shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+                  <div className="mb-[10px] text-[12px] font-semibold text-[#1c1c1e]">选择月份区间</div>
+                  <div className="mb-[10px]">
+                    <div className="mb-[6px] text-[11px] text-[#8e8e93]">开始月份</div>
+                    <div className="grid grid-cols-4 gap-[6px]">
+                      {monthRangeOptions.map((month) => (
+                        <button
+                          key={`start-${month}`}
+                          onClick={() => setTrendRange((prev) => ({ start: month, end: Math.max(month, prev.end) }))}
+                          className={`h-[32px] rounded-[8px] text-[12px] transition-all ${trendRange.start === month ? 'bg-[#1677ff] text-white font-semibold' : 'bg-[#f7f8fa] text-[#5c5c5e] font-medium'}`}
+                        >
+                          {month}月
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-[6px] text-[11px] text-[#8e8e93]">结束月份</div>
+                    <div className="grid grid-cols-4 gap-[6px]">
+                      {monthRangeOptions.map((month) => {
+                        const disabled = month < trendRange.start;
+                        return (
+                          <button
+                            key={`end-${month}`}
+                            disabled={disabled}
+                            onClick={() => setTrendRange((prev) => ({ ...prev, end: month }))}
+                            className={`h-[32px] rounded-[8px] text-[12px] transition-all ${trendRange.end === month ? 'bg-[#1677ff] text-white font-semibold' : disabled ? 'bg-[#f7f8fa] text-[#d1d5db]' : 'bg-[#f7f8fa] text-[#5c5c5e] font-medium'}`}
+                          >
+                            {month}月
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-[12px] flex justify-between">
+                    <button onClick={() => setTrendRange({ start: 1, end: 12 })} className="text-[12px] font-medium text-[#1677ff]">全年</button>
+                    <button onClick={() => { setIsTrendRangeOpen(false); notify(`趋势范围已切换为${trendRangeLabel}`); }} className="rounded-[8px] bg-[#1677ff] px-[14px] py-[6px] text-[12px] font-semibold text-white">确定</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-[16px] mb-[20px]">
           <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#65d4a9] mr-[6px]"></div>收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(CNY)</span></div>
@@ -703,8 +804,8 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       {isInsightModalOpen && (
         <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] flex flex-col h-auto">
-            <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[12px] mb-[16px]"></div>
+          <div className="relative w-full max-w-[430px] max-h-[78vh] overflow-hidden bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col">
+            <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
             <div className="px-[20px] flex justify-between items-start">
                <div>
                   <h2 className="text-[18px] font-bold text-[#1c1c1e]">本月支出较上月增加 <span className="text-[#ff4d4f]">13.2%</span></h2>
@@ -712,7 +813,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
                </div>
                <button onClick={() => setIsInsightModalOpen(false)} className="p-[4px] active:bg-gray-100 rounded-full transition-colors mt-[-4px] mr-[-4px]"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
             </div>
-            <div className="flex items-center justify-between px-[20px] mt-[24px] mb-[20px]">
+            <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px]">
                <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px]">
                   {['支出分析', '收入分析', '对比分析', '建议'].map((tab) => (
                     <button key={tab} onClick={() => { setInsightTab(tab); notify(`已切换到${tab}`); }} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
@@ -720,18 +821,18 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
                </div>
                <button onClick={() => notify('已选择 2026年4月')} className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
-            <div className="flex justify-between items-center px-[20px] mb-[16px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
-            <div className="flex flex-col space-y-[20px]">
+            <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
+            <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
                {STATS_INSIGHT_MODAL_DATA.map((item) => (
                   <div key={item.rank} className="flex items-center px-[20px] w-full">
                      <div className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${item.badgeBg} ${item.badgeText}`}>{item.rank}</div>
-                     <div className="w-[26px] h-[26px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0 ml-[10px]">{React.cloneElement(item.icon, { className: "w-[13px] h-[13px] text-[#3a3a3c]" })}</div>
-                     <div className="flex-1 flex flex-col justify-center ml-[12px] mr-[16px]"><span className="text-[14px] text-[#3a3a3c] font-medium leading-none">{item.name}</span><div className="h-[4px] bg-[#ff4d4f] rounded-full mt-[6px]" style={{ width: item.width }}></div></div>
+                     <div className="w-[24px] h-[24px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0 ml-[10px]">{React.cloneElement(item.icon, { className: "w-[12px] h-[12px] text-[#3a3a3c]" })}</div>
+                     <div className="flex-1 flex flex-col justify-center ml-[10px] mr-[14px]"><span className="text-[14px] text-[#3a3a3c] font-medium leading-none">{item.name}</span><div className="h-[4px] bg-[#ff4d4f] rounded-full mt-[6px]" style={{ width: item.width }}></div></div>
                      <div className="flex items-center shrink-0"><span className="text-[14px] font-bold text-[#1c1c1e] tabular-nums">{item.amount}</span><span className="text-[13px] font-medium text-[#ff4d4f] tabular-nums ml-[12px] w-[58px] text-right flex items-center justify-end">{item.percent} <ArrowUp className="w-[12px] h-[12px] ml-[2px]" strokeWidth={3} /></span></div>
                   </div>
                ))}
             </div>
-            <div className="px-[20px] mt-[32px]"><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类详情'); }} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
+            <div className="px-[20px] mt-[18px]"><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类详情'); }} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
           </div>
         </div>
       )}
@@ -785,7 +886,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [selectedType, setSelectedType] = useState('全部');
-  const [selectedRange, setSelectedRange] = useState('日');
+  const [selectedRange, setSelectedRange] = useState('月');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(23);
@@ -810,7 +911,10 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
 
   const filteredData = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
+    const baseDate = new Date(2026, selectedMonth - 1, selectedDate);
+    const { start: weekStart, end: weekEnd } = getWeekRange(baseDate);
     const validTxs = transactions.filter(tx => {
+      const txDate = parseTransactionDate(tx.fullDate);
       const paymentMatched = selectedFilter === 'all' || tx.paymentMethod === selectedFilter;
       const typeMatched =
         selectedType === '全部' ||
@@ -818,10 +922,17 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
         (selectedType === '收入' && tx.isIncome) ||
         (selectedType === '理财' && (tx.tagType === 'investment' || tx.tag === '理财')) ||
         (selectedType === '转账' && (tx.tagType === 'transfer' || tx.tag === '转账'));
+      const rangeMatched = !txDate || (
+        selectedRange === '月'
+          ? txDate.getFullYear() === baseDate.getFullYear() && txDate.getMonth() === baseDate.getMonth()
+          : selectedRange === '周'
+            ? txDate >= weekStart && txDate <= weekEnd
+            : isSameDay(txDate, baseDate)
+      );
       const queryMatched = !keyword || [tx.title, tx.subtitle, tx.tag, tx.paymentMethod, tx.note]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
-      return paymentMatched && typeMatched && queryMatched;
+      return paymentMatched && typeMatched && rangeMatched && queryMatched;
     });
     const groupsMap = {};
     validTxs.forEach(tx => {
@@ -837,7 +948,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
         totalIncome: income.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})
       };
     });
-  }, [transactions, selectedFilter, selectedType, searchQuery]);
+  }, [transactions, selectedFilter, selectedType, selectedRange, searchQuery, selectedMonth, selectedDate]);
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -991,7 +1102,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, updateAccount }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
@@ -1004,21 +1115,64 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
   const [exchangeSelected, setExchangeSelected] = useState('OKX');
   const [apiConnected, setApiConnected] = useState(false);
   const [aprConfigEnabled, setAprConfigEnabled] = useState(true);
+  const [aprValues, setAprValues] = useState({ limit: '0', baseRate: '0', overflowRate: '0' });
+  const [exchangeAccountName, setExchangeAccountName] = useState('');
 
   const currenciesList = [
     { id: 'USDT', icon: <TetherIcon />, label: 'USDT' }, { id: 'BTC', icon: <BitcoinIcon />, label: 'BTC' },
     { id: 'ETH', icon: <EthereumIcon />, label: 'ETH' }, { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
   ];
 
-  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setIsAccountDetailModalOpen(true); notify(`已打开 ${accountData.name}`); };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); notify(`已选择 ${defaultExchange} 交易所账户`); };
+  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); notify(`已打开 ${accountData.name}`); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); notify(`已选择 ${defaultExchange} 交易所账户`); };
   const handleOpenCustomAccount = (name, icon, currency = 'AED') => {
+    const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
+    const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
     setIsAddAccountModalOpen(false);
-    setSelectedAccount({ name, sub: '新账户', balance: '0.00', currency, icon });
+    setSelectedAccount({ name, sub: '新账户', balance: '0.00', currency, icon, type: inferredType, iconType: inferredIcon });
     setAccountBalance('0.00');
     setSelectedCurrency(currency);
+    setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
     setIsAccountDetailModalOpen(true);
     notify(`已创建${name}`);
+  };
+
+  const saveAccountDetail = async () => {
+    if (!selectedAccount) return;
+    const payload = {
+      balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      currency: selectedCurrency,
+      apy_limit: aprValues.limit || '0',
+      apy_base_rate: aprValues.baseRate || '0',
+      apy_overflow_rate: aprValues.overflowRate || '0'
+    };
+    if (selectedAccount.id) {
+      await updateAccount(selectedAccount.id, payload);
+    } else {
+      await createAccount({
+        name: selectedAccount.name,
+        sub: selectedAccount.sub,
+        type: selectedAccount.type || 'other',
+        icon: selectedAccount.iconType || 'cash',
+        ...payload
+      });
+    }
+    setIsAccountDetailModalOpen(false);
+  };
+
+  const saveExchangeAccount = async () => {
+    await createAccount({
+      name: exchangeAccountName || `${exchangeSelected} 现货账户`,
+      sub: "交易所账户",
+      type: "exchange",
+      balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      currency: selectedCurrency || 'USDT',
+      icon: exchangeSelected.toLowerCase(),
+      apy_limit: aprValues.limit || '0',
+      apy_base_rate: aprValues.baseRate || '0',
+      apy_overflow_rate: aprValues.overflowRate || '0'
+    });
+    setIsAddExchangeModalOpen(false);
   };
 
   // Calculate dynamic percentages
@@ -1195,7 +1349,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
               </div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">账户信息</h3>
-                <div className="mb-[14px]"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label><input type="text" placeholder="例如：OKX 现货账户" className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/></div>
+                <div className="mb-[14px]"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label><input type="text" value={exchangeAccountName} onChange={(e) => setExchangeAccountName(e.target.value)} placeholder="例如：OKX 现货账户" className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/></div>
                 <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => notify('已选择现货账户')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">现货账户</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
@@ -1206,13 +1360,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
               <div className="mb-[8px]">
                 <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
                 <div className={`space-y-[14px] overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[400px]' : 'opacity-0 max-h-0'}`}>
-                  <div><div className="flex items-center space-x-[4px] mb-[6px] ml-[2px]"><label className="text-[12px] font-medium text-[#5c5c5e]">高息限额</label><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div><div className="relative"><input type="text" placeholder="请输入高息限额金额" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[40px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#8e8e93]">AED</span></div><span className="text-[11px] text-[#8e8e93] block mt-[6px] ml-[2px]">超过该金额后按超出利率计算</span></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">基础利率 (APR)</label><div className="relative"><input type="text" placeholder="请输入基础利率" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">超出利率 (APR)</label><div className="relative"><input type="text" placeholder="请输入超出利率" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
+                  <div><div className="flex items-center space-x-[4px] mb-[6px] ml-[2px]"><label className="text-[12px] font-medium text-[#5c5c5e]">高息限额</label><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div><div className="relative"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[40px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><span className="text-[11px] text-[#8e8e93] block mt-[6px] ml-[2px]">超过该金额后按超出利率计算</span></div>
+                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">基础利率 (APR)</label><div className="relative"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
+                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">超出利率 (APR)</label><div className="relative"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
                 </div>
               </div>
             </div>
-            <div className="px-[20px] pb-[20px] pt-[12px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8]"><button onClick={() => { setIsAddExchangeModalOpen(false); notify(`${exchangeSelected} 账户已添加`); }} className="w-full py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">添加账户</button></div>
+            <div className="px-[20px] pb-[20px] pt-[12px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8]"><button onClick={saveExchangeAccount} className="w-full py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">添加账户</button></div>
           </div>
         </div>
       )}
@@ -1247,14 +1401,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
             <div className="mb-[32px]">
                <div className="flex items-center space-x-[6px] mb-[12px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[14px] h-[14px] text-[#c7c7cc]" strokeWidth={2} /></div>
                <div className="grid grid-cols-3 gap-[8px]">
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[6px]">高息限额</div><div className="flex items-baseline justify-between mb-[8px]"><span className="text-[17px] font-bold text-[#1c1c1e] truncate pr-1">10,000</span><span className="text-[11px] font-medium text-[#8e8e93] shrink-0">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[6px]">基础利率</div><div className="flex items-baseline justify-between mb-[8px]"><span className="text-[17px] font-bold text-[#1c1c1e]">4.50</span><span className="text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[6px]">超出利率</div><div className="flex items-baseline justify-between mb-[8px]"><span className="text-[17px] font-bold text-[#1c1c1e]">1.20</span><span className="text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
+                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">高息限额</div><div className="relative mb-[8px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[34px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
+                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
+                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
                </div>
             </div>
             <div className="flex space-x-[12px] pb-[8px]">
                <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[120px] py-[14px] border border-[#e5e5ea] rounded-[14px] text-[16px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={() => { setIsAccountDetailModalOpen(false); notify(`${selectedAccount.name} 已保存`); }} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
+               <button onClick={saveAccountDetail} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
             </div>
           </div>
         </div>
@@ -1269,26 +1423,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify }) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isMessageCenterOpen, setIsMessageCenterOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const toastTimerRef = useRef(null);
-  const { accounts, transactions, loading, updateTransaction } = useSupabaseData();
+  const { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount } = useSupabaseData();
 
-  const notify = (message) => {
-    if (!message) return;
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(message);
-    toastTimerRef.current = window.setTimeout(() => setToastMessage(''), 1600);
-  };
-
-  const handleAppClickCapture = (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    const actionElement = target.closest('[data-action-label], button');
-    if (!actionElement || actionElement.getAttribute('data-toast') === 'off') return;
-    const label = getActionText(actionElement);
-    if (!label) return;
-    notify(label.length > 16 ? label : `已点击 ${label}`);
-  };
+  const notify = () => {};
 
   useEffect(() => {
     const metas = [
@@ -1305,10 +1442,6 @@ export default function App() {
       }
       meta.content = content;
     });
-  }, []);
-
-  useEffect(() => () => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
   return (
@@ -1344,21 +1477,20 @@ export default function App() {
         }
       `}} />
 
-      <div className="app-container shadow-2xl" onClickCapture={handleAppClickCapture}>
+      <div className="app-container shadow-2xl">
         <div className="scroll-area hide-scrollbar">
             {loading ? (
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <HomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} setActiveTab={setActiveTab} notify={notify} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} createAccount={createAccount} updateAccount={updateAccount} />}
               </>
             )}
         </div>
         
-        <ActionToast message={toastMessage} />
         <MessageCenterModal isOpen={isMessageCenterOpen} onClose={() => setIsMessageCenterOpen(false)} notify={notify} />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
