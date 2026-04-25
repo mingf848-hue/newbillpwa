@@ -24,8 +24,8 @@ const HOME_BRAND_LOGOS = {
   openai:  { url: 'https://cdn.simpleicons.org/openai/ffffff',    bg: '#10a37f' },
   alipay:  { url: 'https://cdn.simpleicons.org/alipay/ffffff',    bg: '#1677ff' },
   okx:     { url: 'https://cdn.simpleicons.org/okx/ffffff',       bg: '#000000' },
-  bitget:  { url: 'https://logo.clearbit.com/bitget.com',         bg: '#00e5c0' },
-  huobi:   { url: 'https://logo.clearbit.com/htx.com',           bg: '#1853db' },
+  bitget:  { url: 'https://cdn.simpleicons.org/bitget/000000',    bg: '#00e5c0', fallbackText: 'BG', textColor: '#000' },
+  huobi:   { url: 'https://cdn.simpleicons.org/huobi/ffffff',     bg: '#1853db', fallbackText: 'HTX' },
   usdt:    { url: 'https://cdn.simpleicons.org/tether/ffffff',    bg: '#26A17B' },
 };
 
@@ -41,14 +41,16 @@ const HomeBrandLogo = ({ type, size = 28 }) => {
   return (
     <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
       {error
-        ? <ShoppingBag style={{ width: imgSize, height: imgSize }} className="text-white" />
+        ? config.fallbackText
+          ? <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 800, color: config.textColor || '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>{config.fallbackText}</span>
+          : <ShoppingBag style={{ width: imgSize, height: imgSize }} className="text-white" />
         : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
       }
     </div>
   );
 };
-const ProfileAvatarButton = () => (
-  <button aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+const ProfileAvatarButton = ({ onClick }: { onClick?: () => void }) => (
+  <button onClick={onClick} aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
     <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
   </button>
 );
@@ -187,7 +189,7 @@ const formatTransactionDate = (date) => {
   };
 };
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], createTransaction, onOpenBills }) {
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
   const [activeModal, setActiveModal] = useState(null); // 'record' | 'budget' | 'transfer' | 'ai'
   const [isRecording, setIsRecording] = useState(false);
   const [recordActiveTab, setRecordActiveTab] = useState('支出');
@@ -354,9 +356,9 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       <header className="shrink-0 px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={onOpenSearch} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen?.(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </header>
 

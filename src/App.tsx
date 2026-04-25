@@ -6,7 +6,7 @@ import {
   Home, FileText, PieChart, Wallet, PenLine, BarChart2, PieChart as PieChartIcon,
   ArrowRightLeft, AlertTriangle, ArrowDownRight, TrendingUp, X, ArrowUp, Info,
   Filter, Landmark, CreditCard, Tag as TagIcon, CalendarDays, Pen, Check,
-  ChevronLeft, Plus, Banknote, MoreHorizontal
+  ChevronLeft, Plus, Banknote, MoreHorizontal, User, Shield, Globe, HelpCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -175,8 +175,8 @@ const BRAND_LOGOS = {
   wechat:     { url: 'https://cdn.simpleicons.org/wechat/ffffff',      bg: '#07c160' },
   okx:        { url: 'https://cdn.simpleicons.org/okx/ffffff',         bg: '#000000' },
   binance:    { url: 'https://cdn.simpleicons.org/binance/1e2329',     bg: '#fcd535' },
-  bitget:     { url: 'https://logo.clearbit.com/bitget.com',           bg: '#00e5c0' },
-  huobi:      { url: 'https://logo.clearbit.com/htx.com',             bg: '#1853db' },
+  bitget:     { url: 'https://cdn.simpleicons.org/bitget/000000',      bg: '#00e5c0', fallbackText: 'BG', textColor: '#000' },
+  huobi:      { url: 'https://cdn.simpleicons.org/huobi/ffffff',       bg: '#1853db', fallbackText: 'HTX' },
   gateio:     { url: 'https://logo.clearbit.com/gate.io',             bg: '#0d6efd' },
   kucoin:     { url: 'https://logo.clearbit.com/kucoin.com',          bg: '#24ae8f' },
   mexc:       { url: 'https://logo.clearbit.com/mexc.com',            bg: '#2152f3' },
@@ -196,16 +196,17 @@ const BrandLogo = ({ type, size = 36 }) => {
   const [error, setError] = useState(false);
   const config = BRAND_LOGOS[type];
   const imgSize = Math.round(size * 0.6);
-  const fallback = (
+  if (!config) return (
     <div className="rounded-full flex items-center justify-center shrink-0 bg-[#8e8e93]" style={{ width: size, height: size }}>
       <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
     </div>
   );
-  if (!config) return fallback;
   return (
     <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
       {error
-        ? <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+        ? config.fallbackText
+          ? <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 800, color: config.textColor || '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>{config.fallbackText}</span>
+          : <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
         : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
       }
     </div>
@@ -420,6 +421,137 @@ const getActionText = (element) => {
   return (label || '').replace(/\s+/g, ' ').trim();
 };
 
+const ProfileSheet = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  const menuItems = [
+    { icon: <User className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2} />, label: '账户信息', sub: '管理个人信息与头像' },
+    { icon: <Bell className="w-[16px] h-[16px] text-[#ff9500]" strokeWidth={2} />, label: '通知设置', sub: '账单提醒、收益通知' },
+    { icon: <Shield className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2} />, label: '安全与隐私', sub: '密码、生物识别解锁' },
+    { icon: <Globe className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2} />, label: '语言与货币', sub: '中文 · AED / CNY' },
+    { icon: <HelpCircle className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} />, label: '帮助与反馈', sub: '使用说明、联系我们' },
+  ];
+  return (
+    <div className="fixed inset-0 z-[800] flex justify-center items-end">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[calc(24px+env(safe-area-inset-bottom))] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
+        <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
+        <div className="flex items-center space-x-[14px] mb-[20px] pb-[20px] border-b border-[#f4f5f8]">
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-[54px] h-[54px] rounded-full object-cover bg-blue-100 shrink-0" />
+          <div className="flex-1"><div className="text-[17px] font-bold text-[#1c1c1e]">Felix</div><div className="text-[13px] text-[#8e8e93]">BitLedger Pro 用户</div></div>
+          <button onClick={onClose} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center shrink-0 active:scale-95 transition-transform"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+        </div>
+        <div className="space-y-[2px]">
+          {menuItems.map((item, i) => (
+            <button key={i} onClick={onClose} className="w-full flex items-center px-[4px] py-[10px] rounded-[12px] active:bg-[#f4f5f8] transition-colors text-left">
+              <div className="w-[34px] h-[34px] rounded-[10px] bg-[#f4f5f8] flex items-center justify-center mr-[12px] shrink-0">{item.icon}</div>
+              <div className="flex-1"><div className="text-[14px] font-semibold text-[#1c1c1e]">{item.label}</div><div className="text-[12px] text-[#8e8e93]">{item.sub}</div></div>
+              <ChevronRight className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2.5} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SearchModal = ({ isOpen, onClose, transactions }) => {
+  const [query, setQuery] = useState('');
+  if (!isOpen) return null;
+  const keyword = query.trim().toLowerCase();
+  const results = keyword.length < 1 ? [] : transactions.filter(tx =>
+    [tx.title, tx.subtitle, tx.tag, tx.note, tx.paymentMethod]
+      .filter(Boolean).some(v => String(v).toLowerCase().includes(keyword))
+  ).slice(0, 30);
+  return (
+    <div className="fixed inset-0 z-[800] flex justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose}></div>
+      <div className="relative w-full max-w-[430px] bg-[#f4f5f8] flex flex-col h-full animate-in fade-in duration-150">
+        <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[12px] bg-white border-b border-[#f0f0f0]">
+          <div className="flex items-center space-x-[10px]">
+            <div className="flex-1 flex items-center bg-[#f4f5f8] rounded-[12px] px-[12px] h-[40px]">
+              <Search className="w-[15px] h-[15px] text-[#8e8e93] mr-[8px] shrink-0" strokeWidth={2} />
+              <input autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索交易记录、账单..." className="flex-1 text-[15px] bg-transparent outline-none text-[#1c1c1e] placeholder:text-[#c7c7cc]" />
+              {query && <button onClick={() => setQuery('')} className="shrink-0 ml-[4px]"><ClearInputIcon /></button>}
+            </div>
+            <button onClick={onClose} className="text-[14px] font-semibold text-[#1677ff] shrink-0 active:opacity-60 transition-opacity">取消</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto hide-scrollbar px-[16px] pt-[12px] pb-[24px]">
+          {keyword.length === 0 ? (
+            <div className="text-center text-[#8e8e93] text-[13px] mt-[50px]">
+              <Search className="w-[32px] h-[32px] text-[#d1d1d6] mx-auto mb-[10px]" strokeWidth={1.5} />
+              <div>输入关键字搜索交易记录</div>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="text-center text-[#8e8e93] text-[13px] mt-[50px]">没有找到与 "{query}" 相关的记录</div>
+          ) : (
+            <div className="bg-white rounded-[20px] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+              {results.map((tx, i) => (
+                <div key={tx.id || i} onClick={onClose} className={`flex items-center px-[16px] py-[12px] cursor-pointer active:bg-[#f9f9f9] transition-colors ${i !== results.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                  <div className="flex-1 ml-[10px] min-w-0">
+                    <div className="text-[13px] font-medium text-[#1c1c1e] truncate">{tx.title}</div>
+                    <div className="text-[11px] text-[#8e8e93] truncate">{tx.fullDate} · {tx.tag}</div>
+                  </div>
+                  <div className={`text-[13px] font-semibold shrink-0 ml-[8px] ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}<span className="text-[10px] font-normal ml-[2px]">{tx.currency}</span></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AprLimitDisplay = ({ balance, aprValues, currency }) => {
+  const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
+  const lim = parseFloat(aprValues.limit) || 0;
+  const baseRate = parseFloat(aprValues.baseRate) || 0;
+  const overflowRate = parseFloat(aprValues.overflowRate) || 0;
+  if (lim === 0 && baseRate === 0) return null;
+  const usedPct = lim > 0 ? Math.min(100, (bal / lim) * 100) : 0;
+  const isOverflow = lim > 0 && bal > lim;
+  const dailyEarnings = lim > 0
+    ? (Math.min(bal, lim) * (baseRate / 100) / 365 + Math.max(0, bal - lim) * (overflowRate / 100) / 365)
+    : (bal * baseRate / 100 / 365);
+  const monthlyEarnings = dailyEarnings * 30;
+  const barColor = usedPct < 80 ? '#1677ff' : usedPct < 100 ? '#ff9500' : '#ff3b30';
+  return (
+    <div className="mt-[14px] p-[12px] bg-[#f8faff] rounded-[12px] border border-[#e8f0fe]">
+      {lim > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-[6px]">
+            <span className="text-[12px] font-medium text-[#5c5c5e]">已用额度</span>
+            <div className="flex items-center space-x-[6px]">
+              {isOverflow && <span className="text-[9px] bg-[#fff1f0] text-[#ff3b30] px-[6px] py-[1px] rounded-full font-semibold border border-[#ffd6d3]">已超限</span>}
+              <span className="text-[12px] font-bold" style={{ color: barColor }}>{usedPct.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div className="h-[5px] bg-[#e5e5ea] rounded-full overflow-hidden mb-[6px]">
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, usedPct)}%`, backgroundColor: barColor }}></div>
+          </div>
+          <div className="text-[10px] text-[#8e8e93] mb-[10px]">
+            {bal.toLocaleString('en-US', { maximumFractionDigits: 2 })} / {lim.toLocaleString('en-US', { maximumFractionDigits: 2 })} {currency}
+          </div>
+        </>
+      )}
+      <div className="grid grid-cols-2 gap-[8px]">
+        <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div className="text-[10px] text-[#8e8e93] mb-[2px]">预计日收益</div>
+          <div className="text-[15px] font-bold text-[#10b981]">{dailyEarnings.toFixed(4)}</div>
+          <div className="text-[10px] text-[#8e8e93]">{currency}</div>
+        </div>
+        <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div className="text-[10px] text-[#8e8e93] mb-[2px]">预计月收益</div>
+          <div className="text-[15px] font-bold text-[#10b981]">{monthlyEarnings.toFixed(2)}</div>
+          <div className="text-[10px] text-[#8e8e93]">{currency}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // ==========================================
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
@@ -629,7 +761,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
   );
 };
 
-const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
+const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch }) => {
   const [activeTab, setActiveTab] = useState('月');
   const [insightTab, setInsightTab] = useState('支出分析');
   const [detailTab, setDetailTab] = useState('本月');
@@ -649,9 +781,9 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f7f8fa]/95 backdrop-blur-md">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify('已打开统计搜索')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={onOpenSearch} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f7f8fa]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
@@ -902,7 +1034,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
   );
 };
 
-const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify }) => {
+const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -977,9 +1109,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify(searchQuery ? `已搜索 ${searchQuery}` : '可在搜索框输入关键词')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={() => notify(searchQuery ? `已搜索 ${searchQuery}` : '可在下方搜索框输入关键词')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
@@ -1124,10 +1256,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, updateAccount }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
+  const [isChangesModalOpen, setIsChangesModalOpen] = useState(false);
+  const [exchangeAccountType, setExchangeAccountType] = useState('现货账户');
+  const [isExchangeTypeOpen, setIsExchangeTypeOpen] = useState(false);
   
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [assetRange, setAssetRange] = useState('30天');
@@ -1238,9 +1373,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify('已打开资产搜索')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={onOpenSearch} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
@@ -1289,30 +1424,30 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
         </div>
 
         <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden mt-[16px]">
-          <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => notify('已查看全部资产变动')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
+          <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => setIsChangesModalOpen(true)} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
           <div className="flex flex-col">
-            <button onClick={() => notify('已打开 Mashreq Bank 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
+            <button onClick={() => { const acc = accounts.find(a => a.name.toLowerCase().includes('mashreq')); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('Mashreq Bank'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
               <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="mashreq" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">Mashreq Bank</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+5,000.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">AED</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 09:23</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">存款</div>
               </div>
             </button>
-            <button onClick={() => notify('已打开微信到支付宝变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
+            <button onClick={() => { const acc = accounts.find(a => a.name.toLowerCase().includes('微信') || a.icon === 'wechat'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('微信 → 支付宝'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
               <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="wechat" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">微信 → 支付宝</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#ff3b30] text-right tracking-tight">-200.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">CNY</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 08:45</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">转入支付宝</div>
               </div>
             </button>
-            <button onClick={() => notify('已打开 OKX 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
+            <button onClick={() => { const acc = accounts.find(a => a.icon === 'okx'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('OKX'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
               <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="okx" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">OKX</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+28.74</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 22:16</span></div></div>
                  <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">现货交易收益</div>
               </div>
             </button>
-            <button onClick={() => notify('已打开币安变动')} className="w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
+            <button onClick={() => { const acc = accounts.find(a => a.icon === 'binance'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('币安'); }} className="w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
               <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="binance" size={36} /></div>
               <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                  <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">币安</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+500.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 20:35</span></div></div>
@@ -1372,7 +1507,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">账户信息</h3>
                 <div className="mb-[14px]"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label><input type="text" value={exchangeAccountName} onChange={(e) => setExchangeAccountName(e.target.value)} placeholder="例如：OKX 现货账户" className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/></div>
-                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => notify('已选择现货账户')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">现货账户</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
+                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); notify(`已选择${t}`); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
               <div className="mb-[24px]">
@@ -1396,7 +1531,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out max-h-[90vh] overflow-y-auto">
             <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between mb-[24px]">
                <div className="flex items-center space-x-[14px]"><div className="w-[48px] h-[48px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[18px] font-bold text-[#1c1c1e] leading-tight mb-[4px]">{selectedAccount.name}</h2><span className="text-[13px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
@@ -1427,10 +1562,42 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
                   <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
                   <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
                </div>
+               <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
             </div>
             <div className="flex space-x-[12px] pb-[8px]">
                <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[120px] py-[14px] border border-[#e5e5ea] rounded-[14px] text-[16px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
                <button onClick={saveAccountDetail} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isChangesModalOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-center items-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsChangesModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out max-h-[80vh] flex flex-col">
+            <div className="w-full flex justify-center mb-[4px] pt-[8px] px-[20px] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-center justify-between px-[20px] py-[14px] shrink-0 border-b border-[#f4f5f8]">
+              <span className="text-[17px] font-bold text-[#1c1c1e]">全部变动</span>
+              <button onClick={() => setIsChangesModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+            </div>
+            <div className="overflow-y-auto hide-scrollbar flex-1">
+              {[
+                { icon: 'mashreq', name: 'Mashreq Bank', sub: '存款', amount: '+5,000.00', currency: 'AED', time: '今天 09:23', isIncome: true },
+                { icon: 'wechat', name: '微信 → 支付宝', sub: '转入支付宝', amount: '-200.00', currency: 'CNY', time: '今天 08:45', isIncome: false },
+                { icon: 'okx', name: 'OKX', sub: '现货交易收益', amount: '+28.74', currency: 'USDT', time: '昨天 22:16', isIncome: true },
+                { icon: 'binance', name: '币安', sub: '充值', amount: '+500.00', currency: 'USDT', time: '昨天 20:35', isIncome: true },
+                { icon: 'alipay', name: '支付宝', sub: '余额宝收益', amount: '+12.80', currency: 'CNY', time: '昨天 08:00', isIncome: true },
+                { icon: 'ccb', name: '中国建设银行', sub: '工资入账', amount: '+35,000.00', currency: 'CNY', time: '4月20日', isIncome: true },
+              ].map((item, i, arr) => (
+                <button key={i} onClick={() => { const acc = accounts.find(a => a.icon === item.icon); if (acc) { setIsChangesModalOpen(false); handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type={item.icon} size={36} /></div>
+                  <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
+                    <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">{item.name}</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className={`text-[14px] font-bold text-right tracking-tight ${item.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{item.amount}</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">{item.currency}</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">{item.time}</span></div></div>
+                    <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{item.sub}</div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -1445,9 +1612,17 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isMessageCenterOpen, setIsMessageCenterOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const toastTimerRef = useRef(null);
   const { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount } = useSupabaseData();
 
-  const notify = () => {};
+  const notify = (msg) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(''), 2200);
+  };
 
   useEffect(() => {
     const metas = [
@@ -1505,16 +1680,19 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} />}
-                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} />}
-                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} createAccount={createAccount} updateAccount={updateAccount} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
+                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>
         
         <MessageCenterModal isOpen={isMessageCenterOpen} onClose={() => setIsMessageCenterOpen(false)} notify={notify} />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={transactions} />
+        <ActionToast message={toastMsg} />
       </div>
     </>
   );
