@@ -1236,6 +1236,12 @@ export default function App() {
         @media (min-width: 431px) {
           html, body, #root { background-color: #000; }
         }
+        @media all and (display-mode: standalone) {
+          html, body, #root, .app-container {
+            height: 100vh;
+            min-height: 100vh;
+          }
+        }
       `}} />
 
       <div className="app-container shadow-2xl">
