@@ -1,10 +1,10 @@
 // @ts-nocheck
-import React, { useMemo, useRef, useState } from 'react';
-import { 
-  Search, Bell, Calendar as CalendarIcon, ChevronDown, Eye, ArrowUpRight, 
-  PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home, FileText, 
-  PieChart, Wallet, ChevronRight, X, Camera, Utensils, Clock, Tag, 
-  XCircle, Delete, Briefcase, CreditCard, Info, Check, Sparkles, ShoppingBag, Gamepad2, MoreHorizontal, ChevronLeft
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import {
+  Search, Bell, Calendar as CalendarIcon, ChevronDown, Eye, ArrowUpRight,
+  PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home, FileText,
+  PieChart, Wallet, ChevronRight, X, Camera, Utensils, Clock, Tag,
+  XCircle, Delete, Briefcase, CreditCard, Info, Check, Sparkles, ShoppingBag, Gamepad2, MoreHorizontal, ChevronLeft, TrendingUp, GraduationCap, Heart, Car
 } from 'lucide-react';
 
 // ==========================================
@@ -189,8 +189,27 @@ const formatTransactionDate = (date) => {
   };
 };
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
-  const [activeModal, setActiveModal] = useState(null); // 'record' | 'budget' | 'transfer' | 'ai'
+const EXPENSE_CATEGORIES = [
+  { name: '餐饮', icon: Utensils, color: '#ff6b6b' },
+  { name: '交通', icon: Car, color: '#4c78fe' },
+  { name: '购物', icon: ShoppingBag, color: '#fbbf24' },
+  { name: '娱乐', icon: Gamepad2, color: '#a78bfa' },
+  { name: '住房', icon: Briefcase, color: '#10b981' },
+  { name: '医疗', icon: Heart, color: '#f97316' },
+  { name: '教育', icon: GraduationCap, color: '#06b6d4' },
+  { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
+  { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
+];
+const INCOME_CATEGORIES = [
+  { name: '工资', icon: Briefcase, color: '#10b981' },
+  { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
+  { name: '奖金', icon: Check, color: '#fbbf24' },
+  { name: '兼职', icon: PenLine, color: '#4c78fe' },
+  { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
+];
+
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
+  const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordActiveTab, setRecordActiveTab] = useState('支出');
   const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
@@ -201,16 +220,51 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [selectedYear, setSelectedYear] = useState(2026);
   const pressTimer = useRef(null);
 
-  const budgetTotal = 20000;
+  // Record form state
+  const [recordCategory, setRecordCategory] = useState('餐饮');
+  const [recordCategoryIncome, setRecordCategoryIncome] = useState('工资');
+  const [recordAccount, setRecordAccount] = useState(null);
+  const [recordDate, setRecordDate] = useState(new Date(2026, 3, 25, 9, 41));
+  const [recordNote, setRecordNote] = useState('');
+  const [recordTag, setRecordTag] = useState('');
+  const [activePicker, setActivePicker] = useState(null);
+
+  // Budget state
+  const [budgetAmount, setBudgetAmount] = useState(20000);
+  const [budgetInput, setBudgetInput] = useState('20000');
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [budgetPeriod, setBudgetPeriod] = useState('每月');
+  const [isBudgetPeriodOpen, setIsBudgetPeriodOpen] = useState(false);
   const budgetUsed = 10653.28;
-  const budgetRemaining = budgetTotal - budgetUsed;
-  const [transferData, setTransferData] = useState({ out: '招商银行', in: '支付宝', amount: '' });
+  const budgetRemaining = budgetAmount - budgetUsed;
+
+  // Transfer state
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferOutAccount, setTransferOutAccount] = useState(null);
+  const [transferInAccount, setTransferInAccount] = useState(null);
+  const [transferPickerOpen, setTransferPickerOpen] = useState(null);
+
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
   const recentTransactions = useMemo(
     () => [...transactions].sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime()).slice(0, 5),
     [transactions]
   );
+
+  // Init account selections when accounts load
+  useEffect(() => {
+    if (accounts.length > 0) {
+      if (!recordAccount) setRecordAccount(accounts[0]);
+      if (!transferOutAccount) setTransferOutAccount(accounts[0]);
+      if (!transferInAccount && accounts.length > 1) setTransferInAccount(accounts[1]);
+      else if (!transferInAccount) setTransferInAccount(accounts[0]);
+    }
+  }, [accounts]);
+
+  const formatDateForDisplay = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
 
   const handleAiStart = (e) => {
     e.preventDefault();
@@ -232,6 +286,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setActiveModal(null);
     setShowInlineKeyboard(false);
     setInputValue('');
+    setActivePicker(null);
+    setTransferPickerOpen(null);
   };
 
   const saveTransaction = async (payload) => {
@@ -243,24 +299,26 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const handleSaveRecord = async () => {
     const amount = Number(inputValue || 0);
     if (!amount) return;
-    const now = new Date();
-    const { dateLabel, fullDate, time } = formatTransactionDate(now);
     const isIncome = recordActiveTab === '收入';
+    const category = isIncome ? recordCategoryIncome : recordCategory;
+    const account = recordAccount;
+    const { dateLabel, fullDate, time } = formatTransactionDate(recordDate);
+    const TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
     await saveTransaction({
       dateLabel,
-      iconBg: isIncome ? 'bg-[#fff7e6]' : 'bg-[#1677ff]',
-      iconType: isIncome ? 'landmark' : 'alipay',
-      title: isIncome ? '工资入账' : '餐饮支出',
-      subtitle: isIncome ? '招商银行' : '钱包 (CNY)',
-      tag: isIncome ? '理财' : '购物',
-      tagType: isIncome ? 'investment' : 'shopping',
+      iconBg: account ? `bg-[#1677ff]` : (isIncome ? 'bg-[#10b981]' : 'bg-[#1677ff]'),
+      iconType: account ? (account.icon || 'landmark') : (isIncome ? 'landmark' : 'alipay'),
+      title: category + (recordNote ? `（${recordNote}）` : ''),
+      subtitle: account ? account.name : (isIncome ? '收入账户' : '支出账户'),
+      tag: category,
+      tagType: TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
       amount: `${isIncome ? '+' : '-'}${formatMoney(amount)}`,
       isIncome,
       time,
       fullDate,
-      currency: 'CNY',
-      paymentMethod: isIncome ? '招商银行' : '钱包',
-      note: isIncome ? '发工资啦！' : '餐饮'
+      currency: account ? (account.currency || 'CNY') : 'CNY',
+      paymentMethod: account ? account.name : '默认账户',
+      note: recordNote
     });
   };
 
@@ -286,24 +344,29 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   };
 
   const handleSaveTransfer = async () => {
-    const amount = Number(transferData.amount || 0);
+    const amount = Number(transferAmount || 0);
     if (!amount) return;
+    const outAcc = transferOutAccount || accounts[0];
+    const inAcc = transferInAccount || accounts[1] || accounts[0];
+    const outName = outAcc ? outAcc.name : '转出账户';
+    const inName = inAcc ? inAcc.name : '转入账户';
+    const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
     await saveTransaction({
       dateLabel,
       iconBg: 'bg-[#8b5cf6]',
-      iconType: 'landmark',
-      title: `${transferData.out} 转入 ${transferData.in}`,
-      subtitle: transferData.out,
+      iconType: outIcon,
+      title: `${outName} 转入 ${inName}`,
+      subtitle: outName,
       tag: '转账',
       tagType: 'transfer',
       amount: `-${formatMoney(amount)}`,
       isIncome: false,
       time,
       fullDate,
-      currency: 'CNY',
-      paymentMethod: transferData.out,
+      currency: outAcc ? (outAcc.currency || 'CNY') : 'CNY',
+      paymentMethod: outName,
       note: '账户转账'
     });
   };
@@ -311,23 +374,25 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
 
   const renderFormList = () => {
+    const accLabel = recordAccount ? recordAccount.name : '选择账户';
+    const dateLabel = formatDateForDisplay(recordDate);
     if (recordActiveTab === '支出') {
       return (
         <>
-          <FormRow Icon={Utensils} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="分类" value="餐饮" />
-          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value="钱包 (CNY)" />
-          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value="2026年4月30日 09:41" />
-          <FormRow Icon={FileText} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="备注" value="点击输入" valueColor="text-gray-300" />
-          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value="+ 添加标签" valueColor="text-[#1677ff]" border={false} />
+          <FormRow Icon={Utensils} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="分类" value={recordCategory} onClick={() => setActivePicker('category')} />
+          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value={accLabel} onClick={() => setActivePicker('account')} />
+          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => setActivePicker('datetime')} />
+          <FormRow Icon={FileText} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => setActivePicker('note')} />
+          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => setActivePicker('tag')} />
         </>
       );
     } else {
       return (
         <>
-          <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value="工资" />
-          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value="招商银行" />
-          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value="2026年4月30日 09:41" />
-          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value="发工资啦！" border={false} />
+          <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value={recordCategoryIncome} onClick={() => setActivePicker('category')} />
+          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} onClick={() => setActivePicker('account')} />
+          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => setActivePicker('datetime')} />
+          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} border={false} onClick={() => setActivePicker('note')} />
         </>
       );
     }
@@ -571,51 +636,224 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
       {/* 记一笔面板 */}
       <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'record' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col ${activeModal === 'record' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="flex flex-col items-center pt-[10px] pb-[8px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold">记一笔</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-        <div className="p-[16px] space-y-[16px]">
-          <div className="flex space-x-[20px] border-b border-gray-50 pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>setRecordActiveTab(tab)} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[10px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
+      <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${activeModal === 'record' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="flex flex-col items-center pt-[10px] pb-[8px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold">记一笔</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+        <div className="flex-1 overflow-y-auto hide-scrollbar p-[16px] space-y-[16px]">
+          <div className="flex space-x-[20px] border-b border-gray-50 pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[10px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[10px]">
             <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
-            <input
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="请输入金额"
-              inputMode="decimal"
-              className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300"
-            />
+            <input autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300" />
             <Camera className="w-[20px] h-[20px] text-gray-400" />
           </div>
           <div className="space-y-[2px]">{renderFormList()}</div>
+
+          {/* 分类选择器 */}
+          {activePicker === 'category' && (
+            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">选择分类</span>
+                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              <div className="grid grid-cols-4 gap-[8px]">
+                {(recordActiveTab === '支出' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((cat) => {
+                  const isSelected = (recordActiveTab === '支出' ? recordCategory : recordCategoryIncome) === cat.name;
+                  return (
+                    <button key={cat.name} onClick={() => { if (recordActiveTab === '支出') setRecordCategory(cat.name); else setRecordCategoryIncome(cat.name); setActivePicker(null); }} className={`flex flex-col items-center py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-white active:bg-[#f0f5ff]'}`}>
+                      <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mb-[4px]" style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : `${cat.color}22` }}>
+                        {React.createElement(cat.icon, { className: `w-[14px] h-[14px]`, style: { color: isSelected ? '#fff' : cat.color } })}
+                      </div>
+                      <span className={`text-[11px] font-medium ${isSelected ? 'text-white' : 'text-[#3a3a3c]'}`}>{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 账户选择器 */}
+          {activePicker === 'account' && (
+            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">选择账户</span>
+                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              {accounts.length === 0 ? (
+                <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先添加</div>
+              ) : (
+                <div className="space-y-[6px] max-h-[180px] overflow-y-auto hide-scrollbar">
+                  {accounts.map((acc) => {
+                    const isSelected = recordAccount && (recordAccount.id === acc.id || recordAccount.name === acc.name);
+                    return (
+                      <button key={acc.id || acc.name} onClick={() => { setRecordAccount(acc); setActivePicker(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-white active:bg-[#f0f5ff]'}`}>
+                        <div className="w-[28px] h-[28px] rounded-full bg-[#f4f5f8] flex items-center justify-center mr-[10px] overflow-hidden shrink-0">
+                          <HomeBrandLogo type={acc.icon} size={28} />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
+                          <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
+                        </div>
+                        {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 时间选择器 */}
+          {activePicker === 'datetime' && (
+            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">选择时间</span>
+                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              <input type="datetime-local" defaultValue={`${recordDate.getFullYear()}-${String(recordDate.getMonth()+1).padStart(2,'0')}-${String(recordDate.getDate()).padStart(2,'0')}T${String(recordDate.getHours()).padStart(2,'0')}:${String(recordDate.getMinutes()).padStart(2,'0')}`} onChange={(e) => { if (e.target.value) setRecordDate(new Date(e.target.value)); }} className="w-full border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none bg-white focus:border-[#1677ff]" />
+              <div className="flex space-x-[8px] mt-[10px]">
+                {['今天', '昨天', '本周'].map((label) => {
+                  const d = new Date();
+                  if (label === '昨天') d.setDate(d.getDate() - 1);
+                  else if (label === '本周') d.setDate(d.getDate() - d.getDay() + 1);
+                  return <button key={label} onClick={() => { setRecordDate(d); setActivePicker(null); }} className="flex-1 py-[8px] bg-white rounded-[10px] text-[13px] font-medium text-[#1677ff] active:bg-[#f0f5ff] transition-colors">{label}</button>;
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 备注输入 */}
+          {activePicker === 'note' && (
+            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">添加备注</span>
+                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              <textarea autoFocus value={recordNote} onChange={(e) => setRecordNote(e.target.value)} placeholder="输入备注内容..." className="w-full border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-[14px] text-[#1c1c1e] outline-none bg-white resize-none h-[80px] focus:border-[#1677ff]" />
+              <button onClick={() => setActivePicker(null)} className="w-full mt-[8px] h-[40px] bg-[#1677ff] text-white rounded-[10px] text-[14px] font-medium active:bg-blue-700 transition-colors">完成</button>
+            </div>
+          )}
+
+          {/* 标签选择 */}
+          {activePicker === 'tag' && (
+            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">添加标签</span>
+                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              <div className="flex flex-wrap gap-[8px]">
+                {['日常', '工作', '家庭', '旅行', '朋友', '医疗', '学习', '娱乐'].map((t) => (
+                  <button key={t} onClick={() => { setRecordTag(recordTag === t ? '' : t); }} className={`px-[14px] py-[7px] rounded-full text-[13px] font-medium transition-all ${recordTag === t ? 'bg-[#1677ff] text-white' : 'bg-white text-[#3a3a3c] border border-[#e5e5ea] active:bg-[#f0f5ff]'}`}>{t}</button>
+                ))}
+              </div>
+              <button onClick={() => setActivePicker(null)} className="w-full mt-[10px] h-[40px] bg-[#1677ff] text-white rounded-[10px] text-[14px] font-medium active:bg-blue-700 transition-colors">完成</button>
+            </div>
+          )}
+
           <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button><button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button></div>
         </div>
       </div>
 
       {/* 预算管理面板 */}
       <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'budget' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${activeModal === 'budget' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] max-h-[90vh] overflow-y-auto hide-scrollbar ${activeModal === 'budget' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] sticky top-0 z-10"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
         <div className="p-[16px] space-y-[14px]">
-          <div className="bg-white rounded-[16px] p-[16px] shadow-sm"><div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]"><span>2026年4月 · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span><span>本月剩余 <span className="text-[#10b981] font-bold">{budgetRemaining.toFixed(2)}</span></span></div><div className="text-[24px] font-bold mb-[12px]">{budgetTotal.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div><div className="h-[4px] bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[#1677ff]" style={{width:'53%'}}></div></div></div>
-          <div className="bg-white rounded-[12px] px-[12px] overflow-hidden"><SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetTotal.toLocaleString()}.00`} /><SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value="每月" /><SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value="2026年4月1日" border={false} /></div>
-          <button className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
+          <div className="bg-white rounded-[16px] p-[16px] shadow-sm">
+            <div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]">
+              <span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span>
+              <span>本月剩余 <span className={`font-bold ${budgetRemaining >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{budgetRemaining.toFixed(2)}</span></span>
+            </div>
+            <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div>
+            <div className="h-[4px] bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#1677ff] transition-all" style={{width: `${Math.min(100, (budgetUsed / budgetAmount) * 100).toFixed(0)}%`}}></div>
+            </div>
+            <div className="flex justify-between text-[10px] text-[#8e8e93] mt-[6px]">
+              <span>已支出 <span className="text-[#1c1c1e] font-semibold">{budgetUsed.toLocaleString()}</span></span>
+              <span>{((budgetUsed / budgetAmount) * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[12px] px-[12px] overflow-hidden">
+            <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => setIsEditingBudget(!isEditingBudget)} />
+            <SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value={budgetPeriod} onClick={() => setIsBudgetPeriodOpen(!isBudgetPeriodOpen)} />
+            <SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} />
+          </div>
+
+          {isEditingBudget && (
+            <div className="bg-white rounded-[12px] p-[14px] space-y-[10px]">
+              <span className="text-[13px] font-bold text-[#1c1c1e]">调整预算金额</span>
+              <div className="flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] focus-within:border-[#1677ff]">
+                <span className="text-[16px] font-bold text-[#1c1c1e] mr-[6px]">¥</span>
+                <input autoFocus type="text" inputMode="decimal" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="输入预算金额" className="flex-1 text-[16px] font-bold text-[#1c1c1e] outline-none bg-transparent" />
+              </div>
+              <div className="flex space-x-[8px]">
+                <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
+                <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
+              </div>
+            </div>
+          )}
+
+          {isBudgetPeriodOpen && (
+            <div className="bg-white rounded-[12px] p-[14px]">
+              <span className="text-[13px] font-bold text-[#1c1c1e] block mb-[10px]">选择周期</span>
+              <div className="grid grid-cols-3 gap-[8px]">
+                {['每日', '每周', '每月', '每季度', '每半年', '每年'].map((p) => (
+                  <button key={p} onClick={() => { setBudgetPeriod(p); setIsBudgetPeriodOpen(false); }} className={`py-[10px] rounded-[10px] text-[13px] font-medium transition-all ${budgetPeriod === p ? 'bg-[#1677ff] text-white' : 'bg-[#f4f5f8] text-[#3a3a3c] active:bg-[#e5eeff]'}`}>{p}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button onClick={() => setIsEditingBudget(true)} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
         </div>
       </div>
 
       {/* 转账管理面板 */}
       <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'transfer' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${activeModal === 'transfer' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] max-h-[90vh] overflow-y-auto hide-scrollbar ${activeModal === 'transfer' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] sticky top-0 z-10"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
         <div className="p-[16px] space-y-[12px]">
           <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
           <div className="bg-white rounded-[16px] px-[16px] overflow-hidden">
-            <TransferRow label="转出账户" value={transferData.out} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} />
-            <TransferRow label="转入账户" value={transferData.in} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} />
+            <TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} />
+            <TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} />
             <div className="flex items-center justify-between py-[14px]">
               <span className="text-[14px] text-[#1c1c1e] shrink-0 w-[70px]">转账金额</span>
-              <input value={transferData.amount} onChange={(e) => setTransferData((prev) => ({ ...prev, amount: e.target.value }))} placeholder="请输入金额" className="flex-1 text-right text-[14px] text-[#1c1c1e] outline-none bg-transparent placeholder:text-[#c7c7cc]" />
+              <input value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 text-right text-[14px] text-[#1c1c1e] outline-none bg-transparent placeholder:text-[#c7c7cc]" />
             </div>
           </div>
+
+          {/* 转账账户选择器 */}
+          {transferPickerOpen && (
+            <div className="bg-white rounded-[16px] p-[14px]">
+              <div className="flex items-center justify-between mb-[10px]">
+                <span className="text-[13px] font-bold text-[#1c1c1e]">{transferPickerOpen === 'out' ? '选择转出账户' : '选择转入账户'}</span>
+                <button onClick={() => setTransferPickerOpen(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+              </div>
+              {accounts.length === 0 ? (
+                <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先在资产页面添加</div>
+              ) : (
+                <div className="space-y-[6px] max-h-[200px] overflow-y-auto hide-scrollbar">
+                  {accounts.map((acc) => {
+                    const selected = transferPickerOpen === 'out' ? transferOutAccount : transferInAccount;
+                    const isSelected = selected && (selected.id === acc.id || selected.name === acc.name);
+                    return (
+                      <button key={acc.id || acc.name} onClick={() => { if (transferPickerOpen === 'out') setTransferOutAccount(acc); else setTransferInAccount(acc); setTransferPickerOpen(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-[#f4f5f8] active:bg-[#e5eeff]'}`}>
+                        <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mr-[10px] shrink-0 overflow-hidden">
+                          <HomeBrandLogo type={acc.icon} size={28} />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
+                          <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
+                        </div>
+                        {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
         </div>
       </div>

@@ -771,7 +771,6 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
   const [trendRange, setTrendRange] = useState({ start: 1, end: 4 });
   const switchStatsTab = (tab) => {
     setActiveTab(tab);
-    notify(`统计已切换为${tab}视图`);
   };
   const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
   const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -788,7 +787,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
       </div>
 
       <div className="px-[16px] mt-[8px] flex items-center justify-between">
-        <button onClick={() => notify('已选择 2026年4月')} className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
+        <button className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
           <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
         </button>
         <div className="flex bg-[#f4f5f8] rounded-[10px] p-[3px]">
@@ -868,7 +867,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
                   </div>
                   <div className="mt-[12px] flex justify-between">
                     <button onClick={() => setTrendRange({ start: 1, end: 12 })} className="text-[12px] font-medium text-[#1677ff]">全年</button>
-                    <button onClick={() => { setIsTrendRangeOpen(false); notify(`趋势范围已切换为${trendRangeLabel}`); }} className="rounded-[8px] bg-[#1677ff] px-[14px] py-[6px] text-[12px] font-semibold text-white">确定</button>
+                    <button onClick={() => setIsTrendRangeOpen(false)} className="rounded-[8px] bg-[#1677ff] px-[14px] py-[6px] text-[12px] font-semibold text-white">确定</button>
                   </div>
                 </div>
               </>
@@ -927,7 +926,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
 
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col">
           <div className="flex items-center justify-between mb-[16px]">
-            <h2 className="text-[14px] font-bold text-[#1c1c1e]">支出分类排行</h2><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类排行详情'); }} className="flex items-center text-[10px] text-[#8e8e93] active:opacity-60">查看全部 <ChevronRight className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></button>
+            <h2 className="text-[14px] font-bold text-[#1c1c1e]">支出分类排行</h2><button onClick={() => setIsDetailModalOpen(true)} className="flex items-center text-[10px] text-[#8e8e93] active:opacity-60">查看全部 <ChevronRight className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></button>
           </div>
           <div className="flex-1 flex flex-col justify-center space-y-[14px]">
             {STATS_RANKING_DATA.map((item) => (
@@ -946,7 +945,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
         </div>
       </div>
 
-      <button onClick={() => { setIsInsightModalOpen(true); notify('已打开智能分析'); }} className="w-[calc(100%-32px)] mx-[16px] mt-[16px] bg-gradient-to-r from-[#6b73ff] to-[#404cff] rounded-[20px] p-[16px] flex items-center shadow-[0_8px_20px_rgba(107,115,255,0.2)] cursor-pointer active:scale-[0.98] transition-transform z-10 relative text-left">
+      <button onClick={() => setIsInsightModalOpen(true)} className="w-[calc(100%-32px)] mx-[16px] mt-[16px] bg-gradient-to-r from-[#6b73ff] to-[#404cff] rounded-[20px] p-[16px] flex items-center shadow-[0_8px_20px_rgba(107,115,255,0.2)] cursor-pointer active:scale-[0.98] transition-transform z-10 relative text-left">
         <div className="w-[40px] h-[40px] rounded-full bg-white/20 flex items-center justify-center shrink-0 mr-[12px]"><TrendingUp className="w-[20px] h-[20px] text-white" strokeWidth={2.5} /></div>
         <div className="flex-1">
           <div className="text-[14px] font-bold text-white mb-[4px]">本月支出较上月增加 <span className="text-[#ffb612]">13.2%</span></div>
@@ -958,7 +957,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
       {isInsightModalOpen && (
         <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] max-h-[78vh] overflow-hidden bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col">
+          <div className="relative w-full max-w-[430px] max-h-[85vh] overflow-y-auto bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
             <div className="px-[20px] flex justify-between items-start">
                <div>
@@ -970,10 +969,10 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px]">
                <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px]">
                   {['支出分析', '收入分析', '对比分析', '建议'].map((tab) => (
-                    <button key={tab} onClick={() => { setInsightTab(tab); notify(`已切换到${tab}`); }} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
+                    <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
-               <button onClick={() => notify('已选择 2026年4月')} className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
+               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
             <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
             <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
@@ -986,7 +985,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
                   </div>
                ))}
             </div>
-            <div className="px-[20px] mt-[18px]"><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类详情'); }} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
+            <div className="px-[20px] mt-[18px]"><button onClick={() => setIsDetailModalOpen(true)} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
           </div>
         </div>
       )}
@@ -994,7 +993,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
       {isDetailModalOpen && (
         <div className="fixed inset-0 z-[400] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsDetailModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] pt-[12px] px-[20px] flex flex-col h-auto">
+          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] pt-[12px] px-[20px] flex flex-col max-h-[85vh] overflow-y-auto hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mb-[20px]"></div>
             <div className="relative">
                <button onClick={() => setIsDetailModalOpen(false)} className="absolute -top-[4px] right-0 p-[4px] active:bg-gray-100 rounded-full transition-colors"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
@@ -1005,7 +1004,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             </div>
             <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[20px]">
                {['本月', '较上月变化', '占比', '趋势'].map((tab) => (
-                 <button key={tab} onClick={() => { setDetailTab(tab); notify(`详情已切换到${tab}`); }} className={`flex-1 text-[13px] py-[6px] rounded-[8px] transition-all ${detailTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
+                 <button key={tab} onClick={() => setDetailTab(tab)} className={`flex-1 text-[13px] py-[6px] rounded-[8px] transition-all ${detailTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                ))}
             </div>
             <div className="flex items-center">
@@ -1048,7 +1047,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   const [selectedMonth, setSelectedMonth] = useState(4);
 
   const selectedMonthLabel = `2026年${selectedMonth}月`;
-  const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); notify(`已打开 ${tx.title} 详情`); };
+  const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
   const handleSave = () => {
     if (!selectedTx) return;
     updateTransaction(selectedTx.id, { title: tempNote || selectedTx.title, note: tempNote });
@@ -1056,11 +1055,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
     notify('账单备注已保存');
   };
   const changeCalendarMonth = (delta) => {
-    setSelectedMonth((prev) => {
-      const next = Math.min(12, Math.max(1, prev + delta));
-      notify(`已切换到 2026年${next}月`);
-      return next;
-    });
+    setSelectedMonth((prev) => Math.min(12, Math.max(1, prev + delta)));
   };
 
   const filteredData = useMemo(() => {
@@ -1109,7 +1104,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify(searchQuery ? `已搜索 ${searchQuery}` : '可在下方搜索框输入关键词')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
           <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
@@ -1125,16 +1120,16 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               <div className="fixed inset-0 z-[40]" onClick={() => setIsCalendarOpen(false)}></div>
               <div className="absolute top-[42px] left-0 w-[310px] bg-white rounded-[20px] p-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-left">
                 <div className="absolute -top-[5px] left-[45px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
-                <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[16px]">{['月', '年'].map((view) => <button key={view} onClick={() => { setCalendarView(view); notify(`日历已切换为${view}视图`); }} className={`flex-1 rounded-[8px] py-[6px] text-[14px] transition-all ${calendarView === view ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] text-[#1677ff] font-semibold' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{view}</button>)}</div>
+                <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[16px]">{['月', '年'].map((view) => <button key={view} onClick={() => setCalendarView(view)} className={`flex-1 rounded-[8px] py-[6px] text-[14px] transition-all ${calendarView === view ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] text-[#1677ff] font-semibold' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{view}</button>)}</div>
                 <div className="flex items-center justify-between mb-[14px] px-[8px]"><button aria-label="上个月" onClick={() => changeCalendarMonth(-1)} className="p-1 active:opacity-50"><ChevronLeft className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button><span className="text-[15px] font-medium text-[#1c1c1e]">{selectedMonthLabel}</span><button aria-label="下个月" onClick={() => changeCalendarMonth(1)} className="p-1 active:opacity-50"><ChevronRight className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button></div>
                 <div className="grid grid-cols-7 text-center mb-[8px]">{['一', '二', '三', '四', '五', '六', '日'].map(d => (<div key={d} className="text-[12px] text-[#8e8e93] font-medium py-[4px]">{d}</div>))}</div>
                 <div className="grid grid-cols-7 gap-y-[6px] text-center">
                     {BILLS_CALENDAR_DAYS.map((dayObj, i) => {
                       const isSelected = dayObj.type === 'curr' && dayObj.val === selectedDate;
-                      return (<button key={i} onClick={() => { if(dayObj.type === 'curr') { setSelectedDate(dayObj.val); notify(`已选择 ${selectedMonthLabel}${dayObj.val}日`); } }} className="w-[32px] h-[32px] mx-auto flex items-center justify-center relative"><div className={`w-full h-full flex items-center justify-center rounded-full text-[15px] transition-all ${isSelected ? 'bg-[#1677ff] text-white font-semibold shadow-[0_2px_8px_rgba(22,119,255,0.4)]' : dayObj.type === 'curr' ? 'text-[#1c1c1e] hover:bg-[#f4f5f8] font-normal' : 'text-[#d1d1d6] font-normal'}`}>{dayObj.val}</div></button>);
+                      return (<button key={i} onClick={() => { if(dayObj.type === 'curr') setSelectedDate(dayObj.val); }} className="w-[32px] h-[32px] mx-auto flex items-center justify-center relative"><div className={`w-full h-full flex items-center justify-center rounded-full text-[15px] transition-all ${isSelected ? 'bg-[#1677ff] text-white font-semibold shadow-[0_2px_8px_rgba(22,119,255,0.4)]' : dayObj.type === 'curr' ? 'text-[#1c1c1e] hover:bg-[#f4f5f8] font-normal' : 'text-[#d1d1d6] font-normal'}`}>{dayObj.val}</div></button>);
                     })}
                 </div>
-                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { setSelectedDate(23); setSelectedMonth(4); notify('已回到今天'); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">今天</button><button onClick={() => { setIsCalendarOpen(false); notify(`已选择 ${selectedMonthLabel}${selectedDate}日`); }} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
+                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { setSelectedDate(23); setSelectedMonth(4); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">今天</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
               </div>
             </>
           )}
@@ -1157,7 +1152,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
                   {BILLS_FILTER_OPTIONS.map((opt) => {
                     const isSelected = selectedFilter === opt.id;
                     return (
-                      <button key={opt.id} onClick={() => { setSelectedFilter(opt.id); setIsFilterOpen(false); notify(`已筛选：${opt.name}`); }} className="w-full flex items-center justify-between px-[16px] py-[10px] hover:bg-[#f9f9f9] active:bg-[#f4f5f8] transition-colors text-left">
+                      <button key={opt.id} onClick={() => { setSelectedFilter(opt.id); setIsFilterOpen(false); }} className="w-full flex items-center justify-between px-[16px] py-[10px] hover:bg-[#f9f9f9] active:bg-[#f4f5f8] transition-colors text-left">
                         <div className="flex items-center space-x-[12px]">{opt.icon}<span className={`text-[14px] ${isSelected && opt.id === 'all' ? 'text-[#1c1c1e] font-semibold' : 'text-[#3a3a3c] font-medium'}`}>{opt.name}</span></div>
                         {isSelected && <Check className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} />}
                       </button>
@@ -1172,11 +1167,11 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
 
       <div className="px-[16px] mt-[12px] flex items-center justify-between relative z-10">
         <div className="flex space-x-[6px]">
-          {['全部', '支出', '收入', '理财', '转账'].map((item) => (<button key={item} onClick={() => { setSelectedType(item); notify(`已筛选${item}账单`); }} className={`whitespace-nowrap px-[12px] py-[5px] rounded-[8px] text-[13px] font-medium transition-all active:scale-95 ${selectedType === item ? 'bg-[#1677ff] text-white shadow-[0_2px_8px_rgba(22,119,255,0.2)]' : 'bg-white text-[#5c5c5e] shadow-[0_1px_4px_rgba(0,0,0,0.02)] hover:bg-gray-50'}`}>{item}</button>))}
+          {['全部', '支出', '收入', '理财', '转账'].map((item) => (<button key={item} onClick={() => setSelectedType(item)} className={`whitespace-nowrap px-[12px] py-[5px] rounded-[8px] text-[13px] font-medium transition-all active:scale-95 ${selectedType === item ? 'bg-[#1677ff] text-white shadow-[0_2px_8px_rgba(22,119,255,0.2)]' : 'bg-white text-[#5c5c5e] shadow-[0_1px_4px_rgba(0,0,0,0.02)] hover:bg-gray-50'}`}>{item}</button>))}
         </div>
         <div className="flex bg-white rounded-[8px] p-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] shrink-0">
           {['日', '周', '月'].map((range) => (
-            <button key={range} onClick={() => { setSelectedRange(range); notify(`账单周期已切换为${range}`); }} className={`w-[30px] py-[3px] text-[12px] transition-all rounded-[6px] ${selectedRange === range ? 'font-semibold text-[#1677ff] bg-[#f0f6ff]' : 'font-medium text-[#8e8e93] active:opacity-60 hover:text-gray-600'}`}>{range}</button>
+            <button key={range} onClick={() => setSelectedRange(range)} className={`w-[30px] py-[3px] text-[12px] transition-all rounded-[6px] ${selectedRange === range ? 'font-semibold text-[#1677ff] bg-[#f0f6ff]' : 'font-medium text-[#8e8e93] active:opacity-60 hover:text-gray-600'}`}>{range}</button>
           ))}
         </div>
       </div>
@@ -1186,13 +1181,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
           <div className="flex-1 pr-[16px] relative">
             <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (AED)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 13.2%</span></div>
-            <button aria-label="查看支出账单" onClick={() => { setSelectedType('支出'); notify('已筛选支出账单'); }} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
+            <button aria-label="查看支出账单" onClick={() => setSelectedType('支出')} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
           </div>
           <div className="w-[1px] bg-[#f0f0f0] my-[2px]"></div>
           <div className="flex-1 pl-[20px] relative">
             <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (AED)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 18.7%</span></div>
-            <button aria-label="查看收入账单" onClick={() => { setSelectedType('收入'); notify('已筛选收入账单'); }} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
+            <button aria-label="查看收入账单" onClick={() => setSelectedType('收入')} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
           </div>
         </div>
       </div>
@@ -1256,7 +1251,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
@@ -1280,8 +1275,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
     { id: 'ETH', icon: <EthereumIcon />, label: 'ETH' }, { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
   ];
 
-  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); notify(`已打开 ${accountData.name}`); };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); notify(`已选择 ${defaultExchange} 交易所账户`); };
+  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, icon, currency = 'AED') => {
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
     const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
@@ -1291,7 +1286,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
     setSelectedCurrency(currency);
     setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
     setIsAccountDetailModalOpen(true);
-    notify(`已创建${name}`);
   };
 
   const saveAccountDetail = async () => {
@@ -1381,7 +1375,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
 
       <div className="px-[16px] flex items-center justify-between mt-[6px]">
         <div className="flex items-center space-x-[6px]"><h1 className="text-[22px] font-bold text-[#1c1c1e]">资产</h1><Eye className="w-[18px] h-[18px] text-[#8e8e93]" strokeWidth={2} /></div>
-        <button onClick={() => { setIsAddAccountModalOpen(true); notify('请选择账户类型'); }} className="flex items-center space-x-[4px] bg-[#1677ff] px-[12px] py-[6px] rounded-full active:scale-95 transition-transform shadow-[0_4px_10px_rgba(22,119,255,0.25)]"><Plus className="w-[14px] h-[14px] text-white" strokeWidth={2.5} /><span className="text-[13px] font-bold text-white">添加账户</span></button>
+        <button onClick={() => setIsAddAccountModalOpen(true)} className="flex items-center space-x-[4px] bg-[#1677ff] px-[12px] py-[6px] rounded-full active:scale-95 transition-transform shadow-[0_4px_10px_rgba(22,119,255,0.25)]"><Plus className="w-[14px] h-[14px] text-white" strokeWidth={2.5} /><span className="text-[13px] font-bold text-white">添加账户</span></button>
       </div>
 
       <div className="px-[16px] mt-[14px] space-y-[14px]">
@@ -1390,7 +1384,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
             <div className="flex items-center space-x-[4px] text-[#8e8e93]"><span className="text-[12px]">总资产 (估值)</span><Info className="w-[12px] h-[12px]" strokeWidth={2} /></div>
             <div className="flex bg-[#f4f5f8] rounded-[6px] p-[2px]">
               {['1天', '7天', '30天', '自定义'].map((range) => (
-                <button key={range} onClick={() => { setAssetRange(range); notify(`资产周期已切换为${range}`); }} className={`px-[8px] py-[3px] text-[11px] rounded-[4px] transition-all ${assetRange === range ? 'font-semibold text-[#1677ff] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]' : 'font-medium text-[#8e8e93] active:opacity-60'}`}>{range}</button>
+                <button key={range} onClick={() => setAssetRange(range)} className={`px-[8px] py-[3px] text-[11px] rounded-[4px] transition-all ${assetRange === range ? 'font-semibold text-[#1677ff] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]' : 'font-medium text-[#8e8e93] active:opacity-60'}`}>{range}</button>
               ))}
             </div>
           </div>
@@ -1426,34 +1420,28 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
         <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden mt-[16px]">
           <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => setIsChangesModalOpen(true)} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
           <div className="flex flex-col">
-            <button onClick={() => { const acc = accounts.find(a => a.name.toLowerCase().includes('mashreq')); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('Mashreq Bank'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="mashreq" size={36} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">Mashreq Bank</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+5,000.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">AED</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 09:23</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">存款</div>
-              </div>
-            </button>
-            <button onClick={() => { const acc = accounts.find(a => a.name.toLowerCase().includes('微信') || a.icon === 'wechat'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('微信 → 支付宝'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="wechat" size={36} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">微信 → 支付宝</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#ff3b30] text-right tracking-tight">-200.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">CNY</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 08:45</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">转入支付宝</div>
-              </div>
-            </button>
-            <button onClick={() => { const acc = accounts.find(a => a.icon === 'okx'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('OKX'); }} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="okx" size={36} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">OKX</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+28.74</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 22:16</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">现货交易收益</div>
-              </div>
-            </button>
-            <button onClick={() => { const acc = accounts.find(a => a.icon === 'binance'); if (acc) handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); else notify('币安'); }} className="w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type="binance" size={36} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">币安</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+500.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 20:35</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">充值</div>
-              </div>
-            </button>
+            {transactions.slice(0, 4).map((tx, idx, arr) => {
+              const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+              return (
+                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); }} className={`w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                  <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
+                      <div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0">
+                        <span className={`text-[14px] font-bold text-right tracking-tight ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span>
+                        <span className="text-[11px] font-medium text-[#8e8e93] text-center">{tx.currency}</span>
+                        <span className="text-[11px] font-medium text-[#8e8e93] text-right">{tx.time}</span>
+                      </div>
+                    </div>
+                    <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{tx.tag}</div>
+                  </div>
+                </button>
+              );
+            })}
+            {transactions.length === 0 && (
+              <div className="py-[20px] text-center text-[#8e8e93] text-[13px]">暂无变动记录</div>
+            )}
           </div>
         </div>
       </div>
@@ -1461,7 +1449,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       {isAddAccountModalOpen && (
         <div className="fixed inset-0 z-[120] flex justify-center items-center px-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAddAccountModalOpen(false)}></div>
-          <div className="relative w-full max-w-[390px] bg-white rounded-[24px] p-[20px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out">
+          <div className="relative w-full max-w-[390px] bg-white rounded-[24px] p-[20px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out max-h-[85vh] overflow-y-auto hide-scrollbar">
             <div className="flex justify-between items-center mb-[20px]"><h2 className="text-[18px] font-bold text-[#1c1c1e]">添加账户</h2><button onClick={() => setIsAddAccountModalOpen(false)} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
             <div className="mb-[24px]">
               <h3 className="text-[14px] font-bold text-[#5c5c5e] mb-[12px]">选择账户类型</h3>
@@ -1500,19 +1488,19 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
                 <div className="grid grid-cols-3 gap-[8px]">
                    {[{ id: 'OKX', icon: <BrandLogo type="okx" size={20} />, name: 'OKX' },{ id: 'Binance', icon: <BrandLogo type="binance" size={20} />, name: '币安 Binance' },{ id: 'Bybit', icon: <BrandLogo type="bybit" size={20} />, name: 'Bybit' },{ id: 'Bitget', icon: <BrandLogo type="bitget" size={20} />, name: 'Bitget' },{ id: 'Gateio', icon: <BrandLogo type="gateio" size={20} />, name: 'Gate.io' },{ id: 'KuCoin', icon: <BrandLogo type="kucoin" size={20} />, name: 'KuCoin' },{ id: 'MEXC', icon: <BrandLogo type="mexc" size={20} />, name: 'MEXC' },{ id: 'HTX', icon: <BrandLogo type="huobi" size={20} />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
                      const isSelected = exchangeSelected === ex.id;
-                     return (<button key={ex.id} onClick={() => { setExchangeSelected(ex.id); notify(`已选择 ${ex.name}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
+                     return (<button key={ex.id} onClick={() => setExchangeSelected(ex.id)} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
                    })}
                 </div>
               </div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">账户信息</h3>
                 <div className="mb-[14px]"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label><input type="text" value={exchangeAccountName} onChange={(e) => setExchangeAccountName(e.target.value)} placeholder="例如：OKX 现货账户" className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/></div>
-                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); notify(`已选择${t}`); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
+                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>
-                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label><button onClick={() => notify('已选择 AED 计价货币')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">AED - 阿联酋迪拉姆</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
+                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label><button className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">AED - 阿联酋迪拉姆</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
               </div>
               <div className="mb-[8px]">
                 <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
@@ -1542,7 +1530,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
                <div className="flex overflow-x-auto hide-scrollbar space-x-[12px] pb-[4px]">
                   {currenciesList.map((currency) => {
                     const isSelected = selectedCurrency === currency.id;
-                    return (<button key={currency.id} onClick={() => { setSelectedCurrency(currency.id); notify(`币种已切换为 ${currency.label}`); }} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
+                    return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
                   })}
                </div>
             </div>
@@ -1582,22 +1570,19 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
               <button onClick={() => setIsChangesModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
             <div className="overflow-y-auto hide-scrollbar flex-1">
-              {[
-                { icon: 'mashreq', name: 'Mashreq Bank', sub: '存款', amount: '+5,000.00', currency: 'AED', time: '今天 09:23', isIncome: true },
-                { icon: 'wechat', name: '微信 → 支付宝', sub: '转入支付宝', amount: '-200.00', currency: 'CNY', time: '今天 08:45', isIncome: false },
-                { icon: 'okx', name: 'OKX', sub: '现货交易收益', amount: '+28.74', currency: 'USDT', time: '昨天 22:16', isIncome: true },
-                { icon: 'binance', name: '币安', sub: '充值', amount: '+500.00', currency: 'USDT', time: '昨天 20:35', isIncome: true },
-                { icon: 'alipay', name: '支付宝', sub: '余额宝收益', amount: '+12.80', currency: 'CNY', time: '昨天 08:00', isIncome: true },
-                { icon: 'ccb', name: '中国建设银行', sub: '工资入账', amount: '+35,000.00', currency: 'CNY', time: '4月20日', isIncome: true },
-              ].map((item, i, arr) => (
-                <button key={i} onClick={() => { const acc = accounts.find(a => a.icon === item.icon); if (acc) { setIsChangesModalOpen(false); handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')}); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
-                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0"><BrandLogo type={item.icon} size={36} /></div>
-                  <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                    <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">{item.name}</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className={`text-[14px] font-bold text-right tracking-tight ${item.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{item.amount}</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">{item.currency}</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">{item.time}</span></div></div>
-                    <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{item.sub}</div>
-                  </div>
-                </button>
-              ))}
+              {transactions.map((tx, i, arr) => {
+                const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+                return (
+                  <button key={tx.id || i} onClick={() => { if (relatedAcc) { setIsChangesModalOpen(false); handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                    <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
+                      <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className={`text-[14px] font-bold text-right tracking-tight ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">{tx.currency}</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">{tx.time}</span></div></div>
+                      <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{tx.tag}</div>
+                    </div>
+                  </button>
+                );
+              })}
+              {transactions.length === 0 && <div className="py-[20px] text-center text-[#8e8e93] text-[13px]">暂无变动记录</div>}
             </div>
           </div>
         </div>
@@ -1680,10 +1665,10 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} accounts={accounts} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={transactions} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>
