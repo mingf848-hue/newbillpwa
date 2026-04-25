@@ -339,7 +339,7 @@ const ProfileAvatarButton = () => (
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
 // ==========================================
 const GlobalTabBar = ({ activeTab, setActiveTab }) => (
-  <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] h-[76px] bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[8px] z-[200]">
+  <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] min-h-[76px] bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[calc(8px+env(safe-area-inset-bottom))] z-[200]">
     <button onClick={() => setActiveTab('home')} className="flex flex-col items-center active:scale-95 transition-transform w-[48px]">
       <Home className={`w-[22px] h-[22px] ${activeTab === 'home' ? 'text-[#1677ff] fill-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={1.5} />
       <span className={`text-[10px] mt-[4px] ${activeTab === 'home' ? 'font-semibold text-[#1677ff]' : 'font-medium text-[#8e8e93]'}`}>首页</span>
@@ -414,7 +414,7 @@ const MessageCenterModal = ({ isOpen, onClose }) => {
 
 const HomePage = ({ setIsMessageCenterOpen, transactions }) => {
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[100px] relative overflow-x-hidden animate-in fade-in duration-300">
+    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[calc(100px+env(safe-area-inset-bottom))] relative overflow-x-hidden animate-in fade-in duration-300">
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]">
           <LogoIcon />
@@ -535,7 +535,7 @@ const StatsPage = ({ setIsMessageCenterOpen }) => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   return (
-    <div className="bg-[#f7f8fa] font-sans text-gray-900 pb-[100px] relative overflow-x-hidden animate-in fade-in duration-300">
+    <div className="bg-[#f7f8fa] font-sans text-gray-900 pb-[calc(100px+env(safe-area-inset-bottom))] relative overflow-x-hidden animate-in fade-in duration-300">
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f7f8fa]/95 backdrop-blur-md">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
@@ -780,7 +780,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction }) 
   }, [transactions, selectedFilter]);
 
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[100px] relative overflow-x-hidden animate-in fade-in duration-300">
+    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[calc(100px+env(safe-area-inset-bottom))] relative overflow-x-hidden animate-in fade-in duration-300">
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
@@ -985,7 +985,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts }) => {
   };
 
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[100px] relative overflow-x-hidden animate-in fade-in duration-300">
+    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[calc(100px+env(safe-area-inset-bottom))] relative overflow-x-hidden animate-in fade-in duration-300">
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
@@ -1236,7 +1236,7 @@ export default function App() {
       <style dangerouslySetInnerHTML={{__html: `
         html, body, #root { 
           width: 100vw; height: var(--app-height, 100dvh); min-height: var(--app-height, 100dvh); overflow: hidden; 
-          position: fixed; overscroll-behavior: none; touch-action: none; 
+          overscroll-behavior: none; touch-action: none; 
           background-color: #fdfdfd;
           -webkit-font-smoothing: antialiased;
         }

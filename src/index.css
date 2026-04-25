@@ -9,7 +9,6 @@ html, body, #root {
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   overflow: hidden;
-  position: fixed;
   overscroll-behavior: none;
   touch-action: none;
   background-color: #fdfdfd;
