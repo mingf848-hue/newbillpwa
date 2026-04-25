@@ -339,7 +339,7 @@ const ProfileAvatarButton = () => (
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
 // ==========================================
 const GlobalTabBar = ({ activeTab, setActiveTab }) => (
-  <div className="absolute bottom-0 left-0 right-0 bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[max(env(safe-area-inset-bottom,0px),10px)] z-[200]">
+  <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[max(env(safe-area-inset-bottom,0px),10px)] z-[200]">
     <button onClick={() => setActiveTab('home')} className="flex flex-col items-center active:scale-95 transition-transform w-[48px]">
       <Home className={`w-[22px] h-[22px] ${activeTab === 'home' ? 'text-[#1677ff] fill-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={1.5} />
       <span className={`text-[10px] mt-[4px] ${activeTab === 'home' ? 'font-semibold text-[#1677ff]' : 'font-medium text-[#8e8e93]'}`}>首页</span>
