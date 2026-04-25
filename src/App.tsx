@@ -225,7 +225,7 @@ const EthereumIcon = () => <BrandLogo type="ethereum" size={20} />;
 
 // Helper for dynamic icon loading
 const getIconByString = (type, size = 'small') => {
-  const px = size === 'large' ? 48 : 36;
+  const px = size === 'large' ? 48 : size === 'medium' ? 36 : 20;
   if (type === 'cash') return <CashIcon size={px} />;
   if (type === 'landmark') return (
     <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: px, height: px }}>
@@ -615,7 +615,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
           <div className="flex flex-col">
             {transactions.slice(0, 4).map((tx, idx) => (
               <button key={tx.id || idx} onClick={() => openBills(`已打开 ${tx.title}`)} className="w-full flex items-center px-[20px] py-[14px] border-b border-[#f4f5f8] active:bg-[#f9f9f9] transition-colors text-left">
-                <div className="w-[38px] h-[38px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType)}</div>
+                <div className="w-[38px] h-[38px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                 <div className="flex-1 ml-[12px] flex justify-between items-center">
                    <div className="flex flex-col justify-center space-y-[2px]"><span className="text-[14px] font-bold text-[#1c1c1e]">{tx.title}</span><div className="flex items-center space-x-[6px]"><span className={`text-[10px] px-[4px] py-[1px] rounded-[4px] ${tx.isIncome ? 'bg-[#ecfdf5] text-[#10b981]' : 'bg-[#e6f4ff] text-[#1677ff]'}`}>{tx.isIncome ? '收入' : '支出'}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.tag}</span></div></div>
                    <div className="flex flex-col items-end justify-center space-y-[2px]"><span className={`text-[15px] font-bold ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.time}</span></div>
@@ -1078,7 +1078,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
                 {group.transactions.map((tx, tIdx) => (
                   <button key={tx.id} onClick={() => handleOpenModal(tx)} className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${tIdx !== group.transactions.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
-                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType)}</div>
+                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                     <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
                     <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
                     <div className="flex items-center justify-end space-x-[4px] min-w-0">
