@@ -1211,18 +1211,38 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const syncViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
+    };
+
+    syncViewportHeight();
+    window.addEventListener('resize', syncViewportHeight);
+    window.addEventListener('orientationchange', syncViewportHeight);
+    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('scroll', syncViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', syncViewportHeight);
+      window.removeEventListener('orientationchange', syncViewportHeight);
+      window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', syncViewportHeight);
+    };
+  }, []);
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
         html, body, #root { 
-          width: 100vw; height: 100%; min-height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; 
+          width: 100vw; height: var(--app-height, 100dvh); min-height: var(--app-height, 100dvh); overflow: hidden; 
           position: fixed; overscroll-behavior: none; touch-action: none; 
           background-color: #fdfdfd;
           -webkit-font-smoothing: antialiased;
         }
         .app-container {
           background-color: #f4f5f8;
-          width: 100%; max-width: 430px; height: 100dvh; min-height: 100dvh; min-height: -webkit-fill-available; max-height: 100%; margin: 0 auto;
+          width: 100%; max-width: 430px; height: var(--app-height, 100dvh); min-height: var(--app-height, 100dvh); max-height: 100%; margin: 0 auto;
           position: relative; overflow: hidden; display: flex; flex-direction: column;
           overscroll-behavior: none; touch-action: none;
         }
