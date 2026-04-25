@@ -328,12 +328,18 @@ const QuickAddRow = ({ icon, name, type, onClick }) => (
   </button>
 );
 
+const ProfileAvatarButton = () => (
+  <button className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
+  </button>
+);
+
 
 // ==========================================
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
 // ==========================================
 const GlobalTabBar = ({ activeTab, setActiveTab }) => (
-  <div className="absolute bottom-0 left-0 right-0 bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[calc(env(safe-area-inset-bottom,0px)+10px)] z-[200]">
+  <div className="absolute bottom-0 left-0 right-0 bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[max(env(safe-area-inset-bottom,0px),10px)] z-[200]">
     <button onClick={() => setActiveTab('home')} className="flex flex-col items-center active:scale-95 transition-transform w-[48px]">
       <Home className={`w-[22px] h-[22px] ${activeTab === 'home' ? 'text-[#1677ff] fill-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={1.5} />
       <span className={`text-[10px] mt-[4px] ${activeTab === 'home' ? 'font-semibold text-[#1677ff]' : 'font-medium text-[#8e8e93]'}`}>首页</span>
@@ -420,9 +426,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions }) => {
             <Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} />
             <div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div>
           </button>
-          <button className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
-          </button>
+          <ProfileAvatarButton />
         </div>
       </div>
 
@@ -537,9 +541,7 @@ const StatsPage = ({ setIsMessageCenterOpen }) => {
         <div className="flex items-center space-x-[16px]">
           <button className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f7f8fa]"></div></button>
-          <button className="w-[28px] h-[28px] rounded-full overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)] bg-[#1677ff]/10">
-            <div className="w-full h-full bg-gradient-to-b from-[#4a90e2] to-[#0052cc] flex items-center justify-center"><div className="w-[12px] h-[12px] bg-white/30 rounded-full blur-[1px]"></div></div>
-          </button>
+          <ProfileAvatarButton />
         </div>
       </div>
 
@@ -784,7 +786,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction }) 
         <div className="flex items-center space-x-[16px]">
           <button className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <button className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" /></button>
+          <ProfileAvatarButton />
         </div>
       </div>
 
@@ -989,7 +991,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts }) => {
         <div className="flex items-center space-x-[16px]">
           <button className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <button className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" /></button>
+          <ProfileAvatarButton />
         </div>
       </div>
 
@@ -1213,14 +1215,14 @@ export default function App() {
     <>
       <style dangerouslySetInnerHTML={{__html: `
         html, body, #root { 
-          width: 100vw; height: 100%; min-height: 100dvh; overflow: hidden; 
+          width: 100vw; height: 100%; min-height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; 
           position: fixed; overscroll-behavior: none; touch-action: none; 
-          background-color: #000;
+          background-color: #fdfdfd;
           -webkit-font-smoothing: antialiased;
         }
         .app-container {
           background-color: #f4f5f8;
-          width: 100%; max-width: 430px; height: 100dvh; max-height: 100%; margin: 0 auto;
+          width: 100%; max-width: 430px; height: 100dvh; min-height: 100dvh; min-height: -webkit-fill-available; max-height: 100%; margin: 0 auto;
           position: relative; overflow: hidden; display: flex; flex-direction: column;
           overscroll-behavior: none; touch-action: none;
         }
@@ -1230,6 +1232,9 @@ export default function App() {
           overflow-y: auto; overflow-x: hidden; touch-action: pan-y; -webkit-overflow-scrolling: touch; 
           flex: 1; position: relative; z-index: 10; height: 100%;
           overscroll-behavior-y: none; overscroll-behavior-x: none;
+        }
+        @media (min-width: 431px) {
+          html, body, #root { background-color: #000; }
         }
       `}} />
 
