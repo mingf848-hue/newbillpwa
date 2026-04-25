@@ -333,7 +333,7 @@ const QuickAddRow = ({ icon, name, type, onClick }) => (
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
 // ==========================================
 const GlobalTabBar = ({ activeTab, setActiveTab }) => (
-  <div className="absolute bottom-0 left-0 right-0 bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[calc(env(safe-area-inset-bottom,32px))] z-[200]">
+  <div className="absolute bottom-0 left-0 right-0 bg-[#fdfdfd] border-t border-[#f0f0f0] flex justify-between items-center px-[40px] pt-[8px] pb-[calc(env(safe-area-inset-bottom,0px)+10px)] z-[200]">
     <button onClick={() => setActiveTab('home')} className="flex flex-col items-center active:scale-95 transition-transform w-[48px]">
       <Home className={`w-[22px] h-[22px] ${activeTab === 'home' ? 'text-[#1677ff] fill-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={1.5} />
       <span className={`text-[10px] mt-[4px] ${activeTab === 'home' ? 'font-semibold text-[#1677ff]' : 'font-medium text-[#8e8e93]'}`}>首页</span>
@@ -910,7 +910,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction }) 
                 <div className="mt-[20px]">
                    <div className="text-[14px] font-bold text-[#1c1c1e] mb-[10px]">备注</div>
                    <div className="border-[1.5px] border-[#1677ff] rounded-[10px] px-[12px] py-[10px] flex items-center bg-white shadow-[0_0_0_4px_rgba(22,119,255,0.1)] transition-shadow">
-                      <input type="text" value={tempNote} onChange={(e) => setTempNote(e.target.value)} className="flex-1 text-[14px] font-medium text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="添加备注..." autoFocus/><Pen className="w-[16px] h-[16px] text-[#8e8e93] shrink-0 ml-[8px]" strokeWidth={2} />
+                      <input type="text" value={tempNote} onChange={(e) => setTempNote(e.target.value)} className="flex-1 text-[14px] font-medium text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="添加备注..."/><Pen className="w-[16px] h-[16px] text-[#8e8e93] shrink-0 ml-[8px]" strokeWidth={2} />
                    </div>
                 </div>
                 <div className="flex space-x-[12px] mt-[24px]">
@@ -1213,21 +1213,23 @@ export default function App() {
     <>
       <style dangerouslySetInnerHTML={{__html: `
         html, body, #root { 
-          width: 100vw; height: 100vh; overflow: hidden; 
+          width: 100vw; height: 100%; min-height: 100dvh; overflow: hidden; 
           position: fixed; overscroll-behavior: none; touch-action: none; 
           background-color: #000;
           -webkit-font-smoothing: antialiased;
         }
         .app-container {
           background-color: #f4f5f8;
-          width: 100%; max-width: 430px; height: 100%; margin: 0 auto;
+          width: 100%; max-width: 430px; height: 100dvh; max-height: 100%; margin: 0 auto;
           position: relative; overflow: hidden; display: flex; flex-direction: column;
+          overscroll-behavior: none; touch-action: none;
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .scroll-area { 
           overflow-y: auto; overflow-x: hidden; touch-action: pan-y; -webkit-overflow-scrolling: touch; 
-          flex: 1; position: relative; z-index: 10;
+          flex: 1; position: relative; z-index: 10; height: 100%;
+          overscroll-behavior-y: none; overscroll-behavior-x: none;
         }
       `}} />
 

@@ -5,7 +5,8 @@
 /* 锁死全局，防橡皮筋 */
 html, body, #root {
   width: 100vw;
-  height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
   position: fixed;
   overscroll-behavior: none;
