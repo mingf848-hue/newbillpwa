@@ -1,6 +1,5 @@
 // @ts-nocheck
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import CustomInputKeyboard from './components/CustomInputKeyboard';
 import {
   Search, Bell, Calendar as CalendarIcon, ChevronDown, Eye, ArrowUpRight,
   PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home, FileText,
@@ -283,12 +282,12 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [recordNote, setRecordNote] = useState('');
   const [recordTag, setRecordTag] = useState('');
   const [activePicker, setActivePicker] = useState(null);
-  const [homeKeyboardField, setHomeKeyboardField] = useState(null);
 
   // Budget state
   const [budgetAmount, setBudgetAmount] = useState(budget);
   const [budgetInput, setBudgetInput] = useState(String(budget));
   const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [isBudgetKeyboardOpen, setIsBudgetKeyboardOpen] = useState(false);
   const [budgetPeriod, setBudgetPeriod] = useState('每月');
   const [isBudgetPeriodOpen, setIsBudgetPeriodOpen] = useState(false);
 
@@ -302,6 +301,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [transferAmount, setTransferAmount] = useState('');
   const [transferOutAccount, setTransferOutAccount] = useState(null);
   const [transferInAccount, setTransferInAccount] = useState(null);
+  const [isTransferKeyboardOpen, setIsTransferKeyboardOpen] = useState(false);
   const [transferPickerOpen, setTransferPickerOpen] = useState(null);
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
@@ -459,9 +459,21 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setActiveModal(null);
     setShowInlineKeyboard(false);
     setInputValue('');
+    setIsBudgetKeyboardOpen(false);
+    setIsTransferKeyboardOpen(false);
     setActivePicker(null);
     setTransferPickerOpen(null);
-    setHomeKeyboardField(null);
+  };
+
+  const handleKeyboardPress = (key, type) => {
+    const setVal = type === 'budget' ? setBudgetInput :
+                   type === 'transfer' ? setTransferAmount : setInputValue;
+
+    if (key === 'delete') {
+      setVal((prev) => String(prev || '').slice(0, -1));
+    } else {
+      setVal((prev) => `${prev || ''}${key}`);
+    }
   };
 
   const appendRecordKey = (key) => {
@@ -577,33 +589,6 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
-
-  const openHomeKeyboard = (field) => setHomeKeyboardField(field);
-  const closeHomeKeyboard = () => setHomeKeyboardField(null);
-  const getHomeKeyboardValue = () => {
-    if (homeKeyboardField === 'recordNote') return recordNote;
-    if (homeKeyboardField === 'budgetAmount') return budgetInput;
-    if (homeKeyboardField === 'transferAmount') return transferAmount;
-    return '';
-  };
-  const setHomeKeyboardValue = (nextValue) => {
-    if (homeKeyboardField === 'recordNote') {
-      setRecordNote(nextValue);
-      return;
-    }
-    if (homeKeyboardField === 'budgetAmount') {
-      setBudgetInput(nextValue);
-      return;
-    }
-    if (homeKeyboardField === 'transferAmount') {
-      setTransferAmount(nextValue);
-    }
-  };
-  const homeKeyboardMeta = {
-    recordNote: { label: '备注', mode: 'text', placeholder: '输入备注内容', quickActions: ['外卖', '午餐', '通勤', '工资', '报销', '转账', '家庭', '学习'] },
-    budgetAmount: { label: '预算金额', suffix: '元', mode: 'number' },
-    transferAmount: { label: '转账金额', suffix: transferOutAccount?.currency || 'CNY', mode: 'number' },
-  };
 
   const renderFormList = () => {
     const accLabel = recordAccount ? recordAccount.name : '选择账户';
@@ -875,270 +860,103 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               {showInlineKeyboard ? <span className="text-[14px] font-medium text-[#1677ff]">完成</span> : <X className="w-[20px] h-[20px]" />}
             </button>
           </div>
-          <div className="flex space-x-[20px] border-b border-gray-50 px-[20px] pt-[8px] pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
-          <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={() => setShowInlineKeyboard(true)}>
+          <div className="flex space-x-[20px] border-b border-gray-50 px-[20px] pt-[8px] pb-[8px]">
+            {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>setRecordActiveTab(tab)} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
+          </div>
+          <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={()=>setShowInlineKeyboard(true)}>
             <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
             <div className="flex items-center flex-1 ml-[10px] h-[30px]">
               <span className={`text-[24px] font-bold ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
               {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px]"></div>}
             </div>
-            {showInlineKeyboard ? (inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('');}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />) : <Camera className="w-[20px] h-[20px] text-gray-400" />}
+            {showInlineKeyboard ? (inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('')}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />) : <Camera className="w-[20px] h-[20px] text-gray-400" />}
           </div>
         </div>
+
         <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: '310px' }}>
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-white transition-transform duration-300 ease-out pb-[20px] flex flex-col ${showInlineKeyboard ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
-            <div className="px-[24px] flex-1 overflow-y-auto hide-scrollbar">{renderFormList()}</div>
+            <div className="px-[24px] flex-1">{renderFormList()}</div>
             <div className="px-[24px] pb-[10px] flex space-x-[12px]">
               <button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button>
               <button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button>
             </div>
           </div>
+
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-[#f4f5f8] transition-transform duration-300 ease-out flex flex-col pb-[16px] pt-[8px] ${showInlineKeyboard ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
             <div className="px-[16px] pb-[8px] flex justify-between space-x-[8px]">
-              {[10, 50, 100, 200].map((amount) => (
-                <button key={amount} onClick={() => addQuickAmount(amount)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{amount}</button>
-              ))}
+              {[10, 50, 100, 200].map(val => (<button key={val} onClick={() => addQuickAmount(val)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{val}</button>))}
+            </div>
+            <div className="px-[16px] pb-[8px]">
+              <div className="bg-white rounded-[10px] px-[10px] flex items-center shadow-sm h-[36px]">
+                <FileText className="w-[14px] h-[14px] text-[#8e8e93] mr-[8px]" strokeWidth={2} />
+                <input type="text" value={recordNote} onChange={(e) => setRecordNote(e.target.value)} placeholder="添加备注" className="flex-1 outline-none text-[13px] text-[#1c1c1e] placeholder-[#c7c7cc] bg-transparent" />
+              </div>
             </div>
             <div className="px-[16px] grid grid-cols-4 gap-[6px]">
-              {['1','2','3','4','5','6','7','8','9','删除','C','.','0'].map((key) => {
-                if (key === 'C') return <button key={key} onClick={() => setInputValue('')} className="row-span-2 bg-[#eaf1ff] rounded-[8px] flex items-center justify-center shadow-sm active:bg-[#dfeaff] transition-colors"><span className="text-[16px] font-medium text-[#1677ff]">C</span></button>;
-                if (key === '删除') return <button key={key} onClick={deleteRecordKey} className="bg-white h-[42px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><span className="text-[18px] font-medium text-[#1c1c1e]">删除</span></button>;
-                return <button key={key} onClick={() => appendRecordKey(key)} className="bg-white h-[42px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><span className={`${key === '.' ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span></button>;
-              })}
+              {['1','2','3','+','4','5','6','-','7','8','9','×','.','0','delete'].map((key) => (
+                <button key={key} onClick={() => handleKeyboardPress(key, 'record')} className="bg-white h-[42px] rounded-[8px] flex flex-col items-center justify-center shadow-sm active:bg-gray-100">
+                  {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','×','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
+                </button>
+              ))}
+              <button onClick={() => setShowInlineKeyboard(false)} className="bg-[#1677ff] h-[42px] rounded-[8px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors">
+                <span className="text-[14px] font-medium text-white">确认</span>
+              </button>
             </div>
           </div>
         </div>
-
-          {/* 分类选择器 */}
-          {activePicker === 'category' && (
-            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">选择分类</span>
-                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              <div className="grid grid-cols-4 gap-[8px]">
-                {(recordActiveTab === '支出' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((cat) => {
-                  const isSelected = (recordActiveTab === '支出' ? recordCategory : recordCategoryIncome) === cat.name;
-                  return (
-                    <button key={cat.name} onClick={() => { if (recordActiveTab === '支出') setRecordCategory(cat.name); else setRecordCategoryIncome(cat.name); setActivePicker(null); }} className={`flex flex-col items-center py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-white active:bg-[#f0f5ff]'}`}>
-                      <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mb-[4px]" style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : `${cat.color}22` }}>
-                        {React.createElement(cat.icon, { className: `w-[14px] h-[14px]`, style: { color: isSelected ? '#fff' : cat.color } })}
-                      </div>
-                      <span className={`text-[11px] font-medium ${isSelected ? 'text-white' : 'text-[#3a3a3c]'}`}>{cat.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 账户选择器 */}
-          {activePicker === 'account' && (
-            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">选择账户</span>
-                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              {accounts.length === 0 ? (
-                <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先添加</div>
-              ) : (
-                <div className="space-y-[6px] max-h-[180px] overflow-y-auto hide-scrollbar">
-                  {accounts.map((acc) => {
-                    const isSelected = recordAccount && (recordAccount.id === acc.id || recordAccount.name === acc.name);
-                    return (
-                      <button key={acc.id || acc.name} onClick={() => { setRecordAccount(acc); setActivePicker(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-white active:bg-[#f0f5ff]'}`}>
-                        <div className="w-[28px] h-[28px] rounded-full bg-[#f4f5f8] flex items-center justify-center mr-[10px] overflow-hidden shrink-0">
-                          <HomeBrandLogo type={acc.icon} size={28} />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
-                          <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
-                        </div>
-                        {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 时间选择器 */}
-          {activePicker === 'datetime' && (
-            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">选择时间</span>
-                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              <input type="datetime-local" defaultValue={`${recordDate.getFullYear()}-${String(recordDate.getMonth()+1).padStart(2,'0')}-${String(recordDate.getDate()).padStart(2,'0')}T${String(recordDate.getHours()).padStart(2,'0')}:${String(recordDate.getMinutes()).padStart(2,'0')}`} onChange={(e) => { if (e.target.value) setRecordDate(new Date(e.target.value)); }} className="w-full border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none bg-white focus:border-[#1677ff]" />
-              <div className="flex space-x-[8px] mt-[10px]">
-                {['今天', '昨天', '本周'].map((label) => {
-                  const d = new Date();
-                  if (label === '昨天') d.setDate(d.getDate() - 1);
-                  else if (label === '本周') d.setDate(d.getDate() - d.getDay() + 1);
-                  return <button key={label} onClick={() => { setRecordDate(d); setActivePicker(null); }} className="flex-1 py-[8px] bg-white rounded-[10px] text-[13px] font-medium text-[#1677ff] active:bg-[#f0f5ff] transition-colors">{label}</button>;
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 备注输入 */}
-          {activePicker === 'note' && (
-            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">添加备注</span>
-                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              <button onClick={() => openHomeKeyboard('recordNote')} className="w-full min-h-[80px] border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-left bg-white active:bg-[#f9f9f9] transition-colors">
-                <span className={`block text-[14px] whitespace-pre-wrap break-words ${recordNote ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>{recordNote || '输入备注内容...'}</span>
-              </button>
-              <button onClick={() => setActivePicker(null)} className="w-full mt-[8px] h-[40px] bg-[#1677ff] text-white rounded-[10px] text-[14px] font-medium active:bg-blue-700 transition-colors">完成</button>
-            </div>
-          )}
-
-          {/* 标签选择 */}
-          {activePicker === 'tag' && (
-            <div className="bg-[#f4f5f8] rounded-[16px] p-[12px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">添加标签</span>
-                <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              <div className="flex flex-wrap gap-[8px]">
-                {['日常', '工作', '家庭', '旅行', '朋友', '医疗', '学习', '娱乐'].map((t) => (
-                  <button key={t} onClick={() => { setRecordTag(recordTag === t ? '' : t); }} className={`px-[14px] py-[7px] rounded-full text-[13px] font-medium transition-all ${recordTag === t ? 'bg-[#1677ff] text-white' : 'bg-white text-[#3a3a3c] border border-[#e5e5ea] active:bg-[#f0f5ff]'}`}>{t}</button>
-                ))}
-              </div>
-              <button onClick={() => setActivePicker(null)} className="w-full mt-[10px] h-[40px] bg-[#1677ff] text-white rounded-[10px] text-[14px] font-medium active:bg-blue-700 transition-colors">完成</button>
-            </div>
-          )}
-
       </div>
 
       {/* 预算管理面板 */}
-      {activeModal === 'budget' && (
-        <>
-          <div className="absolute inset-0 bg-black/40 z-[90]" onClick={closeModals} />
-          <div className="absolute bottom-[12px] left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[88vh] animate-in slide-in-from-bottom duration-300">
-            <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-            <div className="overflow-y-auto hide-scrollbar flex-1 p-[16px] space-y-[14px]">
-              <div className="bg-white rounded-[16px] p-[16px] shadow-sm">
-                <div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]">
-                  <span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span>
-                  <span>本月剩余 <span className={`font-bold ${budgetRemaining >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{budgetRemaining.toFixed(2)}</span></span>
-                </div>
-                <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">元</span></div>
-                <div className="h-[4px] bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#1677ff] transition-all" style={{width: `${Math.min(100, (budgetUsed / budgetAmount) * 100).toFixed(0)}%`}}></div>
-                </div>
-                <div className="flex justify-between text-[10px] text-[#8e8e93] mt-[6px]">
-                  <span>已支出 <span className="text-[#1c1c1e] font-semibold">{budgetUsed.toLocaleString()}</span></span>
-                  <span>{((budgetUsed / budgetAmount) * 100).toFixed(0)}%</span>
-                </div>
-              </div>
+      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'budget' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out flex flex-col pb-[24px] ${activeModal === 'budget' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+        <div className="p-[16px] space-y-[14px]">
+          <div className="bg-white rounded-[16px] p-[16px] shadow-sm"><div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]"><span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span><span>本月剩余 <span className="text-[#10b981] font-bold">{budgetRemaining.toFixed(2)}</span></span></div><div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div><div className="h-[4px] bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-[#1677ff]" style={{width:`${budgetProgressPercent.toFixed(0)}%`}}></div></div></div>
+          <div className="bg-white rounded-[12px] px-[12px] overflow-hidden"><SettingRow onClick={() => {setBudgetInput(String(budgetAmount)); setIsBudgetKeyboardOpen(true);}} iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} /><SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value="每月" /><SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} /></div>
+          <button onClick={() => {setBudgetInput(String(budgetAmount)); setIsBudgetKeyboardOpen(true);}} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
+        </div>
+      </div>
 
-              <div className="bg-white rounded-[12px] px-[12px] overflow-hidden">
-                <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => { setIsEditingBudget(true); openHomeKeyboard('budgetAmount'); }} />
-                <SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value={budgetPeriod} onClick={() => setIsBudgetPeriodOpen(!isBudgetPeriodOpen)} />
-                <SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} />
-              </div>
-
-              {isEditingBudget && (
-                <div className="bg-white rounded-[12px] p-[14px] space-y-[10px]">
-                  <span className="text-[13px] font-bold text-[#1c1c1e]">调整预算金额</span>
-                  <button onClick={() => openHomeKeyboard('budgetAmount')} className="w-full flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] text-left active:bg-[#f9f9f9] transition-colors">
-                    <span className="text-[16px] font-bold text-[#1c1c1e] mr-[6px]">¥</span>
-                    <span className={`flex-1 text-[16px] font-bold ${budgetInput ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>{budgetInput || '输入预算金额'}</span>
-                  </button>
-                  <div className="flex space-x-[8px]">
-                    <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
-                    <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); if (updateBudget) updateBudget(v); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
-                  </div>
-                </div>
-              )}
-
-              {isBudgetPeriodOpen && (
-                <div className="bg-white rounded-[12px] p-[14px]">
-                  <span className="text-[13px] font-bold text-[#1c1c1e] block mb-[10px]">选择周期</span>
-                  <div className="grid grid-cols-3 gap-[8px]">
-                    {['每日', '每周', '每月', '每季度', '每半年', '每年'].map((p) => (
-                      <button key={p} onClick={() => { setBudgetPeriod(p); setIsBudgetPeriodOpen(false); }} className={`py-[10px] rounded-[10px] text-[13px] font-medium transition-all ${budgetPeriod === p ? 'bg-[#1677ff] text-white' : 'bg-[#f4f5f8] text-[#3a3a3c] active:bg-[#e5eeff]'}`}>{p}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button onClick={() => { setIsEditingBudget(true); openHomeKeyboard('budgetAmount'); }} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
-            </div>
-          </div>
-        </>
-      )}
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isBudgetKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsBudgetKeyboardOpen(false)} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isBudgetKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsBudgetKeyboardOpen(false)}>取消</span><span className="font-bold">修改预算</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>{const v = Number(budgetInput)||0; setBudgetAmount(v); if (updateBudget) updateBudget(v); setIsBudgetKeyboardOpen(false);}}>保存</span></div></div>
+        <div className="p-[20px] bg-white flex items-center justify-center space-x-[8px] text-[32px] font-bold border-b border-gray-50"><span>¥</span><span>{budgetInput || '0'}</span><div className="w-[2px] h-[28px] bg-[#1677ff] animate-pulse"></div></div>
+        <div className="p-[16px] grid grid-cols-4 gap-[6px]">
+          {['1','2','3','delete','4','5','6','clear','7','8','9','save','.','0'].map(k => {
+            if (k === 'delete') return <button key={k} onClick={()=>handleKeyboardPress('delete', 'budget')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><Delete className="w-[18px] h-[18px]" /></button>;
+            if (k === 'clear') return <button key={k} onClick={()=>setBudgetInput('')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 text-[14px]">清空</button>;
+            if (k === 'save') return <button key={k} onClick={()=>{const v = Number(budgetInput)||0; setBudgetAmount(v); if (updateBudget) updateBudget(v); setIsBudgetKeyboardOpen(false);}} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">保存</button>;
+            if (k === '0') return <button key={k} onClick={()=>handleKeyboardPress('0', 'budget')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
+            return <button key={k} onClick={()=>handleKeyboardPress(k, 'budget')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
+          })}
+        </div>
+      </div>
 
       {/* 转账管理面板 */}
-      {activeModal === 'transfer' && (
-        <>
-          <div className="absolute inset-0 bg-black/40 z-[90]" onClick={closeModals} />
-          <div className="absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[90vh] animate-in slide-in-from-bottom duration-300">
-            <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-            <div className="overflow-y-auto hide-scrollbar flex-1 p-[16px] space-y-[12px]">
-              <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
-              <div className="bg-white rounded-[16px] px-[16px] overflow-hidden">
-                <TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} />
-                <TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} />
-                <button onClick={() => openHomeKeyboard('transferAmount')} className="w-full flex items-center justify-between py-[14px] text-left active:bg-[#f9f9f9] transition-colors">
-                  <span className="text-[14px] text-[#1c1c1e] shrink-0 w-[70px]">转账金额</span>
-                  <span className={`flex-1 text-right text-[14px] ${transferAmount ? 'text-[#1c1c1e] font-semibold' : 'text-[#c7c7cc]'}`}>{transferAmount ? `¥ ${transferAmount}` : '请输入金额'}</span>
-                </button>
-              </div>
+      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'transfer' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out flex flex-col pb-[24px] ${activeModal === 'transfer' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+        <div className="p-[16px] space-y-[12px]">
+          <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
+          <div className="bg-white rounded-[16px] px-[16px]"><TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} /><TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} /><TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `¥ ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} /></div>
+          <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
+        </div>
+      </div>
 
-              {/* 转账账户选择器 */}
-              {transferPickerOpen && (
-                <div className="bg-white rounded-[16px] p-[14px]">
-                  <div className="flex items-center justify-between mb-[10px]">
-                    <span className="text-[13px] font-bold text-[#1c1c1e]">{transferPickerOpen === 'out' ? '选择转出账户' : '选择转入账户'}</span>
-                    <button onClick={() => setTransferPickerOpen(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-                  </div>
-                  {accounts.length === 0 ? (
-                    <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先在资产页面添加</div>
-                  ) : (
-                    <div className="space-y-[6px] max-h-[200px] overflow-y-auto hide-scrollbar">
-                      {accounts.map((acc) => {
-                        const selected = transferPickerOpen === 'out' ? transferOutAccount : transferInAccount;
-                        const isSelected = selected && (selected.id === acc.id || selected.name === acc.name);
-                        return (
-                          <button key={acc.id || acc.name} onClick={() => { if (transferPickerOpen === 'out') setTransferOutAccount(acc); else setTransferInAccount(acc); setTransferPickerOpen(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-[#f4f5f8] active:bg-[#e5eeff]'}`}>
-                            <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mr-[10px] shrink-0 overflow-hidden">
-                              <HomeBrandLogo type={acc.icon} size={28} />
-                            </div>
-                            <div className="flex-1 text-left">
-                              <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
-                              <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
-                            </div>
-                            {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      <CustomInputKeyboard
-        open={Boolean(homeKeyboardField)}
-        label={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].label : ''}
-        value={getHomeKeyboardValue()}
-        suffix={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].suffix || '' : ''}
-        mode={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].mode || 'number' : 'number'}
-        placeholder={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].placeholder || '' : ''}
-        quickActions={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].quickActions || [] : []}
-        onClose={closeHomeKeyboard}
-        onChange={setHomeKeyboardValue}
-      />
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isTransferKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsTransferKeyboardOpen(false)} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isTransferKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsTransferKeyboardOpen(false)}>取消</span><span className="font-bold">转账金额</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>setIsTransferKeyboardOpen(false)}>确定</span></div></div>
+        <div className="p-[20px] bg-white flex items-center justify-center space-x-[8px] text-[32px] font-bold border-b border-gray-50"><span>¥</span><span>{transferAmount || '0'}</span><div className="w-[2px] h-[28px] bg-[#1677ff] animate-pulse"></div></div>
+        <div className="p-[16px] grid grid-cols-4 gap-[6px]">
+          {['1','2','3','delete','4','5','6','clear','7','8','9','save','.','0'].map(k => {
+            if (k === 'delete') return <button key={k} onClick={()=>handleKeyboardPress('delete', 'transfer')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><Delete className="w-[18px] h-[18px]" /></button>;
+            if (k === 'clear') return <button key={k} onClick={() => setTransferAmount('')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 text-[14px]">清空</button>;
+            if (k === 'save') return <button key={k} onClick={()=>setIsTransferKeyboardOpen(false)} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">确定</button>;
+            if (k === '0') return <button key={k} onClick={()=>handleKeyboardPress('0', 'transfer')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
+            return <button key={k} onClick={()=>handleKeyboardPress(k, 'transfer')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
+          })}
+        </div>
+      </div>
     </div>
   );
 }
