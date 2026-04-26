@@ -589,6 +589,9 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
+  const toggleRecordPicker = (picker) => {
+    setActivePicker((current) => current === picker ? null : picker);
+  };
 
   const renderFormList = () => {
     const accLabel = recordAccount ? recordAccount.name : '选择账户';
@@ -596,30 +599,30 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     if (recordActiveTab === '支出') {
       return (
         <>
-          <FormRow Icon={Utensils} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="分类" value={recordCategory} onClick={() => setActivePicker('category')} />
+          <FormRow Icon={Utensils} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="分类" value={recordCategory} onClick={() => toggleRecordPicker('category')} />
           {renderRecordPickerPanel('category')}
-          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value={accLabel} onClick={() => setActivePicker('account')} />
+          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value={accLabel} onClick={() => toggleRecordPicker('account')} />
           {renderRecordPickerPanel('account')}
-          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => setActivePicker('datetime')} />
+          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => toggleRecordPicker('datetime')} />
           {renderRecordPickerPanel('datetime')}
-          <FormRow Icon={FileText} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => setActivePicker('note')} />
+          <FormRow Icon={FileText} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => toggleRecordPicker('note')} />
           {renderRecordPickerPanel('note')}
-          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => setActivePicker('tag')} />
+          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => toggleRecordPicker('tag')} />
           {renderRecordPickerPanel('tag')}
         </>
       );
     } else {
       return (
         <>
-          <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value={recordCategoryIncome} onClick={() => setActivePicker('category')} />
+          <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value={recordCategoryIncome} onClick={() => toggleRecordPicker('category')} />
           {renderRecordPickerPanel('category')}
-          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} onClick={() => setActivePicker('account')} />
+          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} onClick={() => toggleRecordPicker('account')} />
           {renderRecordPickerPanel('account')}
-          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => setActivePicker('datetime')} />
+          <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => toggleRecordPicker('datetime')} />
           {renderRecordPickerPanel('datetime')}
-          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => setActivePicker('note')} />
+          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => toggleRecordPicker('note')} />
           {renderRecordPickerPanel('note')}
-          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => setActivePicker('tag')} />
+          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => toggleRecordPicker('tag')} />
           {renderRecordPickerPanel('tag')}
         </>
       );
