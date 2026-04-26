@@ -609,10 +609,139 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value={recordCategoryIncome} onClick={() => setActivePicker('category')} />
           <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} onClick={() => setActivePicker('account')} />
           <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => setActivePicker('datetime')} />
-          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} border={false} onClick={() => setActivePicker('note')} />
+          <FormRow Icon={FileText} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="备注" value={recordNote || '点击输入'} valueColor={recordNote ? 'text-[#1c1c1e]' : 'text-gray-300'} onClick={() => setActivePicker('note')} />
+          <FormRow Icon={Tag} iconBg="bg-[#f4f5f8]" iconColor="text-[#8e8e93]" label="标签" value={recordTag || '+ 添加标签'} valueColor={recordTag ? 'text-[#1c1c1e]' : 'text-[#1677ff]'} border={false} onClick={() => setActivePicker('tag')} />
         </>
       );
     }
+  };
+
+  const formatDateTimeLocal = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const renderRecordPickerPanel = () => {
+    if (showInlineKeyboard || !activePicker) return null;
+
+    if (activePicker === 'category') {
+      const categoryList = recordActiveTab === '收入' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+      return (
+        <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px]">
+          <div className="grid grid-cols-4 gap-[8px]">
+            {categoryList.map((item) => {
+              const IconComp = item.icon;
+              const isSelected = recordActiveTab === '收入' ? recordCategoryIncome === item.name : recordCategory === item.name;
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => {
+                    if (recordActiveTab === '收入') setRecordCategoryIncome(item.name);
+                    else setRecordCategory(item.name);
+                    setActivePicker(null);
+                  }}
+                  className={`h-[64px] rounded-[12px] flex flex-col items-center justify-center space-y-[5px] transition-colors ${isSelected ? 'bg-white ring-2 ring-[#1677ff]/70 shadow-sm' : 'bg-white/70 active:bg-white'}`}
+                >
+                  <div className="w-[24px] h-[24px] rounded-full flex items-center justify-center" style={{ backgroundColor: `${item.color}18` }}>
+                    <IconComp className="w-[13px] h-[13px]" style={{ color: item.color }} strokeWidth={2.4} />
+                  </div>
+                  <span className={`text-[11px] ${isSelected ? 'text-[#1677ff] font-bold' : 'text-[#3a3a3c] font-medium'}`}>{item.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (activePicker === 'account') {
+      return (
+        <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px] space-y-[6px]">
+          {accounts.map((account) => {
+            const isSelected = recordAccount?.id === account.id;
+            return (
+              <button
+                key={account.id}
+                onClick={() => { setRecordAccount(account); setActivePicker(null); }}
+                className={`w-full h-[42px] rounded-[10px] px-[10px] flex items-center justify-between bg-white active:bg-gray-50 ${isSelected ? 'ring-2 ring-[#1677ff]/60' : ''}`}
+              >
+                <div className="flex items-center space-x-[8px]">
+                  <HomeBrandLogo type={account.icon || 'landmark'} size={24} />
+                  <span className="text-[13px] font-medium text-[#1c1c1e]">{account.name}</span>
+                </div>
+                {isSelected && <Check className="w-[15px] h-[15px] text-[#1677ff]" strokeWidth={3} />}
+              </button>
+            );
+          })}
+          {accounts.length === 0 && <div className="text-[12px] text-[#8e8e93] text-center py-[8px]">暂无可选账户</div>}
+        </div>
+      );
+    }
+
+    if (activePicker === 'datetime') {
+      return (
+        <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px] space-y-[8px]">
+          <input
+            type="datetime-local"
+            value={formatDateTimeLocal(recordDate)}
+            onChange={(event) => setRecordDate(new Date(event.target.value))}
+            className="w-full h-[42px] bg-white rounded-[10px] px-[10px] text-[13px] font-medium text-[#1c1c1e] outline-none"
+          />
+          <div className="grid grid-cols-3 gap-[6px]">
+            {[
+              { label: '今天', date: new Date(2026, 3, 25, 9, 41) },
+              { label: '昨天', date: new Date(2026, 3, 24, 9, 41) },
+              { label: '月初', date: new Date(2026, 3, 1, 9, 41) },
+            ].map((item) => (
+              <button key={item.label} onClick={() => { setRecordDate(item.date); setActivePicker(null); }} className="h-[34px] bg-white rounded-[8px] text-[12px] font-medium text-[#1677ff] active:bg-gray-50">{item.label}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activePicker === 'note') {
+      return (
+        <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px]">
+          <textarea
+            value={recordNote}
+            onChange={(event) => setRecordNote(event.target.value.slice(0, 50))}
+            placeholder="添加备注"
+            className="w-full h-[74px] bg-white rounded-[10px] p-[10px] text-[13px] text-[#1c1c1e] placeholder-[#c7c7cc] outline-none resize-none"
+          />
+          <div className="text-right text-[10px] text-[#c7c7cc] mt-[4px]">{recordNote.length}/50</div>
+        </div>
+      );
+    }
+
+    if (activePicker === 'tag') {
+      const tags = ['工作', '生活', '家庭', '重要', '报销', '订阅', '旅行', '学习'];
+      return (
+        <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px]">
+          <div className="flex flex-wrap gap-[8px]">
+            {tags.map((tag) => {
+              const isSelected = recordTag === tag;
+              return (
+                <button
+                  key={tag}
+                  onClick={() => { setRecordTag(isSelected ? '' : tag); setActivePicker(null); }}
+                  className={`px-[12px] h-[32px] rounded-full text-[12px] font-medium transition-colors ${isSelected ? 'bg-[#1677ff] text-white' : 'bg-white text-[#3a3a3c] active:bg-gray-50'}`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -861,7 +990,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
             </button>
           </div>
           <div className="flex space-x-[20px] border-b border-gray-50 px-[20px] pt-[8px] pb-[8px]">
-            {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>setRecordActiveTab(tab)} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
+            {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab); setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
           </div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={()=>setShowInlineKeyboard(true)}>
             <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
@@ -875,7 +1004,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
         <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: '310px' }}>
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-white transition-transform duration-300 ease-out pb-[20px] flex flex-col ${showInlineKeyboard ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
-            <div className="px-[24px] flex-1">{renderFormList()}</div>
+            <div className="px-[24px] flex-1 overflow-y-auto hide-scrollbar">
+              {renderFormList()}
+              {renderRecordPickerPanel()}
+            </div>
             <div className="px-[24px] pb-[10px] flex space-x-[12px]">
               <button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button>
               <button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button>
@@ -938,7 +1070,33 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
         <div className="p-[16px] space-y-[12px]">
           <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
-          <div className="bg-white rounded-[16px] px-[16px]"><TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} /><TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} /><TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `¥ ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} /></div>
+          <div className="bg-white rounded-[16px] px-[16px]"><TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} /><TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} /><TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `¥ ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} /></div>
+          {transferPickerOpen && (
+            <div className="bg-white rounded-[16px] p-[12px] space-y-[6px] shadow-sm">
+              <div className="text-[12px] font-bold text-[#1c1c1e] px-[2px] mb-[2px]">{transferPickerOpen === 'out' ? '选择转出账户' : '选择转入账户'}</div>
+              {accounts.map((account) => {
+                const selected = transferPickerOpen === 'out' ? transferOutAccount?.id === account.id : transferInAccount?.id === account.id;
+                return (
+                  <button
+                    key={account.id}
+                    onClick={() => {
+                      if (transferPickerOpen === 'out') setTransferOutAccount(account);
+                      else setTransferInAccount(account);
+                      setTransferPickerOpen(null);
+                    }}
+                    className={`w-full h-[42px] rounded-[10px] px-[10px] flex items-center justify-between active:bg-gray-50 ${selected ? 'bg-[#f0f5ff] ring-1 ring-[#1677ff]/40' : 'bg-[#f7f8fb]'}`}
+                  >
+                    <div className="flex items-center space-x-[8px]">
+                      <HomeBrandLogo type={account.icon || 'landmark'} size={24} />
+                      <span className="text-[13px] font-medium text-[#1c1c1e]">{account.name}</span>
+                    </div>
+                    {selected && <Check className="w-[15px] h-[15px] text-[#1677ff]" strokeWidth={3} />}
+                  </button>
+                );
+              })}
+              {accounts.length === 0 && <div className="text-[12px] text-[#8e8e93] text-center py-[8px]">暂无可选账户</div>}
+            </div>
+          )}
           <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
         </div>
       </div>

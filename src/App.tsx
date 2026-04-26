@@ -2046,7 +2046,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
                <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{accountName || selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
-               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+               <div className="flex items-center space-x-[8px] shrink-0">
+                 <button onClick={saveAccountDetail} className="h-[28px] px-[12px] rounded-full bg-[#1677ff] text-white text-[12px] font-bold active:bg-[#0f60d6] transition-colors">保存</button>
+                 <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+               </div>
             </div>
             <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[16px] pt-[10px] pb-[16px]">
               <div className="mb-[14px]">
@@ -2084,7 +2087,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             </div>
             <div className="px-[16px] py-[10px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
                <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
+               <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
             </div>
           </div>
         </div>
