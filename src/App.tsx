@@ -6,7 +6,7 @@ import {
   Home, FileText, PieChart, Wallet, PenLine, BarChart2, PieChart as PieChartIcon,
   ArrowRightLeft, AlertTriangle, ArrowDownRight, TrendingUp, X, ArrowUp, Info,
   Filter, Landmark, CreditCard, Tag as TagIcon, CalendarDays, Pen, Check,
-  ChevronLeft, Plus, Banknote, MoreHorizontal
+  ChevronLeft, Plus, Banknote, MoreHorizontal, User, Shield, Globe, HelpCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -89,6 +89,7 @@ const getWeekRange = (referenceDate) => {
 function useSupabaseData() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [budget, setBudget] = useState(20000);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -103,13 +104,26 @@ function useSupabaseData() {
         // Auto-seed to Database if empty
         if (accs.length === 0) {
           console.log("Seeding accounts to Supabase...");
-          try { accs = await fetchSupabase("accounts", "POST", SEED_ACCOUNTS); } 
+          try { accs = await fetchSupabase("accounts", "POST", SEED_ACCOUNTS); }
           catch (e) { accs = SEED_ACCOUNTS; }
         }
         if (txs.length === 0) {
           console.log("Seeding transactions to Supabase...");
-          try { txs = await fetchSupabase("transactions", "POST", SEED_TRANSACTIONS); } 
+          try { txs = await fetchSupabase("transactions", "POST", SEED_TRANSACTIONS); }
           catch (e) { txs = SEED_TRANSACTIONS; }
+        }
+
+        // Load budget from settings table or localStorage fallback
+        try {
+          const settings = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+          if (settings && settings.length > 0) setBudget(Number(settings[0].value) || 20000);
+          else {
+            const ls = localStorage.getItem('monthly_budget');
+            if (ls) setBudget(Number(ls) || 20000);
+          }
+        } catch (e) {
+          const ls = localStorage.getItem('monthly_budget');
+          if (ls) setBudget(Number(ls) || 20000);
         }
 
         setAccounts(accs);
@@ -126,7 +140,7 @@ function useSupabaseData() {
   const updateTransaction = async (id, updates) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     if (id && String(id).length > 10) { // Check if valid DB UUID
-      try { await fetchSupabase(`transactions?id=eq.${id}`, "PATCH", updates); } 
+      try { await fetchSupabase(`transactions?id=eq.${id}`, "PATCH", updates); }
       catch (e) { console.error("Update failed", e); }
     }
   };
@@ -150,7 +164,31 @@ function useSupabaseData() {
     }
   };
 
-  return { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount };
+  const updateBudget = async (newBudget) => {
+    setBudget(newBudget);
+    localStorage.setItem('monthly_budget', String(newBudget));
+    try {
+      const existing = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+      if (existing && existing.length > 0) {
+        await fetchSupabase(`settings?key=eq.monthly_budget`, "PATCH", { value: String(newBudget) });
+      } else {
+        await fetchSupabase("settings", "POST", { key: 'monthly_budget', value: String(newBudget) });
+      }
+    } catch (e) {
+      console.warn('Settings table missing, budget saved to localStorage only');
+    }
+  };
+
+  const transferFunds = async (fromAccount, toAccount, amount) => {
+    if (!fromAccount || !toAccount || !amount || amount <= 0) return;
+    const fromBalance = parseFloat(String(fromAccount.balance).replace(/,/g, '')) - amount;
+    const toBalance = parseFloat(String(toAccount.balance).replace(/,/g, '')) + amount;
+    const formatBal = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (fromAccount.id) await updateAccount(fromAccount.id, { balance: formatBal(fromBalance) });
+    if (toAccount.id) await updateAccount(toAccount.id, { balance: formatBal(toBalance) });
+  };
+
+  return { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds };
 }
 
 // ==========================================
@@ -165,55 +203,75 @@ const LogoIcon = () => (
   </svg>
 );
 
-// Crypto & Tech Icons
-const AppleIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-white"><path d="M12 2C12 2 12 3.5 13.5 4.5C15 5.5 16.5 5 16.5 5C16.5 5 15.5 8 12.5 8C9.5 8 8.5 6 8.5 6C8.5 6 6.5 6.5 5.5 9C4.5 11.5 5 16.5 7 19.5C9 22.5 11.5 22.5 12.5 21.5C13.5 20.5 14.5 20.5 16.5 21.5C18.5 22.5 20.5 19.5 21.5 16.5C21.5 16.5 19 16 18 13.5C17 11 18.5 9 18.5 9C18.5 9 16.5 7 13.5 7.5C12.5 7.5 12 2 12 2Z" /></svg>);
-const OpenAiIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[16px] h-[16px] text-white"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2057 5.9847 5.9847 0 0 0 3.989-2.9 6.051 6.051 0 0 0-.7388-7.0732ZM13.2599 22.4278a4.4842 4.4842 0 0 1-2.9022-1.0664l.0567-.0333 4.8872-2.8223a.7925.7925 0 0 0 .3962-.684v-6.0416l2.1274 1.2284v5.334a4.526 4.526 0 0 1-4.5653 4.0852ZM5.2891 19.34a4.4842 4.4842 0 0 1-.6283-3.0315l.0614.0284 4.8919 2.8223a.7925.7925 0 0 0 .7925 0l5.2319-3.0208v2.4568L10.364 21.645A4.5308 4.5308 0 0 1 5.2891 19.34ZM2.8687 11.2359a4.4842 4.4842 0 0 1 2.274-2.1002v6.1031a.7925.7925 0 0 0 .3962.6888l5.2319 3.0208-2.1274 1.2284-5.2698-3.0397a4.5308 4.5308 0 0 1-.5049-5.8912h.0048ZM18.711 11.2359a4.4842 4.4842 0 0 1-2.274 2.1002V7.233a.7925.7925 0 0 0-.3962-.6888L10.8089 3.5234l2.1274-1.2284 5.2698 3.0397a4.5308 4.5308 0 0 1 .5049 5.8912h-.0048ZM10.7402 1.5722a4.4842 4.4842 0 0 1 2.9022 1.0664l-.0567.0333-4.8872 2.8223a.7925.7925 0 0 0-.3962.684v6.0416L6.1749 10.991V5.6571A4.526 4.526 0 0 1 10.7402 1.5722ZM18.711 4.66a4.4842 4.4842 0 0 1 .6283 3.0315l-.0614-.0284-4.8919-2.8223a.7925.7925 0 0 0-.7925 0l-5.2319 3.0208V5.4048l5.2746-3.054A4.5308 4.5308 0 0 1 18.711 4.66ZM14.9213 11.4582l-2.9211 1.6868-2.9211-1.6868v-3.3783l2.9211-1.6868 2.9211 1.6868v3.3783Z" /></svg>);
-const UsdtIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-white"><path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z" fill="#26A17B"/><path d="M13.435 10.822v2.855c1.64.088 2.923.447 3.527.915.688.535 1.066 1.258 1.066 2.04 0 .783-.378 1.505-1.066 2.04-.604.468-1.887.827-3.527.915v2.855h-2.87v-2.855c-1.64-.088-2.923-.447-3.527-.915-.688-.535-1.066-1.258-1.066-2.04 0-.783.378-1.505 1.066-2.04.604-.468 1.887-.827 3.527-.915v-2.855h2.87zm-1.435 4.39c2.518 0 4.56-1.12 4.56-2.5s-2.042-2.5-4.56-2.5-4.56 1.12-4.56 2.5 2.042 2.5 4.56 2.5z" fill="white"/></svg>);
-const TetherIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#26A17B" /><path d="M13.25 10.25V17.5h-2.5v-7.25H7v-2.5h10v2.5h-3.75z" fill="white" /></svg>);
-const BitcoinIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#F7931A" /><path d="M16.5 12.3c.4-.6.6-1.3.6-2.1 0-2.2-1.6-3.4-4.5-3.4H8v11h4.8c3.2 0 5-1.4 5-3.6 0-1.2-.5-2.2-1.3-2.9zM10.2 8.5h2.2c1.4 0 2.2.6 2.2 1.6 0 1.1-.8 1.7-2.3 1.7h-2.1V8.5zm2.5 7.6h-2.5v-3.5h2.6c1.6 0 2.5.7 2.5 1.8 0 1.2-.9 1.7-2.6 1.7z" fill="white" /></svg>);
-const EthereumIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#627EEA" /><path d="M11.8 4L7 11.9l4.8 2.8 4.8-2.8L11.8 4zm0 15.5l-4.8-6.7 4.8 2.8 4.8-2.8-4.8 6.7z" fill="white" opacity="0.8"/><path d="M11.8 14.7V4l-4.8 7.9 4.8 2.8z" fill="white" /></svg>);
-const OkxIcon = ({ size = 20, innerSize = 13 }) => (<div className={`bg-black rounded-full flex items-center justify-center shrink-0`} style={{width: size, height: size}}><svg viewBox="0 0 24 24" fill="currentColor" className="text-white" style={{width: innerSize, height: innerSize}}><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" /></svg></div>);
-const BitgetIcon = () => (<svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px] text-[#00e5c0] shrink-0"><path d="M12 2L22 12L12 22L2 12L12 2Z" /><circle cx="12" cy="12" r="4" fill="black" /></svg>);
-const HuobiIcon = () => (<div className="w-[18px] h-[18px] bg-[#1853db] rounded-full flex items-center justify-center shrink-0"><svg viewBox="0 0 24 24" fill="currentColor" className="w-[12px] h-[12px] text-white"><path d="M12 2C12 2 8 8 8 12C8 16 11.5 19 12 19C12.5 19 16 16 16 12C16 8 12 2 12 2ZM12 16C11 16 10.5 15 10.5 14C10.5 13 12 10 12 10C12 10 13.5 13 13.5 14C13.5 15 13 16 12 16Z" /></svg></div>);
-const BinanceLogo = ({ size = 20 }) => (<div className={`bg-[#fcd535] rounded-[6px] flex items-center justify-center shrink-0`} style={{ width: size, height: size }}><svg viewBox="0 0 24 24" fill="#1e2329" style={{ width: size * 0.6, height: size * 0.6 }}><path d="M12 2l-5 5 2 2 3-3 3 3 2-2-5-5zm0 20l5-5-2-2-3 3-3-3-2 2 5 5zm-7-7l-3-3 3-3 2 2-3 3 3 3-2 2zm14 0l3-3-3-3-2 2 3 3-3 3 2 2zM12 9l-3 3 3 3 3-3-3-3z"/></svg></div>);
-const BybitIcon = ({ size = 20 }) => (<div className={`bg-[#121214] rounded-[6px] flex items-center justify-center shrink-0`} style={{ width: size, height: size }}><span className="text-white font-bold tracking-tighter uppercase" style={{ fontSize: size * 0.3 }}>BYBIT</span></div>);
-const GateIoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#0d6efd] shrink-0"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="45 15" strokeLinecap="round"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>);
-const KuCoinIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#24ae8f] shrink-0"><path d="M12 2L22 7V17L12 22L2 17V7L12 2Z" fill="currentColor" opacity="0.2"/><path d="M7 8V16L12 13L17 16V8L12 11L7 8Z" fill="currentColor"/></svg>);
-const MexcIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] text-[#2152f3] shrink-0"><path d="M3 18L12 6L21 18H16L12 11.5L8 18H3Z" fill="currentColor"/></svg>);
-const HexagonCryptoIcon = () => (<svg viewBox="0 0 24 24" fill="none" className="w-[18px] h-[18px] text-[#f59e0b]"><path d="M12 2L20.6603 7V17L12 22L3.33975 17V7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M12 7L16.3301 9.5V14.5L12 17L7.66987 14.5V9.5L12 7Z" fill="currentColor"/></svg>);
+// ==========================================
+// BRAND LOGO API CONFIGURATION
+// ==========================================
+const BRAND_LOGOS = {
+  apple:      { url: 'https://cdn.simpleicons.org/apple/ffffff',       bg: '#000000' },
+  openai:     { url: 'https://cdn.simpleicons.org/openai/ffffff',      bg: '#10a37f' },
+  alipay:     { url: 'https://cdn.simpleicons.org/alipay/ffffff',      bg: '#1677ff' },
+  wechat:     { url: 'https://cdn.simpleicons.org/wechat/ffffff',      bg: '#07c160' },
+  okx:        { url: 'https://cdn.simpleicons.org/okx/ffffff',         bg: '#000000' },
+  binance:    { url: 'https://cdn.simpleicons.org/binance/1e2329',     bg: '#fcd535' },
+  bitget:     { url: 'https://cdn.simpleicons.org/bitget/000000',      bg: '#00e5c0', fallbackText: 'BG', textColor: '#000' },
+  huobi:      { url: 'https://cdn.simpleicons.org/huobi/ffffff',       bg: '#1853db', fallbackText: 'HTX' },
+  gateio:     { url: 'https://logo.clearbit.com/gate.io',             bg: '#0d6efd' },
+  kucoin:     { url: 'https://logo.clearbit.com/kucoin.com',          bg: '#24ae8f' },
+  mexc:       { url: 'https://logo.clearbit.com/mexc.com',            bg: '#2152f3' },
+  bybit:      { url: 'https://logo.clearbit.com/bybit.com',           bg: '#121214' },
+  mashreq:    { url: 'https://logo.clearbit.com/mashreq.com',         bg: '#f37021' },
+  adcb:       { url: 'https://logo.clearbit.com/adcb.com',            bg: '#ffffff' },
+  ccb:        { url: 'https://logo.clearbit.com/ccb.com',             bg: '#003B90' },
+  usdt:       { url: 'https://cdn.simpleicons.org/tether/ffffff',      bg: '#26A17B' },
+  bitcoin:    { url: 'https://cdn.simpleicons.org/bitcoin/ffffff',     bg: '#F7931A' },
+  ethereum:   { url: 'https://cdn.simpleicons.org/ethereum/ffffff',    bg: '#627EEA' },
+  amazon:     { url: 'https://cdn.simpleicons.org/amazon/ff9900',      bg: '#232f3e' },
+  mastercard: { url: 'https://logo.clearbit.com/mastercard.com',      bg: '#ffffff' },
+  noon:       { url: 'https://logo.clearbit.com/noon.com',            bg: '#fee000' },
+};
 
-// Bank & Wallet & Payment Icons
-const AmazonIcon = () => (<div className="text-white font-bold text-[14px] leading-none" style={{ fontFamily: 'Georgia, serif' }}>a</div>);
-const MastercardIcon = () => (<div className="flex -space-x-[6px]"><div className="w-[11px] h-[11px] rounded-full bg-[#ff3b30] opacity-90 mix-blend-multiply"></div><div className="w-[11px] h-[11px] rounded-full bg-[#ffcc00] opacity-90 mix-blend-multiply"></div></div>);
-const MashreqLogoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><path d="M12 2C17.52 2 22 6.48 22 12c0 1.66-.41 3.22-1.14 4.6l-5.6-3.23c.47-.85.74-1.84.74-2.87 0-3.31-2.69-6-6-6-1.03 0-2.02.27-2.87.74L3.9 1.64C5.28.91 6.84.5 8.5.5h3.5z" fill="#f37021"/><path d="M2.5 8.5c-.91 1.38-1.5 2.94-1.5 4.6 0 5.52 4.48 10 10 10 1.66 0 3.22-.59 4.6-1.5l-3.23-5.6c-.85.47-1.84.74-2.87.74-3.31 0-6-2.69-6-6 0-1.03.27-2.02.74-2.87L1.01 8.5z" fill="#ffb612"/></svg>);
-const AdcbLogoIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><path d="M12 2L2 20h20L12 2z" fill="#ed1c24" opacity="0.9"/><path d="M12 8l-5 9h10l-5-9z" fill="white"/><path d="M12 11l-2 4h4l-2-4z" fill="#1c1c1e"/></svg>);
-const CCBLogo = () => (<svg viewBox="0 0 24 24" className="w-[18px] h-[18px] shrink-0" fill="none"><circle cx="12" cy="12" r="11" fill="#003B90" /><circle cx="12" cy="12" r="8" fill="white" /><circle cx="12" cy="12" r="5" fill="#003B90" /><path d="M 12 7 L 17 12 L 12 17 L 7 12 Z" fill="white" /></svg>);
-const AlipayLogo = () => (<div className="w-[18px] h-[18px] bg-[#1677ff] rounded-full text-white font-bold text-[11px] flex items-center justify-center leading-none shrink-0" style={{ fontFamily: 'sans-serif' }}>支</div>);
-const WeChatLogo = () => (<div className="w-[20px] h-[20px] bg-[#07c160] rounded-full flex items-center justify-center relative shrink-0"><div className="w-[10px] h-[8px] bg-white rounded-full absolute top-[5px] left-[3px] shadow-sm"></div><div className="w-[7px] h-[5px] bg-white rounded-full absolute bottom-[4px] right-[3px] shadow-sm"></div></div>);
-const CashIcon = () => (<div className="w-[18px] h-[18px] bg-[#e6f4ff] border border-[#52c41a] rounded-[4px] flex items-center justify-center shrink-0"><div className="w-[9px] h-[5px] border border-[#52c41a] rounded-[2px] flex items-center justify-center"><div className="w-[3px] h-[1.5px] bg-[#52c41a] rounded-full"></div></div></div>);
+const BrandLogo = ({ type, size = 36 }) => {
+  const [error, setError] = useState(false);
+  const config = BRAND_LOGOS[type];
+  const imgSize = Math.round(size * 0.6);
+  if (!config) return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#8e8e93]" style={{ width: size, height: size }}>
+      <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+    </div>
+  );
+  return (
+    <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
+      {error
+        ? config.fallbackText
+          ? <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 800, color: config.textColor || '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>{config.fallbackText}</span>
+          : <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+        : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
+      }
+    </div>
+  );
+};
+
+const CashIcon = ({ size = 36 }) => (
+  <div className="rounded-full flex items-center justify-center shrink-0 bg-[#e6f4ff] border-2 border-[#52c41a]" style={{ width: size, height: size }}>
+    <Banknote style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5) }} className="text-[#52c41a]" />
+  </div>
+);
+
 const CNYIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#E60012" /><text x="12" y="16.5" fontSize="13" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="sans-serif">¥</text></svg>);
+const TetherIcon = () => <BrandLogo type="usdt" size={20} />;
+const BitcoinIcon = () => <BrandLogo type="bitcoin" size={20} />;
+const EthereumIcon = () => <BrandLogo type="ethereum" size={20} />;
 
 // Helper for dynamic icon loading
 const getIconByString = (type, size = 'small') => {
-  switch(type) {
-    case 'apple': return <AppleIcon />;
-    case 'openai': return <OpenAiIcon />;
-    case 'usdt': return <UsdtIcon />;
-    case 'landmark': return <Landmark className={size === 'large' ? "w-[24px] h-[24px] text-white" : "w-[16px] h-[16px] text-white"} strokeWidth={2.5} />;
-    case 'alipay': return <AlipayLogo />;
-    case 'bitget': return size === 'large' ? <div className="transform scale-[2.4]"><BitgetIcon /></div> : <BitgetIcon />;
-    case 'noon': return <div className="w-[16px] h-[16px] bg-black text-[#fee000] rounded-[4px] flex items-center justify-center font-bold text-[11px]">n</div>;
-    case 'cash': return size === 'large' ? <div className="transform scale-[2.4]"><CashIcon /></div> : <CashIcon />;
-    case 'amazon': return <AmazonIcon />;
-    case 'mastercard': return <MastercardIcon />;
-    case 'mashreq': return <MashreqLogoIcon />;
-    case 'ccb': return <CCBLogo />;
-    case 'wechat': return <WeChatLogo />;
-    case 'okx': return size === 'large' ? <OkxIcon size={48} innerSize={30} /> : <OkxIcon size={20} innerSize={13} />;
-    case 'binance': return size === 'large' ? <BinanceLogo size={48} /> : <BinanceLogo size={20} />;
-    case 'huobi': return size === 'large' ? <div className="transform scale-[2.4]"><HuobiIcon /></div> : <HuobiIcon />;
-    default: return <Landmark className="w-[16px] h-[16px] text-gray-500" />;
-  }
+  const px = size === 'large' ? 48 : size === 'medium' ? 36 : 20;
+  if (type === 'cash') return <CashIcon size={px} />;
+  if (type === 'landmark') return (
+    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: px, height: px }}>
+      <Landmark style={{ width: Math.round(px * 0.5), height: Math.round(px * 0.5) }} className="text-white" strokeWidth={2.5} />
+    </div>
+  );
+  return <BrandLogo type={type} size={px} />;
 };
 
 // UI Detail Icons
@@ -327,11 +385,14 @@ const STATS_DETAIL_MODAL_DATA = [
 ];
 
 const BILLS_FILTER_OPTIONS = [
-  { id: 'all', name: '全部支付方式', icon: <CheckCircleSolid /> }, { id: 'ADCB', name: 'ADCB', icon: <AdcbLogoIcon /> },
-  { id: 'Apple Pay', name: 'Apple Pay', icon: <div className="w-[20px] h-[20px] bg-black rounded-full flex items-center justify-center"><AppleIcon /></div> },
-  { id: 'Mashreq Bank', name: 'Mashreq Bank', icon: <MashreqLogoIcon /> }, { id: '支付宝', name: '支付宝', icon: <AlipayLogo /> },
-  { id: 'OKX', name: 'OKX', icon: <OkxIcon size={20} innerSize={13} /> }, { id: 'Bitget', name: 'Bitget', icon: <div className="w-[20px] h-[20px] bg-black rounded-full flex items-center justify-center"><BitgetIcon /></div> },
-  { id: '现金', name: '现金', icon: <CashIcon /> },
+  { id: 'all', name: '全部支付方式', icon: <CheckCircleSolid /> },
+  { id: 'ADCB', name: 'ADCB', icon: <BrandLogo type="adcb" size={20} /> },
+  { id: 'Apple Pay', name: 'Apple Pay', icon: <BrandLogo type="apple" size={20} /> },
+  { id: 'Mashreq Bank', name: 'Mashreq Bank', icon: <BrandLogo type="mashreq" size={20} /> },
+  { id: '支付宝', name: '支付宝', icon: <BrandLogo type="alipay" size={20} /> },
+  { id: 'OKX', name: 'OKX', icon: <BrandLogo type="okx" size={20} /> },
+  { id: 'Bitget', name: 'Bitget', icon: <BrandLogo type="bitget" size={20} /> },
+  { id: '现金', name: '现金', icon: <CashIcon size={20} /> },
 ];
 
 const BILLS_CALENDAR_DAYS = [
@@ -396,6 +457,137 @@ const getActionText = (element) => {
   if (!element) return '';
   const label = element.getAttribute('data-action-label') || element.getAttribute('aria-label') || element.textContent;
   return (label || '').replace(/\s+/g, ' ').trim();
+};
+
+const ProfileSheet = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  const menuItems = [
+    { icon: <User className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2} />, label: '账户信息', sub: '管理个人信息与头像' },
+    { icon: <Bell className="w-[16px] h-[16px] text-[#ff9500]" strokeWidth={2} />, label: '通知设置', sub: '账单提醒、收益通知' },
+    { icon: <Shield className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2} />, label: '安全与隐私', sub: '密码、生物识别解锁' },
+    { icon: <Globe className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2} />, label: '语言与货币', sub: '中文 · AED / CNY' },
+    { icon: <HelpCircle className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} />, label: '帮助与反馈', sub: '使用说明、联系我们' },
+  ];
+  return (
+    <div className="fixed inset-0 z-[800] flex justify-center items-end">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[calc(24px+env(safe-area-inset-bottom))] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
+        <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
+        <div className="flex items-center space-x-[14px] mb-[20px] pb-[20px] border-b border-[#f4f5f8]">
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-[54px] h-[54px] rounded-full object-cover bg-blue-100 shrink-0" />
+          <div className="flex-1"><div className="text-[17px] font-bold text-[#1c1c1e]">Felix</div><div className="text-[13px] text-[#8e8e93]">BitLedger Pro 用户</div></div>
+          <button onClick={onClose} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center shrink-0 active:scale-95 transition-transform"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+        </div>
+        <div className="space-y-[2px]">
+          {menuItems.map((item, i) => (
+            <button key={i} onClick={onClose} className="w-full flex items-center px-[4px] py-[10px] rounded-[12px] active:bg-[#f4f5f8] transition-colors text-left">
+              <div className="w-[34px] h-[34px] rounded-[10px] bg-[#f4f5f8] flex items-center justify-center mr-[12px] shrink-0">{item.icon}</div>
+              <div className="flex-1"><div className="text-[14px] font-semibold text-[#1c1c1e]">{item.label}</div><div className="text-[12px] text-[#8e8e93]">{item.sub}</div></div>
+              <ChevronRight className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2.5} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SearchModal = ({ isOpen, onClose, transactions }) => {
+  const [query, setQuery] = useState('');
+  if (!isOpen) return null;
+  const keyword = query.trim().toLowerCase();
+  const results = keyword.length < 1 ? [] : transactions.filter(tx =>
+    [tx.title, tx.subtitle, tx.tag, tx.note, tx.paymentMethod]
+      .filter(Boolean).some(v => String(v).toLowerCase().includes(keyword))
+  ).slice(0, 30);
+  return (
+    <div className="fixed inset-0 z-[800] flex justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose}></div>
+      <div className="relative w-full max-w-[430px] bg-[#f4f5f8] flex flex-col h-full animate-in fade-in duration-150">
+        <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[12px] bg-white border-b border-[#f0f0f0]">
+          <div className="flex items-center space-x-[10px]">
+            <div className="flex-1 flex items-center bg-[#f4f5f8] rounded-[12px] px-[12px] h-[40px]">
+              <Search className="w-[15px] h-[15px] text-[#8e8e93] mr-[8px] shrink-0" strokeWidth={2} />
+              <input autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索交易记录、账单..." className="flex-1 text-[15px] bg-transparent outline-none text-[#1c1c1e] placeholder:text-[#c7c7cc]" />
+              {query && <button onClick={() => setQuery('')} className="shrink-0 ml-[4px]"><ClearInputIcon /></button>}
+            </div>
+            <button onClick={onClose} className="text-[14px] font-semibold text-[#1677ff] shrink-0 active:opacity-60 transition-opacity">取消</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto hide-scrollbar px-[16px] pt-[12px] pb-[24px]">
+          {keyword.length === 0 ? (
+            <div className="text-center text-[#8e8e93] text-[13px] mt-[50px]">
+              <Search className="w-[32px] h-[32px] text-[#d1d1d6] mx-auto mb-[10px]" strokeWidth={1.5} />
+              <div>输入关键字搜索交易记录</div>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="text-center text-[#8e8e93] text-[13px] mt-[50px]">没有找到与 "{query}" 相关的记录</div>
+          ) : (
+            <div className="bg-white rounded-[20px] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+              {results.map((tx, i) => (
+                <div key={tx.id || i} onClick={onClose} className={`flex items-center px-[16px] py-[12px] cursor-pointer active:bg-[#f9f9f9] transition-colors ${i !== results.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                  <div className="flex-1 ml-[10px] min-w-0">
+                    <div className="text-[13px] font-medium text-[#1c1c1e] truncate">{tx.title}</div>
+                    <div className="text-[11px] text-[#8e8e93] truncate">{tx.fullDate} · {tx.tag}</div>
+                  </div>
+                  <div className={`text-[13px] font-semibold shrink-0 ml-[8px] ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}<span className="text-[10px] font-normal ml-[2px]">{tx.currency}</span></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AprLimitDisplay = ({ balance, aprValues, currency }) => {
+  const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
+  const lim = parseFloat(aprValues.limit) || 0;
+  const baseRate = parseFloat(aprValues.baseRate) || 0;
+  const overflowRate = parseFloat(aprValues.overflowRate) || 0;
+  if (lim === 0 && baseRate === 0) return null;
+  const usedPct = lim > 0 ? Math.min(100, (bal / lim) * 100) : 0;
+  const isOverflow = lim > 0 && bal > lim;
+  const dailyEarnings = lim > 0
+    ? (Math.min(bal, lim) * (baseRate / 100) / 365 + Math.max(0, bal - lim) * (overflowRate / 100) / 365)
+    : (bal * baseRate / 100 / 365);
+  const monthlyEarnings = dailyEarnings * 30;
+  const barColor = usedPct < 80 ? '#1677ff' : usedPct < 100 ? '#ff9500' : '#ff3b30';
+  return (
+    <div className="mt-[14px] p-[12px] bg-[#f8faff] rounded-[12px] border border-[#e8f0fe]">
+      {lim > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-[6px]">
+            <span className="text-[12px] font-medium text-[#5c5c5e]">已用额度</span>
+            <div className="flex items-center space-x-[6px]">
+              {isOverflow && <span className="text-[9px] bg-[#fff1f0] text-[#ff3b30] px-[6px] py-[1px] rounded-full font-semibold border border-[#ffd6d3]">已超限</span>}
+              <span className="text-[12px] font-bold" style={{ color: barColor }}>{usedPct.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div className="h-[5px] bg-[#e5e5ea] rounded-full overflow-hidden mb-[6px]">
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, usedPct)}%`, backgroundColor: barColor }}></div>
+          </div>
+          <div className="text-[10px] text-[#8e8e93] mb-[10px]">
+            {bal.toLocaleString('en-US', { maximumFractionDigits: 2 })} / {lim.toLocaleString('en-US', { maximumFractionDigits: 2 })} {currency}
+          </div>
+        </>
+      )}
+      <div className="grid grid-cols-2 gap-[8px]">
+        <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div className="text-[10px] text-[#8e8e93] mb-[2px]">预计日收益</div>
+          <div className="text-[15px] font-bold text-[#10b981]">{dailyEarnings.toFixed(4)}</div>
+          <div className="text-[10px] text-[#8e8e93]">{currency}</div>
+        </div>
+        <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div className="text-[10px] text-[#8e8e93] mb-[2px]">预计月收益</div>
+          <div className="text-[15px] font-bold text-[#10b981]">{monthlyEarnings.toFixed(2)}</div>
+          <div className="text-[10px] text-[#8e8e93]">{currency}</div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 
@@ -593,7 +785,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
           <div className="flex flex-col">
             {transactions.slice(0, 4).map((tx, idx) => (
               <button key={tx.id || idx} onClick={() => openBills(`已打开 ${tx.title}`)} className="w-full flex items-center px-[20px] py-[14px] border-b border-[#f4f5f8] active:bg-[#f9f9f9] transition-colors text-left">
-                <div className={`w-[38px] h-[38px] rounded-full flex items-center justify-center shrink-0 ${tx.iconBg}`}>{getIconByString(tx.iconType)}</div>
+                <div className="w-[38px] h-[38px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                 <div className="flex-1 ml-[12px] flex justify-between items-center">
                    <div className="flex flex-col justify-center space-y-[2px]"><span className="text-[14px] font-bold text-[#1c1c1e]">{tx.title}</span><div className="flex items-center space-x-[6px]"><span className={`text-[10px] px-[4px] py-[1px] rounded-[4px] ${tx.isIncome ? 'bg-[#ecfdf5] text-[#10b981]' : 'bg-[#e6f4ff] text-[#1677ff]'}`}>{tx.isIncome ? '收入' : '支出'}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.tag}</span></div></div>
                    <div className="flex flex-col items-end justify-center space-y-[2px]"><span className={`text-[15px] font-bold ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.time}</span></div>
@@ -607,7 +799,7 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
   );
 };
 
-const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
+const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch }) => {
   const [activeTab, setActiveTab] = useState('月');
   const [insightTab, setInsightTab] = useState('支出分析');
   const [detailTab, setDetailTab] = useState('本月');
@@ -617,7 +809,6 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
   const [trendRange, setTrendRange] = useState({ start: 1, end: 4 });
   const switchStatsTab = (tab) => {
     setActiveTab(tab);
-    notify(`统计已切换为${tab}视图`);
   };
   const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
   const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -627,14 +818,14 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f7f8fa]/95 backdrop-blur-md">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify('已打开统计搜索')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={onOpenSearch} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f7f8fa]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
       <div className="px-[16px] mt-[8px] flex items-center justify-between">
-        <button onClick={() => notify('已选择 2026年4月')} className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
+        <button className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
           <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
         </button>
         <div className="flex bg-[#f4f5f8] rounded-[10px] p-[3px]">
@@ -714,20 +905,20 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
                   </div>
                   <div className="mt-[12px] flex justify-between">
                     <button onClick={() => setTrendRange({ start: 1, end: 12 })} className="text-[12px] font-medium text-[#1677ff]">全年</button>
-                    <button onClick={() => { setIsTrendRangeOpen(false); notify(`趋势范围已切换为${trendRangeLabel}`); }} className="rounded-[8px] bg-[#1677ff] px-[14px] py-[6px] text-[12px] font-semibold text-white">确定</button>
+                    <button onClick={() => setIsTrendRangeOpen(false)} className="rounded-[8px] bg-[#1677ff] px-[14px] py-[6px] text-[12px] font-semibold text-white">确定</button>
                   </div>
                 </div>
               </>
             )}
           </div>
         </div>
-        <div className="flex items-center space-x-[16px] mb-[20px]">
-          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#65d4a9] mr-[6px]"></div>收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(CNY)</span></div>
-          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#fa757e] mr-[6px]"></div>支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(CNY)</span></div>
+        <div className="flex items-center space-x-[16px] mb-[12px]">
+          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#65d4a9] mr-[6px]"></div>收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(元)</span></div>
+          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#fa757e] mr-[6px]"></div>支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(元)</span></div>
         </div>
-        <div className="relative h-[180px] w-full">
-          {[80, 60, 40, 20, 0].map((val) => (
-            <div key={val} className="absolute w-full flex items-center" style={{ bottom: `${(val / 80) * 100}%` }}>
+        <div className="relative h-[140px] w-full pt-[16px]">
+          {[60, 45, 30, 15, 0].map((val) => (
+            <div key={val} className="absolute w-full flex items-center" style={{ bottom: `${(val / 60) * 100}%` }}>
               <span className="text-[10px] text-[#c7c7cc] w-[28px] -mt-[6px]">{val === 0 ? '0' : `${val}K`}</span>
               <div className="flex-1 border-t border-dashed border-[#f0f0f0] ml-[4px]"></div>
             </div>
@@ -736,21 +927,21 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
             {STATS_BAR_CHART_DATA.map((item) => (
               <div key={item.month} className="flex flex-col items-center flex-1 h-full relative z-10">
                 <div className="absolute bottom-0 flex justify-between items-end h-full w-[32px]">
-                  <div className="relative w-[10px]" style={{ height: `${(item.in / 80) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${(item.in / 60) * 100}%` }}>
                     <div className={`w-full h-full rounded-t-[3px] transition-all duration-500 ${item.isCurrent ? 'bg-[#4080ff]' : 'bg-[#65d4a9]'}`}></div>
-                    <div className={`absolute -top-[16px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1.5px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{item.in}K</div>
+                    <div className={`absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{item.in}K</div>
                   </div>
-                  <div className="relative w-[10px]" style={{ height: `${(item.out / 80) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${(item.out / 60) * 100}%` }}>
                     <div className="w-full h-full bg-[#fa757e] rounded-t-[3px] transition-all duration-500"></div>
-                    <div className="absolute -top-[16px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1.5px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{item.out}K</div>
+                    <div className="absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{item.out}K</div>
                   </div>
                 </div>
-                <div className={`absolute -bottom-[24px] text-[11px] font-medium ${item.isCurrent ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`}>{item.month}</div>
+                <div className={`absolute -bottom-[20px] text-[11px] font-medium ${item.isCurrent ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`}>{item.month}</div>
               </div>
             ))}
           </div>
         </div>
-        <div className="h-[24px]"></div>
+        <div className="h-[20px]"></div>
       </div>
 
       <div className="mx-[16px] mt-[16px] grid grid-cols-[175px_1fr] gap-[12px]">
@@ -773,7 +964,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
 
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col">
           <div className="flex items-center justify-between mb-[16px]">
-            <h2 className="text-[14px] font-bold text-[#1c1c1e]">支出分类排行</h2><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类排行详情'); }} className="flex items-center text-[10px] text-[#8e8e93] active:opacity-60">查看全部 <ChevronRight className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></button>
+            <h2 className="text-[14px] font-bold text-[#1c1c1e]">支出分类排行</h2><button onClick={() => setIsDetailModalOpen(true)} className="flex items-center text-[10px] text-[#8e8e93] active:opacity-60">查看全部 <ChevronRight className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></button>
           </div>
           <div className="flex-1 flex flex-col justify-center space-y-[14px]">
             {STATS_RANKING_DATA.map((item) => (
@@ -792,7 +983,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
         </div>
       </div>
 
-      <button onClick={() => { setIsInsightModalOpen(true); notify('已打开智能分析'); }} className="w-[calc(100%-32px)] mx-[16px] mt-[16px] bg-gradient-to-r from-[#6b73ff] to-[#404cff] rounded-[20px] p-[16px] flex items-center shadow-[0_8px_20px_rgba(107,115,255,0.2)] cursor-pointer active:scale-[0.98] transition-transform z-10 relative text-left">
+      <button onClick={() => setIsInsightModalOpen(true)} className="w-[calc(100%-32px)] mx-[16px] mt-[16px] bg-gradient-to-r from-[#6b73ff] to-[#404cff] rounded-[20px] p-[16px] flex items-center shadow-[0_8px_20px_rgba(107,115,255,0.2)] cursor-pointer active:scale-[0.98] transition-transform z-10 relative text-left">
         <div className="w-[40px] h-[40px] rounded-full bg-white/20 flex items-center justify-center shrink-0 mr-[12px]"><TrendingUp className="w-[20px] h-[20px] text-white" strokeWidth={2.5} /></div>
         <div className="flex-1">
           <div className="text-[14px] font-bold text-white mb-[4px]">本月支出较上月增加 <span className="text-[#ffb612]">13.2%</span></div>
@@ -804,7 +995,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       {isInsightModalOpen && (
         <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] max-h-[78vh] overflow-hidden bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col">
+          <div className="relative w-full max-w-[430px] max-h-[85vh] overflow-y-auto bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
             <div className="px-[20px] flex justify-between items-start">
                <div>
@@ -816,10 +1007,10 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
             <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px]">
                <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px]">
                   {['支出分析', '收入分析', '对比分析', '建议'].map((tab) => (
-                    <button key={tab} onClick={() => { setInsightTab(tab); notify(`已切换到${tab}`); }} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
+                    <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
-               <button onClick={() => notify('已选择 2026年4月')} className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
+               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
             <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
             <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
@@ -832,7 +1023,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
                   </div>
                ))}
             </div>
-            <div className="px-[20px] mt-[18px]"><button onClick={() => { setIsDetailModalOpen(true); notify('已打开支出分类详情'); }} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
+            <div className="px-[20px] mt-[18px]"><button onClick={() => setIsDetailModalOpen(true)} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
           </div>
         </div>
       )}
@@ -840,7 +1031,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
       {isDetailModalOpen && (
         <div className="fixed inset-0 z-[400] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsDetailModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] pt-[12px] px-[20px] flex flex-col h-auto">
+          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] pt-[12px] px-[20px] flex flex-col max-h-[85vh] overflow-y-auto hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mb-[20px]"></div>
             <div className="relative">
                <button onClick={() => setIsDetailModalOpen(false)} className="absolute -top-[4px] right-0 p-[4px] active:bg-gray-100 rounded-full transition-colors"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
@@ -851,7 +1042,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
             </div>
             <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[20px]">
                {['本月', '较上月变化', '占比', '趋势'].map((tab) => (
-                 <button key={tab} onClick={() => { setDetailTab(tab); notify(`详情已切换到${tab}`); }} className={`flex-1 text-[13px] py-[6px] rounded-[8px] transition-all ${detailTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
+                 <button key={tab} onClick={() => setDetailTab(tab)} className={`flex-1 text-[13px] py-[6px] rounded-[8px] transition-all ${detailTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                ))}
             </div>
             <div className="flex items-center">
@@ -880,7 +1071,58 @@ const StatsPage = ({ setIsMessageCenterOpen, notify }) => {
   );
 };
 
-const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify }) => {
+const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
+  const [swipeX, setSwipeX] = useState(0);
+  const [startX, setStartX] = useState(0);
+  const touchStartX = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    setStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - touchStartX.current;
+    if (diff < 0) setSwipeX(Math.max(diff, -80));
+    else setSwipeX(0);
+  };
+
+  const handleTouchEnd = () => {
+    if (swipeX < -40) setSwipeX(-80);
+    else setSwipeX(0);
+  };
+
+  return (
+    <div className="relative overflow-hidden bg-white">
+      <button
+        onClick={() => onEdit(tx)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
+        style={{ transform: `translateX(${swipeX}px)` }}
+      >
+        <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+        <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
+        <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
+        <div className="flex items-center justify-end space-x-[4px] min-w-0">
+          <div className="flex flex-col items-end min-w-0"><div className={`text-[13px] font-semibold mb-[1px] whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount} <span className="text-[10px] font-medium ml-[1px]">{tx.currency}</span></div><div className="text-[10px] text-[#8e8e93]">{tx.time}</div></div>
+          <ChevronRight className="w-[14px] h-[14px] text-[#c7c7cc] shrink-0" strokeWidth={2.5} />
+        </div>
+      </button>
+      <button
+        onClick={() => onDelete(tx)}
+        className={`absolute right-0 top-0 h-full bg-[#ff3b30] text-white px-[20px] flex items-center justify-center font-medium text-[14px] active:bg-[#e32a1f] transition-colors ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
+        style={{ opacity: Math.min(1, Math.abs(swipeX) / 40) }}
+      >
+        删除
+      </button>
+    </div>
+  );
+};
+
+const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -894,19 +1136,21 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   const [selectedMonth, setSelectedMonth] = useState(4);
 
   const selectedMonthLabel = `2026年${selectedMonth}月`;
-  const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); notify(`已打开 ${tx.title} 详情`); };
+  const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
   const handleSave = () => {
     if (!selectedTx) return;
     updateTransaction(selectedTx.id, { title: tempNote || selectedTx.title, note: tempNote });
     setSelectedTx(null);
     notify('账单备注已保存');
   };
+  const handleDeleteTransaction = (tx) => {
+    if (tx.id) {
+      updateTransaction(tx.id, { deleted: true });
+      notify('账单已删除');
+    }
+  };
   const changeCalendarMonth = (delta) => {
-    setSelectedMonth((prev) => {
-      const next = Math.min(12, Math.max(1, prev + delta));
-      notify(`已切换到 2026年${next}月`);
-      return next;
-    });
+    setSelectedMonth((prev) => Math.min(12, Math.max(1, prev + delta)));
   };
 
   const filteredData = useMemo(() => {
@@ -955,9 +1199,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify(searchQuery ? `已搜索 ${searchQuery}` : '可在搜索框输入关键词')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
@@ -971,16 +1215,16 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               <div className="fixed inset-0 z-[40]" onClick={() => setIsCalendarOpen(false)}></div>
               <div className="absolute top-[42px] left-0 w-[310px] bg-white rounded-[20px] p-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-left">
                 <div className="absolute -top-[5px] left-[45px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
-                <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[16px]">{['月', '年'].map((view) => <button key={view} onClick={() => { setCalendarView(view); notify(`日历已切换为${view}视图`); }} className={`flex-1 rounded-[8px] py-[6px] text-[14px] transition-all ${calendarView === view ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] text-[#1677ff] font-semibold' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{view}</button>)}</div>
+                <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[16px]">{['月', '年'].map((view) => <button key={view} onClick={() => setCalendarView(view)} className={`flex-1 rounded-[8px] py-[6px] text-[14px] transition-all ${calendarView === view ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] text-[#1677ff] font-semibold' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{view}</button>)}</div>
                 <div className="flex items-center justify-between mb-[14px] px-[8px]"><button aria-label="上个月" onClick={() => changeCalendarMonth(-1)} className="p-1 active:opacity-50"><ChevronLeft className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button><span className="text-[15px] font-medium text-[#1c1c1e]">{selectedMonthLabel}</span><button aria-label="下个月" onClick={() => changeCalendarMonth(1)} className="p-1 active:opacity-50"><ChevronRight className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button></div>
                 <div className="grid grid-cols-7 text-center mb-[8px]">{['一', '二', '三', '四', '五', '六', '日'].map(d => (<div key={d} className="text-[12px] text-[#8e8e93] font-medium py-[4px]">{d}</div>))}</div>
                 <div className="grid grid-cols-7 gap-y-[6px] text-center">
                     {BILLS_CALENDAR_DAYS.map((dayObj, i) => {
                       const isSelected = dayObj.type === 'curr' && dayObj.val === selectedDate;
-                      return (<button key={i} onClick={() => { if(dayObj.type === 'curr') { setSelectedDate(dayObj.val); notify(`已选择 ${selectedMonthLabel}${dayObj.val}日`); } }} className="w-[32px] h-[32px] mx-auto flex items-center justify-center relative"><div className={`w-full h-full flex items-center justify-center rounded-full text-[15px] transition-all ${isSelected ? 'bg-[#1677ff] text-white font-semibold shadow-[0_2px_8px_rgba(22,119,255,0.4)]' : dayObj.type === 'curr' ? 'text-[#1c1c1e] hover:bg-[#f4f5f8] font-normal' : 'text-[#d1d1d6] font-normal'}`}>{dayObj.val}</div></button>);
+                      return (<button key={i} onClick={() => { if(dayObj.type === 'curr') setSelectedDate(dayObj.val); }} className="w-[32px] h-[32px] mx-auto flex items-center justify-center relative"><div className={`w-full h-full flex items-center justify-center rounded-full text-[15px] transition-all ${isSelected ? 'bg-[#1677ff] text-white font-semibold shadow-[0_2px_8px_rgba(22,119,255,0.4)]' : dayObj.type === 'curr' ? 'text-[#1c1c1e] hover:bg-[#f4f5f8] font-normal' : 'text-[#d1d1d6] font-normal'}`}>{dayObj.val}</div></button>);
                     })}
                 </div>
-                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { setSelectedDate(23); setSelectedMonth(4); notify('已回到今天'); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">今天</button><button onClick={() => { setIsCalendarOpen(false); notify(`已选择 ${selectedMonthLabel}${selectedDate}日`); }} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
+                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { setSelectedDate(23); setSelectedMonth(4); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">今天</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
               </div>
             </>
           )}
@@ -1003,7 +1247,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
                   {BILLS_FILTER_OPTIONS.map((opt) => {
                     const isSelected = selectedFilter === opt.id;
                     return (
-                      <button key={opt.id} onClick={() => { setSelectedFilter(opt.id); setIsFilterOpen(false); notify(`已筛选：${opt.name}`); }} className="w-full flex items-center justify-between px-[16px] py-[10px] hover:bg-[#f9f9f9] active:bg-[#f4f5f8] transition-colors text-left">
+                      <button key={opt.id} onClick={() => { setSelectedFilter(opt.id); setIsFilterOpen(false); }} className="w-full flex items-center justify-between px-[16px] py-[10px] hover:bg-[#f9f9f9] active:bg-[#f4f5f8] transition-colors text-left">
                         <div className="flex items-center space-x-[12px]">{opt.icon}<span className={`text-[14px] ${isSelected && opt.id === 'all' ? 'text-[#1c1c1e] font-semibold' : 'text-[#3a3a3c] font-medium'}`}>{opt.name}</span></div>
                         {isSelected && <Check className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} />}
                       </button>
@@ -1018,11 +1262,11 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
 
       <div className="px-[16px] mt-[12px] flex items-center justify-between relative z-10">
         <div className="flex space-x-[6px]">
-          {['全部', '支出', '收入', '理财', '转账'].map((item) => (<button key={item} onClick={() => { setSelectedType(item); notify(`已筛选${item}账单`); }} className={`whitespace-nowrap px-[12px] py-[5px] rounded-[8px] text-[13px] font-medium transition-all active:scale-95 ${selectedType === item ? 'bg-[#1677ff] text-white shadow-[0_2px_8px_rgba(22,119,255,0.2)]' : 'bg-white text-[#5c5c5e] shadow-[0_1px_4px_rgba(0,0,0,0.02)] hover:bg-gray-50'}`}>{item}</button>))}
+          {['全部', '支出', '收入', '理财', '转账'].map((item) => (<button key={item} onClick={() => setSelectedType(item)} className={`whitespace-nowrap px-[12px] py-[5px] rounded-[8px] text-[13px] font-medium transition-all active:scale-95 ${selectedType === item ? 'bg-[#1677ff] text-white shadow-[0_2px_8px_rgba(22,119,255,0.2)]' : 'bg-white text-[#5c5c5e] shadow-[0_1px_4px_rgba(0,0,0,0.02)] hover:bg-gray-50'}`}>{item}</button>))}
         </div>
         <div className="flex bg-white rounded-[8px] p-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] shrink-0">
           {['日', '周', '月'].map((range) => (
-            <button key={range} onClick={() => { setSelectedRange(range); notify(`账单周期已切换为${range}`); }} className={`w-[30px] py-[3px] text-[12px] transition-all rounded-[6px] ${selectedRange === range ? 'font-semibold text-[#1677ff] bg-[#f0f6ff]' : 'font-medium text-[#8e8e93] active:opacity-60 hover:text-gray-600'}`}>{range}</button>
+            <button key={range} onClick={() => setSelectedRange(range)} className={`w-[30px] py-[3px] text-[12px] transition-all rounded-[6px] ${selectedRange === range ? 'font-semibold text-[#1677ff] bg-[#f0f6ff]' : 'font-medium text-[#8e8e93] active:opacity-60 hover:text-gray-600'}`}>{range}</button>
           ))}
         </div>
       </div>
@@ -1030,15 +1274,15 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] mt-[16px] relative z-10">
         <div className="bg-white rounded-[20px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex relative">
           <div className="flex-1 pr-[16px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (AED)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (人民币)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 13.2%</span></div>
-            <button aria-label="查看支出账单" onClick={() => { setSelectedType('支出'); notify('已筛选支出账单'); }} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
+            <button aria-label="查看支出账单" onClick={() => setSelectedType('支出')} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
           </div>
           <div className="w-[1px] bg-[#f0f0f0] my-[2px]"></div>
           <div className="flex-1 pl-[20px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (AED)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (人民币)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 18.7%</span></div>
-            <button aria-label="查看收入账单" onClick={() => { setSelectedType('收入'); notify('已筛选收入账单'); }} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
+            <button aria-label="查看收入账单" onClick={() => setSelectedType('收入')} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
           </div>
         </div>
       </div>
@@ -1055,15 +1299,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               </div>
               <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
                 {group.transactions.map((tx, tIdx) => (
-                  <button key={tx.id} onClick={() => handleOpenModal(tx)} className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${tIdx !== group.transactions.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
-                    <div className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 ${tx.iconBg}`}>{getIconByString(tx.iconType)}</div>
-                    <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
-                    <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
-                    <div className="flex items-center justify-end space-x-[4px] min-w-0">
-                      <div className="flex flex-col items-end min-w-0"><div className={`text-[13px] font-semibold mb-[1px] whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount} <span className="text-[10px] font-medium ml-[1px]">{tx.currency}</span></div><div className="text-[10px] text-[#8e8e93]">{tx.time}</div></div>
-                      <ChevronRight className="w-[14px] h-[14px] text-[#c7c7cc] shrink-0" strokeWidth={2.5} />
-                    </div>
-                  </button>
+                  <SwipeableTransactionRow key={tx.id} tx={tx} tIdx={tIdx} isLast={group.transactions.length - 1} onEdit={handleOpenModal} onDelete={handleDeleteTransaction} />
                 ))}
               </div>
             </div>
@@ -1078,7 +1314,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
                 <div className="absolute top-[10px] left-1/2 transform -translate-x-1/2 w-[36px] h-[4px] bg-[#e5e5ea] rounded-full"></div>
                 <h3 className="text-[16px] font-bold text-[#1c1c1e] mt-[4px]">账单详情</h3>
                 <button onClick={() => setSelectedTx(null)} className="absolute top-[18px] right-[16px] active:scale-90 transition-transform"><X className="w-[22px] h-[22px] text-[#3a3a3c]" strokeWidth={2} /></button>
-                <div className="flex items-center mt-[24px] mb-[20px]"><div className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${selectedTx.iconBg}`}>{getIconByString(selectedTx.iconType, 'large')}</div><div className="flex-1 ml-[12px] text-[15px] font-semibold text-[#1c1c1e] truncate">{selectedTx.title}</div><div className={`text-[16px] font-bold shrink-0 ml-[8px] ${selectedTx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{selectedTx.amount} <span className="text-[12px] font-medium">{selectedTx.currency}</span></div></div>
+                <div className="flex items-center mt-[24px] mb-[20px]"><div className="w-[48px] h-[48px] flex items-center justify-center shrink-0 overflow-hidden rounded-full">{getIconByString(selectedTx.iconType, 'large')}</div><div className="flex-1 ml-[12px] text-[15px] font-semibold text-[#1c1c1e] truncate">{selectedTx.title}</div><div className={`text-[16px] font-bold shrink-0 ml-[8px] ${selectedTx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{selectedTx.amount} <span className="text-[12px] font-medium">{selectedTx.currency}</span></div></div>
                 <div className="flex flex-col">
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><CreditCard className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">账户</span></div><span className="text-[13px] font-medium text-[#1c1c1e]">{selectedTx.subtitle}</span></div>
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><TagIcon className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">分类</span></div><Tag type={selectedTx.tagType} text={selectedTx.tag} /></div>
@@ -1102,10 +1338,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, updateAccount }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
+  const [isChangesModalOpen, setIsChangesModalOpen] = useState(false);
+  const [exchangeAccountType, setExchangeAccountType] = useState('现货账户');
+  const [isExchangeTypeOpen, setIsExchangeTypeOpen] = useState(false);
   
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [assetRange, setAssetRange] = useState('30天');
@@ -1123,8 +1362,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
     { id: 'ETH', icon: <EthereumIcon />, label: 'ETH' }, { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
   ];
 
-  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); notify(`已打开 ${accountData.name}`); };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); notify(`已选择 ${defaultExchange} 交易所账户`); };
+  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, icon, currency = 'AED') => {
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
     const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
@@ -1134,7 +1373,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
     setSelectedCurrency(currency);
     setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
     setIsAccountDetailModalOpen(true);
-    notify(`已创建${name}`);
   };
 
   const saveAccountDetail = async () => {
@@ -1216,15 +1454,15 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify('已打开资产搜索')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+          <button aria-label="搜索" onClick={onOpenSearch} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
           <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
+          <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
 
       <div className="px-[16px] flex items-center justify-between mt-[6px]">
         <div className="flex items-center space-x-[6px]"><h1 className="text-[22px] font-bold text-[#1c1c1e]">资产</h1><Eye className="w-[18px] h-[18px] text-[#8e8e93]" strokeWidth={2} /></div>
-        <button onClick={() => { setIsAddAccountModalOpen(true); notify('请选择账户类型'); }} className="flex items-center space-x-[4px] bg-[#1677ff] px-[12px] py-[6px] rounded-full active:scale-95 transition-transform shadow-[0_4px_10px_rgba(22,119,255,0.25)]"><Plus className="w-[14px] h-[14px] text-white" strokeWidth={2.5} /><span className="text-[13px] font-bold text-white">添加账户</span></button>
+        <button onClick={() => setIsAddAccountModalOpen(true)} className="flex items-center space-x-[4px] bg-[#1677ff] px-[12px] py-[6px] rounded-full active:scale-95 transition-transform shadow-[0_4px_10px_rgba(22,119,255,0.25)]"><Plus className="w-[14px] h-[14px] text-white" strokeWidth={2.5} /><span className="text-[13px] font-bold text-white">添加账户</span></button>
       </div>
 
       <div className="px-[16px] mt-[14px] space-y-[14px]">
@@ -1233,12 +1471,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
             <div className="flex items-center space-x-[4px] text-[#8e8e93]"><span className="text-[12px]">总资产 (估值)</span><Info className="w-[12px] h-[12px]" strokeWidth={2} /></div>
             <div className="flex bg-[#f4f5f8] rounded-[6px] p-[2px]">
               {['1天', '7天', '30天', '自定义'].map((range) => (
-                <button key={range} onClick={() => { setAssetRange(range); notify(`资产周期已切换为${range}`); }} className={`px-[8px] py-[3px] text-[11px] rounded-[4px] transition-all ${assetRange === range ? 'font-semibold text-[#1677ff] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]' : 'font-medium text-[#8e8e93] active:opacity-60'}`}>{range}</button>
+                <button key={range} onClick={() => setAssetRange(range)} className={`px-[8px] py-[3px] text-[11px] rounded-[4px] transition-all ${assetRange === range ? 'font-semibold text-[#1677ff] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]' : 'font-medium text-[#8e8e93] active:opacity-60'}`}>{range}</button>
               ))}
             </div>
           </div>
-          <div className="text-[32px] font-bold text-[#1c1c1e] tracking-tight leading-none mb-[8px]" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span className="text-[14px] font-semibold text-[#3a3a3c] ml-[2px]">AED</span></div>
-          <div className="flex flex-col mb-[30px]"><div className="flex items-center space-x-[4px] text-[#8e8e93] mb-[2px]"><span className="text-[11px]">今日变化</span><Info className="w-[11px] h-[11px]" strokeWidth={2} /></div><div className="text-[13px] font-semibold text-[#10b981]">+7,718.23 AED (+6.34%)</div></div>
+          <div className="text-[32px] font-bold text-[#1c1c1e] tracking-tight leading-none mb-[8px]" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span className="text-[14px] font-semibold text-[#3a3a3c] ml-[2px]">元</span></div>
+          <div className="flex flex-col mb-[30px]"><div className="flex items-center space-x-[4px] text-[#8e8e93] mb-[2px]"><span className="text-[11px]">今日变化</span><Info className="w-[11px] h-[11px]" strokeWidth={2} /></div><div className="text-[13px] font-semibold text-[#10b981]">+7,718.23 元 (+6.34%)</div></div>
           <div className="absolute bottom-0 right-0 w-[65%] h-[85px] pointer-events-none">
             <svg viewBox="0 0 200 85" className="w-full h-full" preserveAspectRatio="none">
               <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1677ff" stopOpacity="0.15" /><stop offset="100%" stopColor="#1677ff" stopOpacity="0" /></linearGradient></defs>
@@ -1250,7 +1488,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
           <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => accounts[0] ? handleOpenAccountDetail({...accounts[0], icon: getIconByString(accounts[0].icon, 'large')}) : notify('暂无账户详情')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
           <div className="flex items-center justify-between">
-            <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span><span className="text-[9px] font-semibold text-[#8e8e93]">AED</span></div></div>
+            <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span><span className="text-[9px] font-semibold text-[#8e8e93]">元</span></div></div>
             <div className="flex-1 ml-[16px] flex flex-col space-y-[8px]">
                {assetDistribution.filter(a => a.val !== "0.00 AED").map((item, i) => (
                  <div key={i} className="grid grid-cols-[10px_64px_34px_1fr] items-center gap-[4px]"><div className={`w-[6px] h-[6px] rounded-full ${item.color}`}></div><span className="text-[11px] text-[#5c5c5e] whitespace-nowrap">{item.name}</span><span className="text-[11px] text-[#8e8e93] text-right">{item.pct}%</span><span className="text-[11px] font-medium text-[#3a3a3c] text-right whitespace-nowrap">{item.val}</span></div>
@@ -1267,36 +1505,30 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
         </div>
 
         <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden mt-[16px]">
-          <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => notify('已查看全部资产变动')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
+          <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => setIsChangesModalOpen(true)} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
           <div className="flex flex-col">
-            <button onClick={() => notify('已打开 Mashreq Bank 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><MashreqLogoIcon /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">Mashreq Bank</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+5,000.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">AED</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 09:23</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">存款</div>
-              </div>
-            </button>
-            <button onClick={() => notify('已打开微信到支付宝变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><WeChatLogo /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">微信 → 支付宝</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#ff3b30] text-right tracking-tight">-200.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">CNY</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">今天 08:45</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">转入支付宝</div>
-              </div>
-            </button>
-            <button onClick={() => notify('已打开 OKX 变动')} className="w-full flex items-center px-[16px] py-[12px] border-b border-[#f4f5f8] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><OkxIcon size={20} innerSize={13} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">OKX</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+28.74</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 22:16</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">现货交易收益</div>
-              </div>
-            </button>
-            <button onClick={() => notify('已打开币安变动')} className="w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left">
-              <div className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0"><BinanceLogo size={20} /></div>
-              <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                 <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">币安</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className="text-[14px] font-bold text-[#10b981] text-right tracking-tight">+500.00</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">USDT</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">昨天 20:35</span></div></div>
-                 <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">充值</div>
-              </div>
-            </button>
+            {transactions.slice(0, 4).map((tx, idx, arr) => {
+              const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+              return (
+                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
+                    <span className="text-[11px] font-medium text-[#8e8e93] truncate mt-[1px]">{tx.tag}</span>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0 min-w-[70px]">
+                    <div className="flex items-baseline space-x-[3px]">
+                      <span className={`text-[14px] font-bold text-right tracking-tight whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span>
+                      <span className="text-[10px] font-medium text-[#8e8e93]">{tx.currency}</span>
+                    </div>
+                    <span className="text-[10px] font-medium text-[#8e8e93] mt-[1px]">{tx.time}</span>
+                  </div>
+                </button>
+              );
+            })}
+            {transactions.length === 0 && (
+              <div className="py-[20px] text-center text-[#8e8e93] text-[13px]">暂无变动记录</div>
+            )}
           </div>
         </div>
       </div>
@@ -1304,13 +1536,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       {isAddAccountModalOpen && (
         <div className="fixed inset-0 z-[120] flex justify-center items-center px-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAddAccountModalOpen(false)}></div>
-          <div className="relative w-full max-w-[390px] bg-white rounded-[24px] p-[20px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out">
+          <div className="relative w-full max-w-[390px] bg-white rounded-[24px] p-[20px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out max-h-[85vh] overflow-y-auto hide-scrollbar">
             <div className="flex justify-between items-center mb-[20px]"><h2 className="text-[18px] font-bold text-[#1c1c1e]">添加账户</h2><button onClick={() => setIsAddAccountModalOpen(false)} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
             <div className="mb-[24px]">
               <h3 className="text-[14px] font-bold text-[#5c5c5e] mb-[12px]">选择账户类型</h3>
               <div className="grid grid-cols-2 gap-[10px]">
                 <button onClick={() => handleOpenCustomAccount('银行账户', <Landmark className="w-[24px] h-[24px] text-[#1677ff]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Landmark className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">银行账户</span></button>
-                <button onClick={() => handleOpenAddExchange()} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><HexagonCryptoIcon /><span className="text-[13px] font-medium text-[#1c1c1e]">交易所账户</span></button>
+                <button onClick={() => handleOpenAddExchange()} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><BrandLogo type="okx" size={16} /><span className="text-[13px] font-medium text-[#1c1c1e]">交易所账户</span></button>
                 <button onClick={() => handleOpenCustomAccount('电子钱包', <Wallet className="w-[24px] h-[24px] text-[#10b981]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Wallet className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">电子钱包</span></button>
                 <button onClick={() => handleOpenCustomAccount('现金账户', <Banknote className="w-[24px] h-[24px] text-[#22c55e]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><Banknote className="w-[16px] h-[16px] text-[#22c55e]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">现金账户</span></button>
                 <button onClick={() => handleOpenCustomAccount('信用卡', <CreditCard className="w-[24px] h-[24px] text-[#8b5cf6]" strokeWidth={2.5} />)} className="border border-[#f0f0f0] rounded-[12px] py-[12px] flex items-center justify-center space-x-[6px] active:bg-[#f9f9f9] transition-colors cursor-pointer"><CreditCard className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2.5}/><span className="text-[13px] font-medium text-[#1c1c1e]">信用卡</span></button>
@@ -1320,11 +1552,11 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
             <div className="mb-[20px]">
               <h3 className="text-[14px] font-bold text-[#5c5c5e] mb-[8px]">快速添加</h3>
               <div className="flex flex-col">
-                <QuickAddRow icon={<OkxIcon size={24} innerSize={16}/>} name="OKX" type="交易所账户" onClick={() => handleOpenAddExchange('OKX')} />
-                <QuickAddRow icon={<BinanceLogo size={24}/>} name="币安 Binance" type="交易所账户" onClick={() => handleOpenAddExchange('Binance')} />
-                <QuickAddRow icon={<BybitIcon size={24}/>} name="Bybit" type="交易所账户" onClick={() => handleOpenAddExchange('Bybit')} />
-                <QuickAddRow icon={<div className="w-[24px] h-[24px] bg-[#1677ff] flex items-center justify-center"><span className="text-white text-[14px] font-bold leading-none">支</span></div>} name="支付宝" type="电子钱包" onClick={() => handleOpenCustomAccount('支付宝', <AlipayLogo />, 'CNY')} />
-                <QuickAddRow icon={<div className="w-[24px] h-[24px] bg-[#07c160] flex items-center justify-center relative"><div className="w-[12px] h-[9px] bg-white rounded-full absolute top-[6px] left-[4px]"></div><div className="w-[8.5px] h-[6.5px] bg-white rounded-full absolute bottom-[4.5px] right-[3px]"></div></div>} name="微信钱包" type="电子钱包" onClick={() => handleOpenCustomAccount('微信钱包', <WeChatLogo />, 'CNY')} />
+                <QuickAddRow icon={<BrandLogo type="okx" size={24} />} name="OKX" type="交易所账户" onClick={() => handleOpenAddExchange('OKX')} />
+                <QuickAddRow icon={<BrandLogo type="binance" size={24} />} name="币安 Binance" type="交易所账户" onClick={() => handleOpenAddExchange('Binance')} />
+                <QuickAddRow icon={<BrandLogo type="bybit" size={24} />} name="Bybit" type="交易所账户" onClick={() => handleOpenAddExchange('Bybit')} />
+                <QuickAddRow icon={<BrandLogo type="alipay" size={24} />} name="支付宝" type="电子钱包" onClick={() => handleOpenCustomAccount('支付宝', <BrandLogo type="alipay" size={24} />, 'CNY')} />
+                <QuickAddRow icon={<BrandLogo type="wechat" size={24} />} name="微信钱包" type="电子钱包" onClick={() => handleOpenCustomAccount('微信钱包', <BrandLogo type="wechat" size={24} />, 'CNY')} />
               </div>
             </div>
             <button onClick={() => handleOpenCustomAccount('自定义账户', <MoreHorizontal className="w-[24px] h-[24px] text-[#8e8e93]" strokeWidth={2.5} />)} className="w-full py-[14px] bg-[#f0f6ff] rounded-[14px] text-[15px] font-bold text-[#1677ff] active:bg-[#e6f0ff] transition-colors mt-[4px]">自定义账户</button>
@@ -1341,21 +1573,21 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择交易所</h3>
                 <div className="grid grid-cols-3 gap-[8px]">
-                   {[{ id: 'OKX', icon: <OkxIcon size={20} innerSize={13}/>, name: 'OKX' },{ id: 'Binance', icon: <BinanceLogo size={20}/>, name: '币安 Binance' },{ id: 'Bybit', icon: <BybitIcon size={20}/>, name: 'Bybit' },{ id: 'Bitget', icon: <BitgetIcon />, name: 'Bitget' },{ id: 'Gateio', icon: <GateIoIcon />, name: 'Gate.io' },{ id: 'KuCoin', icon: <KuCoinIcon />, name: 'KuCoin' },{ id: 'MEXC', icon: <MexcIcon />, name: 'MEXC' },{ id: 'HTX', icon: <HuobiIcon />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
+                   {[{ id: 'OKX', icon: <BrandLogo type="okx" size={20} />, name: 'OKX' },{ id: 'Binance', icon: <BrandLogo type="binance" size={20} />, name: '币安 Binance' },{ id: 'Bybit', icon: <BrandLogo type="bybit" size={20} />, name: 'Bybit' },{ id: 'Bitget', icon: <BrandLogo type="bitget" size={20} />, name: 'Bitget' },{ id: 'Gateio', icon: <BrandLogo type="gateio" size={20} />, name: 'Gate.io' },{ id: 'KuCoin', icon: <BrandLogo type="kucoin" size={20} />, name: 'KuCoin' },{ id: 'MEXC', icon: <BrandLogo type="mexc" size={20} />, name: 'MEXC' },{ id: 'HTX', icon: <BrandLogo type="huobi" size={20} />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
                      const isSelected = exchangeSelected === ex.id;
-                     return (<button key={ex.id} onClick={() => { setExchangeSelected(ex.id); notify(`已选择 ${ex.name}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
+                     return (<button key={ex.id} onClick={() => setExchangeSelected(ex.id)} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
                    })}
                 </div>
               </div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">账户信息</h3>
                 <div className="mb-[14px]"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label><input type="text" value={exchangeAccountName} onChange={(e) => setExchangeAccountName(e.target.value)} placeholder="例如：OKX 现货账户" className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/></div>
-                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => notify('已选择现货账户')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">现货账户</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
+                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>
-                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label><button onClick={() => notify('已选择 AED 计价货币')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">AED - 阿联酋迪拉姆</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
+                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label><button className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">AED - 阿联酋迪拉姆</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
               </div>
               <div className="mb-[8px]">
                 <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
@@ -1374,41 +1606,71 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
-            <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
-            <div className="flex items-start justify-between mb-[24px]">
-               <div className="flex items-center space-x-[14px]"><div className="w-[48px] h-[48px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[18px] font-bold text-[#1c1c1e] leading-tight mb-[4px]">{selectedAccount.name}</h2><span className="text-[13px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[80vh]">
+            <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
+               <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
+               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
-            <div className="mb-[24px]">
-               <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">1. 币种</h3>
-               <div className="flex overflow-x-auto hide-scrollbar space-x-[12px] pb-[4px]">
-                  {currenciesList.map((currency) => {
-                    const isSelected = selectedCurrency === currency.id;
-                    return (<button key={currency.id} onClick={() => { setSelectedCurrency(currency.id); notify(`币种已切换为 ${currency.label}`); }} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
-                  })}
-               </div>
+            <div className="overflow-y-auto hide-scrollbar flex-1 px-[16px] pt-[10px] pb-[8px]">
+              <div className="mb-[14px]">
+                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">1. 币种</h3>
+                 <div className="flex overflow-x-auto hide-scrollbar space-x-[8px] pb-[2px]">
+                    {currenciesList.map((currency) => {
+                      const isSelected = selectedCurrency === currency.id;
+                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] px-[12px] py-[7px] flex items-center space-x-[6px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
+                    })}
+                 </div>
+              </div>
+              <div className="mb-[14px]">
+                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">2. 余额</h3>
+                 <div className="border border-[#e5e5ea] rounded-[10px] p-[10px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
+                    <span className="text-[11px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
+                    <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[18px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[2px]"><ClearInputIcon /></button>}</div>
+                 </div>
+                 <div className="flex items-center justify-between mt-[8px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
+              </div>
+              <div className="mb-[10px]">
+                 <div className="flex items-center space-x-[4px] mb-[8px]"><h3 className="text-[13px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
+                 <div className="grid grid-cols-3 gap-[6px]">
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
+                 </div>
+                 <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
+              </div>
             </div>
-            <div className="mb-[24px]">
-               <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">2. 余额</h3>
-               <div className="border border-[#e5e5ea] rounded-[14px] p-[12px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
-                  <span className="text-[12px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
-                  <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[22px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[4px]"><ClearInputIcon /></button>}</div>
-               </div>
-               <p className="text-[12px] text-[#8e8e93] mt-[8px] ml-[2px]">当前可用余额，请输入数字，最多 8 位小数</p>
-               <div className="flex items-center justify-between mt-[16px]"><span className="text-[14px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
+            <div className="px-[16px] py-[10px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
+               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
+               <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
             </div>
-            <div className="mb-[32px]">
-               <div className="flex items-center space-x-[6px] mb-[12px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[14px] h-[14px] text-[#c7c7cc]" strokeWidth={2} /></div>
-               <div className="grid grid-cols-3 gap-[8px]">
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">高息限额</div><div className="relative mb-[8px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[34px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
-               </div>
+          </div>
+        </div>
+      )}
+
+      {isChangesModalOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-center items-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsChangesModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out max-h-[80vh] flex flex-col">
+            <div className="w-full flex justify-center mb-[4px] pt-[8px] px-[20px] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-center justify-between px-[20px] py-[14px] shrink-0 border-b border-[#f4f5f8]">
+              <span className="text-[17px] font-bold text-[#1c1c1e]">全部变动</span>
+              <button onClick={() => setIsChangesModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
-            <div className="flex space-x-[12px] pb-[8px]">
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[120px] py-[14px] border border-[#e5e5ea] rounded-[14px] text-[16px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={saveAccountDetail} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
+            <div className="overflow-y-auto hide-scrollbar flex-1">
+              {transactions.map((tx, i, arr) => {
+                const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+                return (
+                  <button key={tx.id || i} onClick={() => { if (relatedAcc) { setIsChangesModalOpen(false); handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+                    <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
+                      <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className={`text-[14px] font-bold text-right tracking-tight ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">{tx.currency}</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">{tx.time}</span></div></div>
+                      <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{tx.tag}</div>
+                    </div>
+                  </button>
+                );
+              })}
+              {transactions.length === 0 && <div className="py-[20px] text-center text-[#8e8e93] text-[13px]">暂无变动记录</div>}
             </div>
           </div>
         </div>
@@ -1423,9 +1685,17 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, notify, createAccount, u
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isMessageCenterOpen, setIsMessageCenterOpen] = useState(false);
-  const { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount } = useSupabaseData();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const toastTimerRef = useRef(null);
+  const { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
 
-  const notify = () => {};
+  const notify = (msg) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(''), 2200);
+  };
 
   useEffect(() => {
     const metas = [
@@ -1483,16 +1753,19 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} />}
-                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} />}
-                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} notify={notify} createAccount={createAccount} updateAccount={updateAccount} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} accounts={accounts} budget={budget} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
+                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={transactions} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>
         
         <MessageCenterModal isOpen={isMessageCenterOpen} onClose={() => setIsMessageCenterOpen(false)} notify={notify} />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={transactions} />
+        <ActionToast message={toastMsg} />
       </div>
     </>
   );
