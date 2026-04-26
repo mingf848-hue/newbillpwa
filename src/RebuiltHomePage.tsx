@@ -159,6 +159,23 @@ const formatMoney = (val) => {
   return isNaN(num) ? '0.00' : num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const parseMoneyNumber = (value) => {
+  const num = parseFloat(String(value ?? '').replace(/,/g, '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(num) ? num : 0;
+};
+
+const parseTransactionDate = (fullDate) => {
+  const match = String(fullDate || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+};
+
+const convertAmountToCny = (amount, currency, exchangeRates) => {
+  const rate = exchangeRates?.[String(currency || 'CNY').toUpperCase()] ?? 0;
+  return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
+};
+
 // ==========================================
 // 主应用页面 (App)
 // ==========================================
@@ -208,7 +225,7 @@ const INCOME_CATEGORIES = [
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, exchangeRates, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
   const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordActiveTab, setRecordActiveTab] = useState('支出');
@@ -255,11 +272,12 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const monthlyExpenses = useMemo(() => {
     return transactions
       .filter(tx => {
-        const date = new Date(tx.fullDate.replace(/年|月/g, '-').replace('日', ''));
+        const date = parseTransactionDate(tx.fullDate);
+        if (!date) return false;
         return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && !tx.isIncome;
       })
-      .reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount.replace(/[^0-9.]/g, ''))), 0);
-  }, [transactions, selectedYear, selectedMonth]);
+      .reduce((sum, tx) => sum + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates), 0);
+  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
 
   const budgetUsed = monthlyExpenses;
   const budgetRemaining = budgetAmount - budgetUsed;

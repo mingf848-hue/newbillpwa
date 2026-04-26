@@ -86,10 +86,115 @@ const getWeekRange = (referenceDate) => {
   return { start, end };
 };
 
+const DEFAULT_DISPLAY_CURRENCY = 'CNY';
+
+const parseMoneyNumber = (value) => {
+  const num = parseFloat(String(value ?? '').replace(/,/g, '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(num) ? num : 0;
+};
+
+const normalizeCurrency = (currency) => String(currency || DEFAULT_DISPLAY_CURRENCY).trim().toUpperCase();
+
+const toMonthKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}`;
+
+const getMonthDateRange = (year, month) => {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  return { start, end };
+};
+
+const isDateInRange = (date, start, end) => date && date >= start && date <= end;
+
+const formatDisplayMoney = (value, digits = 2) => (
+  Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+);
+
+const convertAmountToCny = (amount, currency, exchangeRates) => {
+  const normalized = normalizeCurrency(currency);
+  const rate = exchangeRates?.[normalized] ?? (normalized === DEFAULT_DISPLAY_CURRENCY ? 1 : 0);
+  return parseMoneyNumber(amount) * rate;
+};
+
+const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
+  transactions.reduce((sum, tx) => (
+    predicate(tx) ? sum + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates) : sum
+  ), 0)
+);
+
+const getCategoryVisual = (category) => {
+  const mapping = {
+    餐饮: { icon: <ForkKnifeIcon />, badgeBg: 'bg-[#fff1b8]', badgeText: 'text-[#fa8c16]', iconColor: 'text-[#3a3a3c]', color: '#4c78fe' },
+    交通: { icon: <CarIcon />, badgeBg: 'bg-[#e6e8eb]', badgeText: 'text-[#8c8c8c]', iconColor: 'text-[#3a3a3c]', color: '#8862fe' },
+    购物: { icon: <BagIcon />, badgeBg: 'bg-[#ffe4cc]', badgeText: 'text-[#d46b08]', iconColor: 'text-[#3a3a3c]', color: '#a78dfe' },
+    转账: { icon: <TransferIcon />, badgeBg: 'bg-[#fef3c7]', badgeText: 'text-[#d97706]', iconColor: 'text-[#3a3a3c]', color: '#f5ad41' },
+    理财: { icon: <TrendIcon />, badgeBg: 'bg-[#ede9fe]', badgeText: 'text-[#7c3aed]', iconColor: 'text-[#3a3a3c]', color: '#ffd24d' },
+    教育: { icon: <CapIcon />, badgeBg: 'bg-[#e0f2fe]', badgeText: 'text-[#0284c7]', iconColor: 'text-[#3a3a3c]', color: '#38bdf8' },
+  };
+  return mapping[category] || { icon: <EllipsisIcon />, badgeBg: 'bg-[#f4f5f8]', badgeText: 'text-[#8c8c8c]', iconColor: 'text-[#3a3a3c]', color: '#c5cbe1' };
+};
+
+const fetchOkxConversionPage = async (path) => {
+  const response = await fetch(`https://www.okx.com/en-us/${path}`, {
+    headers: { Accept: 'text/html' },
+  });
+  if (!response.ok) {
+    throw new Error(`OKX request failed: ${response.status}`);
+  }
+  return response.text();
+};
+
+const extractOkxRate = (html, base, quote) => {
+  const upperBase = normalizeCurrency(base);
+  const upperQuote = normalizeCurrency(quote);
+  const patterns = [
+    new RegExp(`1\\s+${upperBase}\\s+is currently worth\\s+(?:¥)?\\s*${upperQuote === 'CNY' ? '' : upperQuote}\\s*([0-9]+(?:\\.[0-9]+)?)`, 'i'),
+    new RegExp(`1\\s+${upperBase}\\s+equals\\s+(?:¥)?\\s*([0-9]+(?:\\.[0-9]+)?)\\s+${upperQuote}`, 'i'),
+    new RegExp(`1\\s+${upperBase}\\s+is valued at approximately\\s+(?:¥)?\\s*([0-9]+(?:\\.[0-9]+)?)\\s+${upperQuote}`, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return null;
+};
+
+const fetchOkxPairRate = async (base, quote) => {
+  const lowerBase = normalizeCurrency(base).toLowerCase();
+  const lowerQuote = normalizeCurrency(quote).toLowerCase();
+  const paths = [`convert/${lowerBase}-to-${lowerQuote}`, `exchange/${lowerBase}-to-${lowerQuote}`];
+  for (const path of paths) {
+    try {
+      const html = await fetchOkxConversionPage(path);
+      const rate = extractOkxRate(html, base, quote);
+      if (rate && Number.isFinite(rate)) return rate;
+    } catch (error) {
+      console.warn(`Failed to load OKX ${base}/${quote} from ${path}`, error);
+    }
+  }
+  throw new Error(`Unable to resolve OKX rate for ${base}/${quote}`);
+};
+
+const fetchCurrencyToCnyRate = async (currency) => {
+  const normalized = normalizeCurrency(currency);
+  if (normalized === DEFAULT_DISPLAY_CURRENCY) return 1;
+
+  try {
+    return await fetchOkxPairRate(normalized, DEFAULT_DISPLAY_CURRENCY);
+  } catch (directError) {
+    const [cnyPerUsdt, targetPerUsdt] = await Promise.all([
+      fetchOkxPairRate('USDT', DEFAULT_DISPLAY_CURRENCY),
+      fetchOkxPairRate('USDT', normalized),
+    ]);
+    if (!targetPerUsdt) throw directError;
+    return cnyPerUsdt / targetPerUsdt;
+  }
+};
+
 function useSupabaseData() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [budget, setBudget] = useState(20000);
+  const [exchangeRates, setExchangeRates] = useState({ [DEFAULT_DISPLAY_CURRENCY]: 1 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -137,10 +242,39 @@ function useSupabaseData() {
     initData();
   }, []);
 
+  useEffect(() => {
+    const currencies = Array.from(new Set([
+      DEFAULT_DISPLAY_CURRENCY,
+      ...accounts.map((account) => normalizeCurrency(account.currency)),
+      ...transactions.map((tx) => normalizeCurrency(tx.currency)),
+    ])).filter(Boolean);
+
+    let cancelled = false;
+    const loadRates = async () => {
+      const entries = await Promise.all(currencies.map(async (currency) => {
+        try {
+          const rate = await fetchCurrencyToCnyRate(currency);
+          return [currency, rate];
+        } catch (error) {
+          console.warn(`Falling back to 0 rate for ${currency}`, error);
+          return [currency, currency === DEFAULT_DISPLAY_CURRENCY ? 1 : 0];
+        }
+      }));
+      if (!cancelled) {
+        setExchangeRates(Object.fromEntries(entries));
+      }
+    };
+
+    if (currencies.length > 0) loadRates();
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, transactions]);
+
   const updateTransaction = async (id, updates) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-    if (id && String(id).length > 10) { // Check if valid DB UUID
-      try { await fetchSupabase(`transactions?id=eq.${id}`, "PATCH", updates); }
+    if (id !== undefined && id !== null) {
+      try { await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "PATCH", updates); }
       catch (e) { console.error("Update failed", e); }
     }
   };
@@ -151,6 +285,17 @@ function useSupabaseData() {
     return created;
   };
 
+  const deleteTransaction = async (id) => {
+    setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    if (id !== undefined && id !== null) {
+      try {
+        await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "DELETE");
+      } catch (e) {
+        console.error("Delete failed", e);
+      }
+    }
+  };
+
   const createAccount = async (payload) => {
     const [created] = await fetchSupabase("accounts", "POST", payload);
     setAccounts(prev => [created, ...prev]);
@@ -159,8 +304,8 @@ function useSupabaseData() {
 
   const updateAccount = async (id, updates) => {
     setAccounts(prev => prev.map(account => account.id === id ? { ...account, ...updates } : account));
-    if (id && String(id).length > 10) {
-      await fetchSupabase(`accounts?id=eq.${id}`, "PATCH", updates);
+    if (id !== undefined && id !== null) {
+      await fetchSupabase(`accounts?id=eq.${encodeURIComponent(id)}`, "PATCH", updates);
     }
   };
 
@@ -188,7 +333,7 @@ function useSupabaseData() {
     if (toAccount.id) await updateAccount(toAccount.id, { balance: formatBal(toBalance) });
   };
 
-  return { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds };
+  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds };
 }
 
 // ==========================================
@@ -799,19 +944,158 @@ const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }
   );
 };
 
-const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch }) => {
+const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, notify, onOpenProfile, onOpenSearch }) => {
+  const latestTxDate = useMemo(() => {
+    const dates = transactions.map((tx) => parseTransactionDate(tx.fullDate)).filter(Boolean);
+    return dates.sort((a, b) => b.getTime() - a.getTime())[0] || new Date();
+  }, [transactions]);
   const [activeTab, setActiveTab] = useState('月');
   const [insightTab, setInsightTab] = useState('支出分析');
   const [detailTab, setDetailTab] = useState('本月');
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isTrendRangeOpen, setIsTrendRangeOpen] = useState(false);
-  const [trendRange, setTrendRange] = useState({ start: 1, end: 4 });
-  const switchStatsTab = (tab) => {
-    setActiveTab(tab);
-  };
-  const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
+  const [selectedYear, setSelectedYear] = useState(latestTxDate.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(latestTxDate.getMonth() + 1);
+  const [trendRange, setTrendRange] = useState({ start: 1, end: latestTxDate.getMonth() + 1 });
   const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
+  const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
+
+  useEffect(() => {
+    setSelectedYear(latestTxDate.getFullYear());
+    setSelectedMonth(latestTxDate.getMonth() + 1);
+    setTrendRange((prev) => ({ start: Math.min(prev.start, latestTxDate.getMonth() + 1), end: Math.max(prev.end, latestTxDate.getMonth() + 1) }));
+  }, [latestTxDate]);
+
+  const currentRange = useMemo(() => getMonthDateRange(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
+  const previousRange = useMemo(() => {
+    const prevDate = new Date(selectedYear, selectedMonth - 2, 1);
+    return getMonthDateRange(prevDate.getFullYear(), prevDate.getMonth() + 1);
+  }, [selectedYear, selectedMonth]);
+
+  const currentMonthTransactions = useMemo(
+    () => transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), currentRange.start, currentRange.end)),
+    [transactions, currentRange]
+  );
+  const previousMonthTransactions = useMemo(
+    () => transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), previousRange.start, previousRange.end)),
+    [transactions, previousRange]
+  );
+
+  const currentExpense = useMemo(
+    () => sumTransactionsCny(currentMonthTransactions, exchangeRates, (tx) => !tx.isIncome),
+    [currentMonthTransactions, exchangeRates]
+  );
+  const currentIncome = useMemo(
+    () => sumTransactionsCny(currentMonthTransactions, exchangeRates, (tx) => tx.isIncome),
+    [currentMonthTransactions, exchangeRates]
+  );
+  const currentBalance = currentIncome - currentExpense;
+  const previousExpense = useMemo(
+    () => sumTransactionsCny(previousMonthTransactions, exchangeRates, (tx) => !tx.isIncome),
+    [previousMonthTransactions, exchangeRates]
+  );
+  const previousIncome = useMemo(
+    () => sumTransactionsCny(previousMonthTransactions, exchangeRates, (tx) => tx.isIncome),
+    [previousMonthTransactions, exchangeRates]
+  );
+  const previousBalance = previousIncome - previousExpense;
+  const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
+
+  const expenseGroups = useMemo(() => {
+    const grouped = currentMonthTransactions
+      .filter((tx) => !tx.isIncome)
+      .reduce((acc, tx) => {
+        const key = tx.tag || '其他';
+        acc[key] = (acc[key] || 0) + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+        return acc;
+      }, {});
+    return Object.entries(grouped)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [currentMonthTransactions, exchangeRates]);
+
+  const previousExpenseGroups = useMemo(() => {
+    return previousMonthTransactions
+      .filter((tx) => !tx.isIncome)
+      .reduce((acc, tx) => {
+        const key = tx.tag || '其他';
+        acc[key] = (acc[key] || 0) + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+        return acc;
+      }, {});
+  }, [previousMonthTransactions, exchangeRates]);
+
+  const pieData = useMemo(() => {
+    const total = expenseGroups.reduce((sum, item) => sum + item.amount, 0);
+    return expenseGroups.slice(0, 6).map((item, index) => {
+      const visual = getCategoryVisual(item.name);
+      const percent = total > 0 ? (item.amount / total) * 100 : 0;
+      return { ...item, color: visual.color, percent, percentLabel: `${percent.toFixed(1)}%`, rank: index + 1, ...visual };
+    });
+  }, [expenseGroups]);
+
+  const rankingData = pieData.map((item) => ({
+    ...item,
+    amountLabel: formatDisplayMoney(item.amount),
+    isRed: item.rank === 1,
+  }));
+
+  const insightData = useMemo(() => {
+    return expenseGroups
+      .map((item, index) => {
+        const previous = previousExpenseGroups[item.name] || 0;
+        const delta = item.amount - previous;
+        return {
+          rank: index + 1,
+          name: item.name,
+          amount: formatDisplayMoney(item.amount),
+          percent: `${delta >= 0 ? '+' : ''}${getDeltaPct(item.amount, previous).toFixed(1)}%`,
+          width: `${Math.max(20, Math.min(100, expenseGroups[0]?.amount ? (item.amount / expenseGroups[0].amount) * 100 : 0))}%`,
+          ...getCategoryVisual(item.name),
+        };
+      })
+      .sort((a, b) => parseFloat(b.percent) - parseFloat(a.percent))
+      .slice(0, 5)
+      .map((item, index) => ({ ...item, rank: index + 1 }));
+  }, [expenseGroups, previousExpenseGroups]);
+
+  const chartData = useMemo(() => {
+    const months = activeTab === '年'
+      ? monthRangeOptions
+      : monthRangeOptions.filter((month) => month >= trendRange.start && month <= trendRange.end);
+    return months.map((month) => {
+      const { start, end } = getMonthDateRange(selectedYear, month);
+      const monthTransactions = transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), start, end));
+      const income = sumTransactionsCny(monthTransactions, exchangeRates, (tx) => tx.isIncome);
+      const expense = sumTransactionsCny(monthTransactions, exchangeRates, (tx) => !tx.isIncome);
+      return {
+        month: `${month}月`,
+        monthNumber: month,
+        income,
+        expense,
+        isCurrent: month === selectedMonth,
+      };
+    });
+  }, [activeTab, exchangeRates, selectedMonth, selectedYear, transactions, trendRange]);
+
+  const chartMax = useMemo(() => {
+    const maxValue = Math.max(1, ...chartData.flatMap((item) => [item.income, item.expense]));
+    return Math.ceil(maxValue / 10000) * 10000;
+  }, [chartData]);
+
+  const pieGradient = useMemo(() => {
+    if (pieData.length === 0) return 'conic-gradient(#e5e7eb 0% 100%)';
+    let start = 0;
+    const segments = pieData.map((item) => {
+      const end = start + item.percent;
+      const segment = `${item.color} ${start}% ${end}%`;
+      start = end;
+      return segment;
+    });
+    return `conic-gradient(from -20deg, ${segments.join(', ')})`;
+  }, [pieData]);
+
+  const monthLabel = `${selectedYear}年${selectedMonth}月`;
 
   return (
     <div className="bg-[#f7f8fa] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -826,7 +1110,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
 
       <div className="px-[16px] mt-[8px] flex items-center justify-between">
         <button className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
-          <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
+          <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">{monthLabel}</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
         </button>
         <div className="flex bg-[#f4f5f8] rounded-[10px] p-[3px]">
           {['月', '年', '自定义'].map((tab) => (
@@ -838,23 +1122,23 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
       <div className="px-[16px] mt-[16px] flex space-x-[10px]">
         <div className="flex-1 bg-white rounded-[16px] p-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.02)] relative">
           <div className="text-[11px] text-[#8e8e93] mb-[4px] font-medium">本月支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px] font-normal">(CNY)</span></div>
-          <div className="text-[18px] font-bold text-[#ff4d4f] mb-[8px] leading-none">7,109.71</div>
+          <div className="text-[18px] font-bold text-[#ff4d4f] mb-[8px] leading-none">{formatDisplayMoney(currentExpense)}</div>
           <div className="text-[10px] text-[#8e8e93] mb-[2px]">较上月</div>
-          <div className="flex items-center text-[10px]"><span className="text-[#ff4d4f] flex items-center font-medium bg-[#fff1f0] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> 13.2%</span></div>
+          <div className="flex items-center text-[10px]"><span className="text-[#ff4d4f] flex items-center font-medium bg-[#fff1f0] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> {getDeltaPct(currentExpense, previousExpense).toFixed(1)}%</span></div>
           <div className="absolute bottom-[12px] right-[12px] w-[28px] h-[28px] bg-[#fff1f0] rounded-[8px] flex items-center justify-center"><ArrowDownRight className="w-[16px] h-[16px] text-[#ff4d4f]" strokeWidth={2.5} /></div>
         </div>
         <div className="flex-1 bg-white rounded-[16px] p-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.02)] relative">
           <div className="text-[11px] text-[#8e8e93] mb-[4px] font-medium">本月收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px] font-normal">(CNY)</span></div>
-          <div className="text-[18px] font-bold text-[#34d399] mb-[8px] leading-none">47,556.16</div>
+          <div className="text-[18px] font-bold text-[#34d399] mb-[8px] leading-none">{formatDisplayMoney(currentIncome)}</div>
           <div className="text-[10px] text-[#8e8e93] mb-[2px]">较上月</div>
-          <div className="flex items-center text-[10px]"><span className="text-[#34d399] flex items-center font-medium bg-[#ecfdf5] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> 18.7%</span></div>
+          <div className="flex items-center text-[10px]"><span className="text-[#34d399] flex items-center font-medium bg-[#ecfdf5] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> {getDeltaPct(currentIncome, previousIncome).toFixed(1)}%</span></div>
           <div className="absolute bottom-[12px] right-[12px] w-[28px] h-[28px] bg-[#ecfdf5] rounded-[8px] flex items-center justify-center"><ArrowUpRight className="w-[16px] h-[16px] text-[#34d399]" strokeWidth={2.5} /></div>
         </div>
         <div className="flex-1 bg-white rounded-[16px] p-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.02)] relative">
           <div className="text-[11px] text-[#8e8e93] mb-[4px] font-medium">本月结余 <span className="text-[9px] text-[#c7c7cc] ml-[2px] font-normal">(CNY)</span></div>
-          <div className="text-[18px] font-bold text-[#1677ff] mb-[8px] leading-none">40,446.45</div>
+          <div className="text-[18px] font-bold text-[#1677ff] mb-[8px] leading-none">{formatDisplayMoney(currentBalance)}</div>
           <div className="text-[10px] text-[#8e8e93] mb-[2px]">较上月</div>
-          <div className="flex items-center text-[10px]"><span className="text-[#1677ff] flex items-center font-medium bg-[#e6f4ff] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> 20.1%</span></div>
+          <div className="flex items-center text-[10px]"><span className="text-[#1677ff] flex items-center font-medium bg-[#e6f4ff] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> {getDeltaPct(currentBalance, previousBalance).toFixed(1)}%</span></div>
           <div className="absolute bottom-[12px] right-[12px] w-[28px] h-[28px] bg-[#e6f4ff] rounded-[8px] flex items-center justify-center"><Wallet className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={2.5} /></div>
         </div>
       </div>
@@ -917,23 +1201,25 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
           <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#fa757e] mr-[6px]"></div>支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(元)</span></div>
         </div>
         <div className="relative h-[140px] w-full pt-[16px]">
-          {[60, 45, 30, 15, 0].map((val) => (
-            <div key={val} className="absolute w-full flex items-center" style={{ bottom: `${(val / 60) * 100}%` }}>
-              <span className="text-[10px] text-[#c7c7cc] w-[28px] -mt-[6px]">{val === 0 ? '0' : `${val}K`}</span>
+          {[4, 3, 2, 1, 0].map((step) => {
+            const val = (chartMax / 4) * step;
+            return (
+            <div key={step} className="absolute w-full flex items-center" style={{ bottom: `${(step / 4) * 100}%` }}>
+              <span className="text-[10px] text-[#c7c7cc] w-[28px] -mt-[6px]">{val === 0 ? '0' : `${Math.round(val / 1000)}K`}</span>
               <div className="flex-1 border-t border-dashed border-[#f0f0f0] ml-[4px]"></div>
             </div>
-          ))}
+          )})}
           <div className="absolute inset-0 ml-[32px] flex justify-between px-[10px] items-end pb-[1px]">
-            {STATS_BAR_CHART_DATA.map((item) => (
+            {chartData.map((item) => (
               <div key={item.month} className="flex flex-col items-center flex-1 h-full relative z-10">
                 <div className="absolute bottom-0 flex justify-between items-end h-full w-[32px]">
-                  <div className="relative w-[10px]" style={{ height: `${(item.in / 60) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${chartMax ? (item.income / chartMax) * 100 : 0}%` }}>
                     <div className={`w-full h-full rounded-t-[3px] transition-all duration-500 ${item.isCurrent ? 'bg-[#4080ff]' : 'bg-[#65d4a9]'}`}></div>
-                    <div className={`absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{item.in}K</div>
+                    <div className={`absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{(item.income / 1000).toFixed(1)}K</div>
                   </div>
-                  <div className="relative w-[10px]" style={{ height: `${(item.out / 60) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${chartMax ? (item.expense / chartMax) * 100 : 0}%` }}>
                     <div className="w-full h-full bg-[#fa757e] rounded-t-[3px] transition-all duration-500"></div>
-                    <div className="absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{item.out}K</div>
+                    <div className="absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{(item.expense / 1000).toFixed(1)}K</div>
                   </div>
                 </div>
                 <div className={`absolute -bottom-[20px] text-[11px] font-medium ${item.isCurrent ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`}>{item.month}</div>
@@ -949,14 +1235,14 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
           <h2 className="text-[14px] font-bold text-[#1c1c1e] mb-[20px]">支出分类占比</h2>
           <div className="flex flex-col items-center flex-1 justify-center">
             <div className="relative w-[116px] h-[116px] mb-[20px]">
-              <div className="w-full h-full transform rotate-[-15deg]" style={{background: 'conic-gradient(from -20deg, #4c78fe 0% 31.8%, #8862fe 31.8% 52.2%, #a78dfe 52.2% 68.9%, #c5cbe1 68.9% 76.9%, #ffd24d 76.9% 86.5%, #f5ad41 86.5% 100%)', borderRadius: '50%', mask: 'radial-gradient(transparent 58%, black 59%)', WebkitMask: 'radial-gradient(transparent 58%, black 59%)'}}></div>
+              <div className="w-full h-full transform rotate-[-15deg]" style={{background: pieGradient, borderRadius: '50%', mask: 'radial-gradient(transparent 58%, black 59%)', WebkitMask: 'radial-gradient(transparent 58%, black 59%)'}}></div>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[14px] font-bold text-[#1c1c1e] leading-none mb-[4px]">7,109.71</span><span className="text-[10px] text-[#8e8e93]">总支出</span>
+                <span className="text-[14px] font-bold text-[#1c1c1e] leading-none mb-[4px]">{formatDisplayMoney(currentExpense)}</span><span className="text-[10px] text-[#8e8e93]">总支出</span>
               </div>
             </div>
             <div className="w-full grid grid-cols-2 gap-y-[10px] gap-x-[8px] px-[2px]">
-              {STATS_PIE_CHART_DATA.map((item) => (
-                <div key={item.name} className="flex items-center text-[11px]"><div className="w-[6px] h-[6px] rounded-full mr-[6px] shrink-0" style={{ backgroundColor: item.color }}></div><span className="text-[#8e8e93] shrink-0 mr-auto">{item.name}</span><span className="text-[#3a3a3c] font-medium shrink-0 ml-[2px]">{item.percent}</span></div>
+              {pieData.map((item) => (
+                <div key={item.name} className="flex items-center text-[11px]"><div className="w-[6px] h-[6px] rounded-full mr-[6px] shrink-0" style={{ backgroundColor: item.color }}></div><span className="text-[#8e8e93] shrink-0 mr-auto">{item.name}</span><span className="text-[#3a3a3c] font-medium shrink-0 ml-[2px]">{item.percentLabel}</span></div>
               ))}
             </div>
           </div>
@@ -967,7 +1253,7 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             <h2 className="text-[14px] font-bold text-[#1c1c1e]">支出分类排行</h2><button onClick={() => setIsDetailModalOpen(true)} className="flex items-center text-[10px] text-[#8e8e93] active:opacity-60">查看全部 <ChevronRight className="w-[12px] h-[12px] ml-[2px]" strokeWidth={2} /></button>
           </div>
           <div className="flex-1 flex flex-col justify-center space-y-[14px]">
-            {STATS_RANKING_DATA.map((item) => (
+            {rankingData.map((item) => (
               <div key={item.rank} className="flex items-center w-full">
                 <div className={`w-[14px] h-[14px] rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${item.badgeBg} ${item.badgeText}`}>{item.rank}</div>
                 <div className="w-[20px] h-[20px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0 ml-[6px]">
@@ -975,8 +1261,8 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
                 </div>
                 <span className="text-[11px] text-[#3a3a3c] font-medium ml-[6px] shrink-0">{item.name}</span>
                 <div className="flex-1 min-w-[2px]"></div>
-                <span className="text-[12px] font-bold text-[#1c1c1e] tabular-nums shrink-0">{item.amount}</span>
-                <span className={`text-[10px] font-medium w-[32px] text-right shrink-0 tabular-nums ml-[4px] ${item.isRed ? 'text-[#ff4d4f]' : 'text-[#8e8e93]'}`}>{item.percent}</span>
+                <span className="text-[12px] font-bold text-[#1c1c1e] tabular-nums shrink-0">{item.amountLabel}</span>
+                <span className={`text-[10px] font-medium w-[40px] text-right shrink-0 tabular-nums ml-[4px] ${item.isRed ? 'text-[#ff4d4f]' : 'text-[#8e8e93]'}`}>{item.percentLabel}</span>
               </div>
             ))}
           </div>
@@ -986,8 +1272,8 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
       <button onClick={() => setIsInsightModalOpen(true)} className="w-[calc(100%-32px)] mx-[16px] mt-[16px] bg-gradient-to-r from-[#6b73ff] to-[#404cff] rounded-[20px] p-[16px] flex items-center shadow-[0_8px_20px_rgba(107,115,255,0.2)] cursor-pointer active:scale-[0.98] transition-transform z-10 relative text-left">
         <div className="w-[40px] h-[40px] rounded-full bg-white/20 flex items-center justify-center shrink-0 mr-[12px]"><TrendingUp className="w-[20px] h-[20px] text-white" strokeWidth={2.5} /></div>
         <div className="flex-1">
-          <div className="text-[14px] font-bold text-white mb-[4px]">本月支出较上月增加 <span className="text-[#ffb612]">13.2%</span></div>
-          <div className="text-[11px] text-white/80">主要增长来自 餐饮 (+18.6%) 和 购物 (+17.3%)</div>
+          <div className="text-[14px] font-bold text-white mb-[4px]">本月支出较上月变化 <span className="text-[#ffb612]">{getDeltaPct(currentExpense, previousExpense).toFixed(1)}%</span></div>
+          <div className="text-[11px] text-white/80">{insightData[0] ? `主要变化来自 ${insightData[0].name} (${insightData[0].percent})` : '当前月份暂无足够支出数据'}</div>
         </div>
         <ChevronRight className="w-[18px] h-[18px] text-white/80 ml-[8px]" strokeWidth={2} />
       </button>
@@ -999,8 +1285,8 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
             <div className="px-[20px] flex justify-between items-start">
                <div>
-                  <h2 className="text-[18px] font-bold text-[#1c1c1e]">本月支出较上月增加 <span className="text-[#ff4d4f]">13.2%</span></h2>
-                  <p className="text-[12px] text-[#8e8e93] mt-[4px]">主要增长来自 餐饮 (+18.6%) 和 购物 (+17.3%)</p>
+                  <h2 className="text-[18px] font-bold text-[#1c1c1e]">本月支出较上月变化 <span className="text-[#ff4d4f]">{getDeltaPct(currentExpense, previousExpense).toFixed(1)}%</span></h2>
+                  <p className="text-[12px] text-[#8e8e93] mt-[4px]">{insightData[0] ? `主要变化来自 ${insightData[0].name} (${insightData[0].percent})` : '当前月份暂无足够数据'}</p>
                </div>
                <button onClick={() => setIsInsightModalOpen(false)} className="p-[4px] active:bg-gray-100 rounded-full transition-colors mt-[-4px] mr-[-4px]"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
             </div>
@@ -1010,11 +1296,11 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
                     <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
-               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">2026年4月</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
+               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">{monthLabel}</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
             <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
             <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
-               {STATS_INSIGHT_MODAL_DATA.map((item) => (
+               {insightData.map((item) => (
                   <div key={item.rank} className="flex items-center px-[20px] w-full">
                      <div className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${item.badgeBg} ${item.badgeText}`}>{item.rank}</div>
                      <div className="w-[24px] h-[24px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0 ml-[10px]">{React.cloneElement(item.icon, { className: "w-[12px] h-[12px] text-[#3a3a3c]" })}</div>
@@ -1035,9 +1321,9 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mb-[20px]"></div>
             <div className="relative">
                <button onClick={() => setIsDetailModalOpen(false)} className="absolute -top-[4px] right-0 p-[4px] active:bg-gray-100 rounded-full transition-colors"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
-               <div className="flex justify-between items-end mb-[20px]">
+                  <div className="flex justify-between items-end mb-[20px]">
                   <h2 className="text-[20px] font-bold text-[#1c1c1e] leading-none">支出分类详情</h2>
-                  <div className="flex items-center text-[12px] text-[#3a3a3c] font-medium mr-[28px] mt-[4px]">2026年4月 <ChevronDown className="w-[12px] h-[12px] ml-[2px] text-[#8e8e93]" strokeWidth={2.5} /></div>
+                  <div className="flex items-center text-[12px] text-[#3a3a3c] font-medium mr-[28px] mt-[4px]">{monthLabel} <ChevronDown className="w-[12px] h-[12px] ml-[2px] text-[#8e8e93]" strokeWidth={2.5} /></div>
                </div>
             </div>
             <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[20px]">
@@ -1048,16 +1334,16 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             <div className="flex items-center">
                <div className="relative w-[110px] h-[110px] shrink-0 self-start mt-[16px]">
                   <DetailedSVGDonut />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-[15px] font-bold text-[#1c1c1e] leading-none mb-[4px]">7,109.71</span><span className="text-[9px] text-[#8e8e93]">总支出 (CNY)</span></div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-[15px] font-bold text-[#1c1c1e] leading-none mb-[4px]">{formatDisplayMoney(currentExpense)}</span><span className="text-[9px] text-[#8e8e93]">总支出 (CNY)</span></div>
                </div>
                <div className="flex-1 ml-[12px] flex flex-col">
                   <div className="flex items-center text-[10px] text-[#8e8e93] mb-[10px] px-[4px]"><div className="w-[54px]">分类</div><div className="flex-1 text-right">金额 (CNY)</div><div className="w-[32px] text-right ml-[8px]">占比</div><div className="w-[45px] text-right ml-[8px]">较上月</div></div>
                   <div className="flex flex-col space-y-[12px]">
-                     {STATS_DETAIL_MODAL_DATA.map((row, i) => (
+                     {rankingData.map((row, i) => (
                         <div key={i} className="flex items-center px-[4px]">
                            <div className="w-[54px] flex items-center space-x-[6px]"><div className="w-[18px] h-[18px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0">{React.cloneElement(row.icon, { className: "w-[10px] h-[10px] text-[#3a3a3c]" })}</div><span className="text-[12px] font-medium text-[#1c1c1e] whitespace-nowrap">{row.name}</span></div>
-                           <div className="flex-1 text-right text-[12px] font-medium text-[#1c1c1e] tabular-nums whitespace-nowrap">{row.amount}</div><div className="w-[32px] text-right text-[11px] font-medium text-[#8e8e93] tabular-nums whitespace-nowrap ml-[8px]">{row.percent}</div>
-                           <div className="w-[45px] flex items-center justify-end text-[11px] font-medium text-[#ff4d4f] tabular-nums ml-[8px]">{row.trend} <ArrowUp className="w-[9px] h-[9px] ml-[2px]" strokeWidth={3} /></div>
+                           <div className="flex-1 text-right text-[12px] font-medium text-[#1c1c1e] tabular-nums whitespace-nowrap">{row.amountLabel}</div><div className="w-[40px] text-right text-[11px] font-medium text-[#8e8e93] tabular-nums whitespace-nowrap ml-[8px]">{row.percentLabel}</div>
+                           <div className="w-[52px] flex items-center justify-end text-[11px] font-medium text-[#ff4d4f] tabular-nums ml-[8px]">{insightData.find((item) => item.name === row.name)?.percent || '+0.0%'} <ArrowUp className="w-[9px] h-[9px] ml-[2px]" strokeWidth={3} /></div>
                         </div>
                      ))}
                   </div>
@@ -1073,12 +1359,11 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
 
 const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   const [swipeX, setSwipeX] = useState(0);
-  const [startX, setStartX] = useState(0);
+  const [isRemoving, setIsRemoving] = useState(false);
   const touchStartX = useRef(0);
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
-    setStartX(e.touches[0].clientX);
   };
 
   const handleTouchMove = (e) => {
@@ -1093,14 +1378,20 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
     else setSwipeX(0);
   };
 
+  const handleDeleteClick = () => {
+    if (isRemoving) return;
+    setIsRemoving(true);
+    setTimeout(() => onDelete(tx), 260);
+  };
+
   return (
-    <div className="relative overflow-hidden bg-white">
+    <div className={`relative overflow-hidden bg-white ${isRemoving ? 'bill-row-shatter' : ''}`}>
       <button
         onClick={() => onEdit(tx)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
+        className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''} ${isRemoving ? 'pointer-events-none' : ''}`}
         style={{ transform: `translateX(${swipeX}px)` }}
       >
         <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
@@ -1112,17 +1403,25 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
         </div>
       </button>
       <button
-        onClick={() => onDelete(tx)}
+        onClick={handleDeleteClick}
         className={`absolute right-0 top-0 h-full bg-[#ff3b30] text-white px-[20px] flex items-center justify-center font-medium text-[14px] active:bg-[#e32a1f] transition-colors ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
         style={{ opacity: Math.min(1, Math.abs(swipeX) / 40) }}
       >
         删除
       </button>
+      {isRemoving && (
+        <>
+          <span className="bill-row-fragment bill-row-fragment-a"></span>
+          <span className="bill-row-fragment bill-row-fragment-b"></span>
+          <span className="bill-row-fragment bill-row-fragment-c"></span>
+          <span className="bill-row-fragment bill-row-fragment-d"></span>
+        </>
+      )}
     </div>
   );
 };
 
-const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify, onOpenProfile }) => {
+const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, updateTransaction, deleteTransaction, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -1145,7 +1444,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   };
   const handleDeleteTransaction = (tx) => {
     if (tx.id) {
-      updateTransaction(tx.id, { deleted: true });
+      deleteTransaction(tx.id);
       notify('账单已删除');
     }
   };
@@ -1180,19 +1479,32 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
     });
     const groupsMap = {};
     validTxs.forEach(tx => {
-      if (!groupsMap[tx.dateLabel]) groupsMap[tx.dateLabel] = { dateLabel: tx.dateLabel, transactions: [], currency: 'AED' };
+      if (!groupsMap[tx.dateLabel]) groupsMap[tx.dateLabel] = { dateLabel: tx.dateLabel, transactions: [], currency: 'CNY' };
       groupsMap[tx.dateLabel].transactions.push(tx);
     });
     return Object.values(groupsMap).map(group => {
-      const expense = group.transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + parseFloat(String(t.amount).replace(/[^\d.]/g, '')), 0);
-      const income = group.transactions.filter(t => t.isIncome).reduce((sum, t) => sum + parseFloat(String(t.amount).replace(/[^\d.]/g, '')), 0);
+      const expense = group.transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
+      const income = group.transactions.filter(t => t.isIncome).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
       return {
         ...group,
         totalExpense: expense.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
         totalIncome: income.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})
       };
     });
-  }, [transactions, selectedFilter, selectedType, selectedRange, searchQuery, selectedMonth, selectedDate]);
+  }, [transactions, selectedFilter, selectedType, selectedRange, searchQuery, selectedMonth, selectedDate, exchangeRates]);
+
+  const filteredTransactions = useMemo(
+    () => filteredData.flatMap((group) => group.transactions),
+    [filteredData]
+  );
+  const currentExpenseCny = useMemo(
+    () => sumTransactionsCny(filteredTransactions, exchangeRates, (tx) => !tx.isIncome),
+    [filteredTransactions, exchangeRates]
+  );
+  const currentIncomeCny = useMemo(
+    () => sumTransactionsCny(filteredTransactions, exchangeRates, (tx) => tx.isIncome),
+    [filteredTransactions, exchangeRates]
+  );
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -1274,13 +1586,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] mt-[16px] relative z-10">
         <div className="bg-white rounded-[20px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex relative">
           <div className="flex-1 pr-[16px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (人民币)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本期支出 (人民币)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">{formatDisplayMoney(currentExpenseCny)}</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 13.2%</span></div>
             <button aria-label="查看支出账单" onClick={() => setSelectedType('支出')} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
           </div>
           <div className="w-[1px] bg-[#f0f0f0] my-[2px]"></div>
           <div className="flex-1 pl-[20px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (人民币)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本期收入 (人民币)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">{formatDisplayMoney(currentIncomeCny)}</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 18.7%</span></div>
             <button aria-label="查看收入账单" onClick={() => setSelectedType('收入')} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
           </div>
@@ -1338,7 +1650,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], exchangeRates, notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
@@ -1413,10 +1725,20 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
     setIsAddExchangeModalOpen(false);
   };
 
-  // Calculate dynamic percentages
-  const totalAssets = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance.replace(/,/g, '')), 0);
-  const getPct = (type) => totalAssets === 0 ? '0.0' : ((accounts.filter(a => a.type === type).reduce((s, acc) => s + parseFloat(acc.balance.replace(/,/g, '')), 0) / totalAssets) * 100).toFixed(1);
-  const getVal = (type) => accounts.filter(a => a.type === type).reduce((s, acc) => s + parseFloat(acc.balance.replace(/,/g, '')), 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const getAccountCnyValue = (account) => convertAmountToCny(parseMoneyNumber(account.balance), account.currency, exchangeRates);
+  const totalAssets = accounts.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
+  const getTypeValue = (type) => accounts.filter((a) => a.type === type).reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
+  const getPct = (type) => totalAssets === 0 ? '0.0' : ((getTypeValue(type) / totalAssets) * 100).toFixed(1);
+  const getVal = (type) => formatDisplayMoney(getTypeValue(type));
+  const todayNetChange = useMemo(() => {
+    const today = new Date();
+    return transactions
+      .filter((tx) => {
+        const txDate = parseTransactionDate(tx.fullDate);
+        return txDate && isSameDay(txDate, today);
+      })
+      .reduce((sum, tx) => sum + (tx.isIncome ? 1 : -1) * convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates), 0);
+  }, [exchangeRates, latestTxDate, transactions]);
   const assetDistribution = [
     { name: '银行账户', pct: getPct('bank'), val: getVal('bank'), color: 'bg-[#1677ff]', stroke: '#1677ff' },
     { name: '交易所资产', pct: getPct('exchange'), val: getVal('exchange'), color: 'bg-[#7dd3fc]', stroke: '#7dd3fc' },
@@ -1428,7 +1750,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
   const renderAccountSection = (title, icon, type, itemsPerSlide, spaceY) => {
     const filtered = accounts.filter(a => a.type === type);
     if(filtered.length === 0) return null;
-    const total = filtered.reduce((sum, acc) => sum + parseFloat(acc.balance.replace(/,/g, '')), 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const total = formatDisplayMoney(filtered.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0));
     const chunks = chunkArray(filtered, itemsPerSlide);
     return (
       <div className="bg-white rounded-[16px] p-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col h-[145px] overflow-hidden">
@@ -1475,8 +1797,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
               ))}
             </div>
           </div>
-          <div className="text-[32px] font-bold text-[#1c1c1e] tracking-tight leading-none mb-[8px]" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span className="text-[14px] font-semibold text-[#3a3a3c] ml-[2px]">元</span></div>
-          <div className="flex flex-col mb-[30px]"><div className="flex items-center space-x-[4px] text-[#8e8e93] mb-[2px]"><span className="text-[11px]">今日变化</span><Info className="w-[11px] h-[11px]" strokeWidth={2} /></div><div className="text-[13px] font-semibold text-[#10b981]">+7,718.23 元 (+6.34%)</div></div>
+          <div className="text-[32px] font-bold text-[#1c1c1e] tracking-tight leading-none mb-[8px]" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>{formatDisplayMoney(totalAssets)} <span className="text-[14px] font-semibold text-[#3a3a3c] ml-[2px]">元</span></div>
+          <div className="flex flex-col mb-[30px]"><div className="flex items-center space-x-[4px] text-[#8e8e93] mb-[2px]"><span className="text-[11px]">今日变化</span><Info className="w-[11px] h-[11px]" strokeWidth={2} /></div><div className={`text-[13px] font-semibold ${todayNetChange >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{todayNetChange >= 0 ? '+' : ''}{formatDisplayMoney(todayNetChange)} 元</div></div>
           <div className="absolute bottom-0 right-0 w-[65%] h-[85px] pointer-events-none">
             <svg viewBox="0 0 200 85" className="w-full h-full" preserveAspectRatio="none">
               <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1677ff" stopOpacity="0.15" /><stop offset="100%" stopColor="#1677ff" stopOpacity="0" /></linearGradient></defs>
@@ -1488,9 +1810,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
           <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => accounts[0] ? handleOpenAccountDetail({...accounts[0], icon: getIconByString(accounts[0].icon, 'large')}) : notify('暂无账户详情')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
           <div className="flex items-center justify-between">
-            <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{totalAssets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span><span className="text-[9px] font-semibold text-[#8e8e93]">元</span></div></div>
+            <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{formatDisplayMoney(totalAssets)}</span><span className="text-[9px] font-semibold text-[#8e8e93]">元</span></div></div>
             <div className="flex-1 ml-[16px] flex flex-col space-y-[8px]">
-               {assetDistribution.filter(a => a.val !== "0.00 AED").map((item, i) => (
+               {assetDistribution.filter((a) => a.val !== "0.00").map((item, i) => (
                  <div key={i} className="grid grid-cols-[10px_64px_34px_1fr] items-center gap-[4px]"><div className={`w-[6px] h-[6px] rounded-full ${item.color}`}></div><span className="text-[11px] text-[#5c5c5e] whitespace-nowrap">{item.name}</span><span className="text-[11px] text-[#8e8e93] text-right">{item.pct}%</span><span className="text-[11px] font-medium text-[#3a3a3c] text-right whitespace-nowrap">{item.val}</span></div>
                ))}
             </div>
@@ -1689,7 +2011,8 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
-  const { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
+  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
+  const activeTransactions = useMemo(() => transactions.filter((tx) => !tx.deleted), [transactions]);
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -1731,6 +2054,43 @@ export default function App() {
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .bill-row-shatter {
+          animation: bill-row-shatter 260ms ease forwards;
+          transform-origin: center;
+        }
+        .bill-row-fragment {
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(255, 59, 48, 0.85);
+          pointer-events: none;
+        }
+        .bill-row-fragment-a { left: 18%; top: 36%; animation: bill-fragment-a 260ms ease-out forwards; }
+        .bill-row-fragment-b { left: 36%; top: 52%; animation: bill-fragment-b 260ms ease-out forwards; }
+        .bill-row-fragment-c { left: 62%; top: 34%; animation: bill-fragment-c 260ms ease-out forwards; }
+        .bill-row-fragment-d { left: 78%; top: 58%; animation: bill-fragment-d 260ms ease-out forwards; }
+        @keyframes bill-row-shatter {
+          0% { opacity: 1; transform: scale(1); filter: blur(0); }
+          60% { opacity: 0.8; transform: scale(0.98); }
+          100% { opacity: 0; transform: scale(0.9); filter: blur(6px); }
+        }
+        @keyframes bill-fragment-a {
+          from { transform: translate(0, 0) scale(1); opacity: 0.9; }
+          to { transform: translate(-18px, -20px) scale(0.3); opacity: 0; }
+        }
+        @keyframes bill-fragment-b {
+          from { transform: translate(0, 0) scale(1); opacity: 0.9; }
+          to { transform: translate(-10px, 16px) scale(0.2); opacity: 0; }
+        }
+        @keyframes bill-fragment-c {
+          from { transform: translate(0, 0) scale(1); opacity: 0.9; }
+          to { transform: translate(16px, -18px) scale(0.25); opacity: 0; }
+        }
+        @keyframes bill-fragment-d {
+          from { transform: translate(0, 0) scale(1); opacity: 0.9; }
+          to { transform: translate(20px, 18px) scale(0.2); opacity: 0; }
+        }
         .scroll-area { 
           overflow-y: auto; overflow-x: hidden; touch-action: pan-y; -webkit-overflow-scrolling: touch; 
           flex: 1 1 auto; min-height: 0; position: relative; z-index: 10;
@@ -1753,10 +2113,10 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} accounts={accounts} budget={budget} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
-                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
-                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={transactions} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
+                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>
@@ -1764,7 +2124,7 @@ export default function App() {
         <MessageCenterModal isOpen={isMessageCenterOpen} onClose={() => setIsMessageCenterOpen(false)} notify={notify} />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
         <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={transactions} />
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={activeTransactions} />
         <ActionToast message={toastMsg} />
       </div>
     </>
