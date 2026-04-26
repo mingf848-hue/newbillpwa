@@ -1590,8 +1590,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   );
 
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col">
-      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[20] bg-[#f4f5f8]/95 backdrop-blur-sm shrink-0">
+    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
+      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[20] bg-[#f4f5f8] shadow-[0_1px_0_rgba(228,232,238,0.96)] shrink-0" style={{ transform: 'translateZ(0)' }}>
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
           <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
@@ -1599,7 +1599,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
-      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] bg-[#f4f5f8]/95 backdrop-blur-sm shrink-0">
+      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] shrink-0" style={{ transform: 'translateZ(0)' }}>
       <div className="px-[16px] flex items-center justify-between space-x-[8px] mt-[4px] relative z-30">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
