@@ -176,8 +176,6 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
 };
 
-const EXCHANGE_CONTEXT_KEYWORDS = ['OKX', 'BINANCE', 'BITGET', 'BYBIT', 'HUOBI', 'HTX', 'GATE', 'MEXC', 'KUCOIN', '交易所', '币安', '火币'];
-
 const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
 
 const isAdjustmentTransaction = (tx) => {
@@ -191,23 +189,16 @@ const isInternalAccountTransferTransaction = (tx) => {
   return title.includes('转入') || title.includes('转出') || note.includes('账户转账');
 };
 
-const isExchangeAssetLedgerTransaction = (tx) => {
-  const title = String(tx?.title || '').toUpperCase();
-  const subtitle = String(tx?.subtitle || '').toUpperCase();
-  const paymentMethod = String(tx?.paymentMethod || '').toUpperCase();
-  const iconType = String(tx?.iconType || '').toUpperCase();
-  const hasExchangeContext = EXCHANGE_CONTEXT_KEYWORDS.some((keyword) => (
-    title.includes(keyword) || subtitle.includes(keyword) || paymentMethod.includes(keyword) || iconType.includes(keyword)
-  ));
-  const isLedgerStyleTitle = title.includes('其他记录') || title.includes('调整记录');
-  return hasExchangeContext && isLedgerStyleTitle;
+const isManualBalanceAdjustmentTransaction = (tx) => {
+  const note = String(tx?.note || '').trim();
+  return note === '余额人工修正' || note === '余额人工修正（不计入统计）';
 };
 
 const shouldCountInCashflow = (tx) => (
   !isTransferTransaction(tx) &&
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
-  !isExchangeAssetLedgerTransaction(tx)
+  !isManualBalanceAdjustmentTransaction(tx)
 );
 
 const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
