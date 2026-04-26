@@ -642,7 +642,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           <div className="flex space-x-[20px] border-b border-gray-50 pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[10px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[10px]">
             <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
-            <input autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300" />
+            <input value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300" />
             <Camera className="w-[20px] h-[20px] text-gray-400" />
           </div>
           <div className="space-y-[2px]">{renderFormList()}</div>
@@ -753,110 +753,118 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       </div>
 
       {/* 预算管理面板 */}
-      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'budget' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] max-h-[90vh] overflow-y-auto hide-scrollbar ${activeModal === 'budget' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] sticky top-0 z-10"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-        <div className="p-[16px] space-y-[14px]">
-          <div className="bg-white rounded-[16px] p-[16px] shadow-sm">
-            <div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]">
-              <span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span>
-              <span>本月剩余 <span className={`font-bold ${budgetRemaining >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{budgetRemaining.toFixed(2)}</span></span>
-            </div>
-            <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div>
-            <div className="h-[4px] bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-[#1677ff] transition-all" style={{width: `${Math.min(100, (budgetUsed / budgetAmount) * 100).toFixed(0)}%`}}></div>
-            </div>
-            <div className="flex justify-between text-[10px] text-[#8e8e93] mt-[6px]">
-              <span>已支出 <span className="text-[#1c1c1e] font-semibold">{budgetUsed.toLocaleString()}</span></span>
-              <span>{((budgetUsed / budgetAmount) * 100).toFixed(0)}%</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-[12px] px-[12px] overflow-hidden">
-            <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => setIsEditingBudget(!isEditingBudget)} />
-            <SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value={budgetPeriod} onClick={() => setIsBudgetPeriodOpen(!isBudgetPeriodOpen)} />
-            <SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} />
-          </div>
-
-          {isEditingBudget && (
-            <div className="bg-white rounded-[12px] p-[14px] space-y-[10px]">
-              <span className="text-[13px] font-bold text-[#1c1c1e]">调整预算金额</span>
-              <div className="flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] focus-within:border-[#1677ff]">
-                <span className="text-[16px] font-bold text-[#1c1c1e] mr-[6px]">¥</span>
-                <input autoFocus type="text" inputMode="decimal" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="输入预算金额" className="flex-1 text-[16px] font-bold text-[#1c1c1e] outline-none bg-transparent" />
+      {activeModal === 'budget' && (
+        <>
+          <div className="absolute inset-0 bg-black/40 z-[90]" onClick={closeModals} />
+          <div className="absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[90vh] animate-in slide-in-from-bottom duration-300">
+            <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+            <div className="overflow-y-auto hide-scrollbar flex-1 p-[16px] space-y-[14px]">
+              <div className="bg-white rounded-[16px] p-[16px] shadow-sm">
+                <div className="flex justify-between items-center text-[11px] text-gray-400 mb-[4px]">
+                  <span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span>
+                  <span>本月剩余 <span className={`font-bold ${budgetRemaining >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{budgetRemaining.toFixed(2)}</span></span>
+                </div>
+                <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div>
+                <div className="h-[4px] bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#1677ff] transition-all" style={{width: `${Math.min(100, (budgetUsed / budgetAmount) * 100).toFixed(0)}%`}}></div>
+                </div>
+                <div className="flex justify-between text-[10px] text-[#8e8e93] mt-[6px]">
+                  <span>已支出 <span className="text-[#1c1c1e] font-semibold">{budgetUsed.toLocaleString()}</span></span>
+                  <span>{((budgetUsed / budgetAmount) * 100).toFixed(0)}%</span>
+                </div>
               </div>
-              <div className="flex space-x-[8px]">
-                <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
-                <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
+
+              <div className="bg-white rounded-[12px] px-[12px] overflow-hidden">
+                <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => setIsEditingBudget(!isEditingBudget)} />
+                <SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value={budgetPeriod} onClick={() => setIsBudgetPeriodOpen(!isBudgetPeriodOpen)} />
+                <SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} />
               </div>
-            </div>
-          )}
 
-          {isBudgetPeriodOpen && (
-            <div className="bg-white rounded-[12px] p-[14px]">
-              <span className="text-[13px] font-bold text-[#1c1c1e] block mb-[10px]">选择周期</span>
-              <div className="grid grid-cols-3 gap-[8px]">
-                {['每日', '每周', '每月', '每季度', '每半年', '每年'].map((p) => (
-                  <button key={p} onClick={() => { setBudgetPeriod(p); setIsBudgetPeriodOpen(false); }} className={`py-[10px] rounded-[10px] text-[13px] font-medium transition-all ${budgetPeriod === p ? 'bg-[#1677ff] text-white' : 'bg-[#f4f5f8] text-[#3a3a3c] active:bg-[#e5eeff]'}`}>{p}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <button onClick={() => setIsEditingBudget(true)} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
-        </div>
-      </div>
-
-      {/* 转账管理面板 */}
-      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'transfer' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] max-h-[90vh] overflow-y-auto hide-scrollbar ${activeModal === 'transfer' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] sticky top-0 z-10"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-        <div className="p-[16px] space-y-[12px]">
-          <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
-          <div className="bg-white rounded-[16px] px-[16px] overflow-hidden">
-            <TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} />
-            <TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} />
-            <div className="flex items-center justify-between py-[14px]">
-              <span className="text-[14px] text-[#1c1c1e] shrink-0 w-[70px]">转账金额</span>
-              <input value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 text-right text-[14px] text-[#1c1c1e] outline-none bg-transparent placeholder:text-[#c7c7cc]" />
-            </div>
-          </div>
-
-          {/* 转账账户选择器 */}
-          {transferPickerOpen && (
-            <div className="bg-white rounded-[16px] p-[14px]">
-              <div className="flex items-center justify-between mb-[10px]">
-                <span className="text-[13px] font-bold text-[#1c1c1e]">{transferPickerOpen === 'out' ? '选择转出账户' : '选择转入账户'}</span>
-                <button onClick={() => setTransferPickerOpen(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
-              </div>
-              {accounts.length === 0 ? (
-                <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先在资产页面添加</div>
-              ) : (
-                <div className="space-y-[6px] max-h-[200px] overflow-y-auto hide-scrollbar">
-                  {accounts.map((acc) => {
-                    const selected = transferPickerOpen === 'out' ? transferOutAccount : transferInAccount;
-                    const isSelected = selected && (selected.id === acc.id || selected.name === acc.name);
-                    return (
-                      <button key={acc.id || acc.name} onClick={() => { if (transferPickerOpen === 'out') setTransferOutAccount(acc); else setTransferInAccount(acc); setTransferPickerOpen(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-[#f4f5f8] active:bg-[#e5eeff]'}`}>
-                        <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mr-[10px] shrink-0 overflow-hidden">
-                          <HomeBrandLogo type={acc.icon} size={28} />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
-                          <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
-                        </div>
-                        {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
-                      </button>
-                    );
-                  })}
+              {isEditingBudget && (
+                <div className="bg-white rounded-[12px] p-[14px] space-y-[10px]">
+                  <span className="text-[13px] font-bold text-[#1c1c1e]">调整预算金额</span>
+                  <div className="flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] focus-within:border-[#1677ff]">
+                    <span className="text-[16px] font-bold text-[#1c1c1e] mr-[6px]">¥</span>
+                    <input autoFocus type="text" inputMode="decimal" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="输入预算金额" className="flex-1 text-[16px] font-bold text-[#1c1c1e] outline-none bg-transparent" />
+                  </div>
+                  <div className="flex space-x-[8px]">
+                    <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
+                    <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
 
-          <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
-        </div>
-      </div>
+              {isBudgetPeriodOpen && (
+                <div className="bg-white rounded-[12px] p-[14px]">
+                  <span className="text-[13px] font-bold text-[#1c1c1e] block mb-[10px]">选择周期</span>
+                  <div className="grid grid-cols-3 gap-[8px]">
+                    {['每日', '每周', '每月', '每季度', '每半年', '每年'].map((p) => (
+                      <button key={p} onClick={() => { setBudgetPeriod(p); setIsBudgetPeriodOpen(false); }} className={`py-[10px] rounded-[10px] text-[13px] font-medium transition-all ${budgetPeriod === p ? 'bg-[#1677ff] text-white' : 'bg-[#f4f5f8] text-[#3a3a3c] active:bg-[#e5eeff]'}`}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button onClick={() => setIsEditingBudget(true)} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 转账管理面板 */}
+      {activeModal === 'transfer' && (
+        <>
+          <div className="absolute inset-0 bg-black/40 z-[90]" onClick={closeModals} />
+          <div className="absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[90vh] animate-in slide-in-from-bottom duration-300">
+            <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
+            <div className="overflow-y-auto hide-scrollbar flex-1 p-[16px] space-y-[12px]">
+              <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
+              <div className="bg-white rounded-[16px] px-[16px] overflow-hidden">
+                <TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} />
+                <TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} />
+                <div className="flex items-center justify-between py-[14px]">
+                  <span className="text-[14px] text-[#1c1c1e] shrink-0 w-[70px]">转账金额</span>
+                  <input value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 text-right text-[14px] text-[#1c1c1e] outline-none bg-transparent placeholder:text-[#c7c7cc]" />
+                </div>
+              </div>
+
+              {/* 转账账户选择器 */}
+              {transferPickerOpen && (
+                <div className="bg-white rounded-[16px] p-[14px]">
+                  <div className="flex items-center justify-between mb-[10px]">
+                    <span className="text-[13px] font-bold text-[#1c1c1e]">{transferPickerOpen === 'out' ? '选择转出账户' : '选择转入账户'}</span>
+                    <button onClick={() => setTransferPickerOpen(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
+                  </div>
+                  {accounts.length === 0 ? (
+                    <div className="py-[12px] text-center text-[#8e8e93] text-[13px]">暂无账户，请先在资产页面添加</div>
+                  ) : (
+                    <div className="space-y-[6px] max-h-[200px] overflow-y-auto hide-scrollbar">
+                      {accounts.map((acc) => {
+                        const selected = transferPickerOpen === 'out' ? transferOutAccount : transferInAccount;
+                        const isSelected = selected && (selected.id === acc.id || selected.name === acc.name);
+                        return (
+                          <button key={acc.id || acc.name} onClick={() => { if (transferPickerOpen === 'out') setTransferOutAccount(acc); else setTransferInAccount(acc); setTransferPickerOpen(null); }} className={`w-full flex items-center px-[12px] py-[10px] rounded-[12px] transition-all ${isSelected ? 'bg-[#1677ff]' : 'bg-[#f4f5f8] active:bg-[#e5eeff]'}`}>
+                            <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center mr-[10px] shrink-0 overflow-hidden">
+                              <HomeBrandLogo type={acc.icon} size={28} />
+                            </div>
+                            <div className="flex-1 text-left">
+                              <div className={`text-[13px] font-semibold ${isSelected ? 'text-white' : 'text-[#1c1c1e]'}`}>{acc.name}</div>
+                              <div className={`text-[11px] ${isSelected ? 'text-white/70' : 'text-[#8e8e93]'}`}>{acc.balance} {acc.currency}</div>
+                            </div>
+                            {isSelected && <Check className="w-[16px] h-[16px] text-white shrink-0" strokeWidth={2.5} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
