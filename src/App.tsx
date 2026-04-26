@@ -89,6 +89,7 @@ const getWeekRange = (referenceDate) => {
 function useSupabaseData() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [budget, setBudget] = useState(20000);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -103,13 +104,26 @@ function useSupabaseData() {
         // Auto-seed to Database if empty
         if (accs.length === 0) {
           console.log("Seeding accounts to Supabase...");
-          try { accs = await fetchSupabase("accounts", "POST", SEED_ACCOUNTS); } 
+          try { accs = await fetchSupabase("accounts", "POST", SEED_ACCOUNTS); }
           catch (e) { accs = SEED_ACCOUNTS; }
         }
         if (txs.length === 0) {
           console.log("Seeding transactions to Supabase...");
-          try { txs = await fetchSupabase("transactions", "POST", SEED_TRANSACTIONS); } 
+          try { txs = await fetchSupabase("transactions", "POST", SEED_TRANSACTIONS); }
           catch (e) { txs = SEED_TRANSACTIONS; }
+        }
+
+        // Load budget from settings table or localStorage fallback
+        try {
+          const settings = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+          if (settings && settings.length > 0) setBudget(Number(settings[0].value) || 20000);
+          else {
+            const ls = localStorage.getItem('monthly_budget');
+            if (ls) setBudget(Number(ls) || 20000);
+          }
+        } catch (e) {
+          const ls = localStorage.getItem('monthly_budget');
+          if (ls) setBudget(Number(ls) || 20000);
         }
 
         setAccounts(accs);
@@ -126,7 +140,7 @@ function useSupabaseData() {
   const updateTransaction = async (id, updates) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     if (id && String(id).length > 10) { // Check if valid DB UUID
-      try { await fetchSupabase(`transactions?id=eq.${id}`, "PATCH", updates); } 
+      try { await fetchSupabase(`transactions?id=eq.${id}`, "PATCH", updates); }
       catch (e) { console.error("Update failed", e); }
     }
   };
@@ -150,7 +164,31 @@ function useSupabaseData() {
     }
   };
 
-  return { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount };
+  const updateBudget = async (newBudget) => {
+    setBudget(newBudget);
+    localStorage.setItem('monthly_budget', String(newBudget));
+    try {
+      const existing = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+      if (existing && existing.length > 0) {
+        await fetchSupabase(`settings?key=eq.monthly_budget`, "PATCH", { value: String(newBudget) });
+      } else {
+        await fetchSupabase("settings", "POST", { key: 'monthly_budget', value: String(newBudget) });
+      }
+    } catch (e) {
+      console.warn('Settings table missing, budget saved to localStorage only');
+    }
+  };
+
+  const transferFunds = async (fromAccount, toAccount, amount) => {
+    if (!fromAccount || !toAccount || !amount || amount <= 0) return;
+    const fromBalance = parseFloat(String(fromAccount.balance).replace(/,/g, '')) - amount;
+    const toBalance = parseFloat(String(toAccount.balance).replace(/,/g, '')) + amount;
+    const formatBal = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (fromAccount.id) await updateAccount(fromAccount.id, { balance: formatBal(fromBalance) });
+    if (toAccount.id) await updateAccount(toAccount.id, { balance: formatBal(toBalance) });
+  };
+
+  return { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds };
 }
 
 // ==========================================
@@ -874,13 +912,13 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             )}
           </div>
         </div>
-        <div className="flex items-center space-x-[16px] mb-[20px]">
-          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#65d4a9] mr-[6px]"></div>收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(CNY)</span></div>
-          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#fa757e] mr-[6px]"></div>支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(CNY)</span></div>
+        <div className="flex items-center space-x-[16px] mb-[12px]">
+          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#65d4a9] mr-[6px]"></div>收入 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(元)</span></div>
+          <div className="flex items-center text-[11px] text-[#8e8e93]"><div className="w-[6px] h-[6px] rounded-full bg-[#fa757e] mr-[6px]"></div>支出 <span className="text-[9px] text-[#c7c7cc] ml-[2px]">(元)</span></div>
         </div>
-        <div className="relative h-[180px] w-full">
-          {[80, 60, 40, 20, 0].map((val) => (
-            <div key={val} className="absolute w-full flex items-center" style={{ bottom: `${(val / 80) * 100}%` }}>
+        <div className="relative h-[140px] w-full pt-[16px]">
+          {[60, 45, 30, 15, 0].map((val) => (
+            <div key={val} className="absolute w-full flex items-center" style={{ bottom: `${(val / 60) * 100}%` }}>
               <span className="text-[10px] text-[#c7c7cc] w-[28px] -mt-[6px]">{val === 0 ? '0' : `${val}K`}</span>
               <div className="flex-1 border-t border-dashed border-[#f0f0f0] ml-[4px]"></div>
             </div>
@@ -889,21 +927,21 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
             {STATS_BAR_CHART_DATA.map((item) => (
               <div key={item.month} className="flex flex-col items-center flex-1 h-full relative z-10">
                 <div className="absolute bottom-0 flex justify-between items-end h-full w-[32px]">
-                  <div className="relative w-[10px]" style={{ height: `${(item.in / 80) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${(item.in / 60) * 100}%` }}>
                     <div className={`w-full h-full rounded-t-[3px] transition-all duration-500 ${item.isCurrent ? 'bg-[#4080ff]' : 'bg-[#65d4a9]'}`}></div>
-                    <div className={`absolute -top-[16px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1.5px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{item.in}K</div>
+                    <div className={`absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center ${item.isCurrent ? 'border-[#4080ff] text-[#4080ff]' : 'border-[#65d4a9] text-[#65d4a9]'}`}>{item.in}K</div>
                   </div>
-                  <div className="relative w-[10px]" style={{ height: `${(item.out / 80) * 100}%` }}>
+                  <div className="relative w-[10px]" style={{ height: `${(item.out / 60) * 100}%` }}>
                     <div className="w-full h-full bg-[#fa757e] rounded-t-[3px] transition-all duration-500"></div>
-                    <div className="absolute -top-[16px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1.5px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{item.out}K</div>
+                    <div className="absolute -top-[14px] left-1/2 transform -translate-x-1/2 text-[8px] font-semibold px-[3px] py-[1px] rounded-[3px] border border-[#fa757e] text-[#fa757e] whitespace-nowrap bg-white leading-none shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-20 flex items-center justify-center">{item.out}K</div>
                   </div>
                 </div>
-                <div className={`absolute -bottom-[24px] text-[11px] font-medium ${item.isCurrent ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`}>{item.month}</div>
+                <div className={`absolute -bottom-[20px] text-[11px] font-medium ${item.isCurrent ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`}>{item.month}</div>
               </div>
             ))}
           </div>
         </div>
-        <div className="h-[24px]"></div>
+        <div className="h-[20px]"></div>
       </div>
 
       <div className="mx-[16px] mt-[16px] grid grid-cols-[175px_1fr] gap-[12px]">
@@ -1472,18 +1510,18 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
             {transactions.slice(0, 4).map((tx, idx, arr) => {
               const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
               return (
-                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); }} className={`w-full flex items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                   <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
-                  <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
-                      <div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0">
-                        <span className={`text-[14px] font-bold text-right tracking-tight ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span>
-                        <span className="text-[11px] font-medium text-[#8e8e93] text-center">{tx.currency}</span>
-                        <span className="text-[11px] font-medium text-[#8e8e93] text-right">{tx.time}</span>
-                      </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
+                    <span className="text-[11px] font-medium text-[#8e8e93] truncate mt-[1px]">{tx.tag}</span>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0 min-w-[70px]">
+                    <div className="flex items-baseline space-x-[3px]">
+                      <span className={`text-[14px] font-bold text-right tracking-tight whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span>
+                      <span className="text-[10px] font-medium text-[#8e8e93]">{tx.currency}</span>
                     </div>
-                    <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">{tx.tag}</div>
+                    <span className="text-[10px] font-medium text-[#8e8e93] mt-[1px]">{tx.time}</span>
                   </div>
                 </button>
               );
@@ -1568,44 +1606,43 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[90vh]">
-            <div className="w-full flex justify-center pt-[12px] pb-[4px] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
-            <div className="flex items-start justify-between px-[20px] pt-[8px] pb-[16px] shrink-0 border-b border-[#f4f5f8]">
-               <div className="flex items-center space-x-[14px]"><div className="w-[48px] h-[48px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[18px] font-bold text-[#1c1c1e] leading-tight mb-[4px]">{selectedAccount.name}</h2><span className="text-[13px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[80vh]">
+            <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
+               <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
+               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
-            <div className="overflow-y-auto hide-scrollbar flex-1 px-[20px] pt-[16px]">
-              <div className="mb-[24px]">
-                 <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">1. 币种</h3>
-                 <div className="flex overflow-x-auto hide-scrollbar space-x-[12px] pb-[4px]">
+            <div className="overflow-y-auto hide-scrollbar flex-1 px-[16px] pt-[10px] pb-[8px]">
+              <div className="mb-[14px]">
+                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">1. 币种</h3>
+                 <div className="flex overflow-x-auto hide-scrollbar space-x-[8px] pb-[2px]">
                     {currenciesList.map((currency) => {
                       const isSelected = selectedCurrency === currency.id;
-                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
+                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] px-[12px] py-[7px] flex items-center space-x-[6px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
                     })}
                  </div>
               </div>
-              <div className="mb-[24px]">
-                 <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">2. 余额</h3>
-                 <div className="border border-[#e5e5ea] rounded-[14px] p-[12px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
-                    <span className="text-[12px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
-                    <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[22px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[4px]"><ClearInputIcon /></button>}</div>
+              <div className="mb-[14px]">
+                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">2. 余额</h3>
+                 <div className="border border-[#e5e5ea] rounded-[10px] p-[10px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
+                    <span className="text-[11px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
+                    <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[18px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[2px]"><ClearInputIcon /></button>}</div>
                  </div>
-                 <p className="text-[12px] text-[#8e8e93] mt-[8px] ml-[2px]">当前可用余额，请输入数字，最多 8 位小数</p>
-                 <div className="flex items-center justify-between mt-[16px]"><span className="text-[14px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
+                 <div className="flex items-center justify-between mt-[8px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
               </div>
-              <div className="mb-[32px]">
-                 <div className="flex items-center space-x-[6px] mb-[12px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[14px] h-[14px] text-[#c7c7cc]" strokeWidth={2} /></div>
-                 <div className="grid grid-cols-3 gap-[8px]">
-                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">高息限额</div><div className="relative mb-[8px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[34px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
+              <div className="mb-[10px]">
+                 <div className="flex items-center space-x-[4px] mb-[8px]"><h3 className="text-[13px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
+                 <div className="grid grid-cols-3 gap-[6px]">
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
                  </div>
                  <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
               </div>
             </div>
-            <div className="px-[20px] py-[16px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[12px]">
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[120px] py-[14px] border border-[#e5e5ea] rounded-[14px] text-[16px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={saveAccountDetail} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
+            <div className="px-[16px] py-[10px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
+               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
+               <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
             </div>
           </div>
         </div>
@@ -1652,7 +1689,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
-  const { accounts, transactions, loading, updateTransaction, createTransaction, createAccount, updateAccount } = useSupabaseData();
+  const { accounts, transactions, budget, loading, updateTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -1716,7 +1753,7 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} accounts={accounts} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} accounts={accounts} budget={budget} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} updateTransaction={updateTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={transactions} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
                 {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={transactions} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}

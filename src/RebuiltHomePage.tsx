@@ -208,7 +208,7 @@ const INCOME_CATEGORIES = [
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
   const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordActiveTab, setRecordActiveTab] = useState('支出');
@@ -230,11 +230,17 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [activePicker, setActivePicker] = useState(null);
 
   // Budget state
-  const [budgetAmount, setBudgetAmount] = useState(20000);
-  const [budgetInput, setBudgetInput] = useState('20000');
+  const [budgetAmount, setBudgetAmount] = useState(budget);
+  const [budgetInput, setBudgetInput] = useState(String(budget));
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [budgetPeriod, setBudgetPeriod] = useState('每月');
   const [isBudgetPeriodOpen, setIsBudgetPeriodOpen] = useState(false);
+
+  // Sync budget from props (when DB loads)
+  useEffect(() => {
+    setBudgetAmount(budget);
+    setBudgetInput(String(budget));
+  }, [budget]);
 
   // Transfer state
   const [transferAmount, setTransferAmount] = useState('');
@@ -366,6 +372,13 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
+
+    // Update both account balances in database
+    if (transferFunds && outAcc && inAcc) {
+      await transferFunds(outAcc, inAcc, amount);
+    }
+
+    // Record the transfer as a transaction
     await saveTransaction({
       dateLabel,
       iconBg: 'bg-[#8b5cf6]',
@@ -382,6 +395,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       paymentMethod: outName,
       note: '账户转账'
     });
+    setTransferAmount('');
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
@@ -802,7 +816,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
                   </div>
                   <div className="flex space-x-[8px]">
                     <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
-                    <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
+                    <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); if (updateBudget) updateBudget(v); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
                   </div>
                 </div>
               )}
