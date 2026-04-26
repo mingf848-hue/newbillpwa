@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useMemo, useRef, useState, useEffect } from 'react';
+import CustomInputKeyboard from './components/CustomInputKeyboard';
 import {
   Search, Bell, Calendar as CalendarIcon, ChevronDown, Eye, ArrowUpRight,
   PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home, FileText,
@@ -282,6 +283,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [recordNote, setRecordNote] = useState('');
   const [recordTag, setRecordTag] = useState('');
   const [activePicker, setActivePicker] = useState(null);
+  const [homeKeyboardField, setHomeKeyboardField] = useState(null);
 
   // Budget state
   const [budgetAmount, setBudgetAmount] = useState(budget);
@@ -459,6 +461,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setInputValue('');
     setActivePicker(null);
     setTransferPickerOpen(null);
+    setHomeKeyboardField(null);
   };
 
   const appendRecordKey = (key) => {
@@ -574,6 +577,33 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
+
+  const openHomeKeyboard = (field) => setHomeKeyboardField(field);
+  const closeHomeKeyboard = () => setHomeKeyboardField(null);
+  const getHomeKeyboardValue = () => {
+    if (homeKeyboardField === 'recordNote') return recordNote;
+    if (homeKeyboardField === 'budgetAmount') return budgetInput;
+    if (homeKeyboardField === 'transferAmount') return transferAmount;
+    return '';
+  };
+  const setHomeKeyboardValue = (nextValue) => {
+    if (homeKeyboardField === 'recordNote') {
+      setRecordNote(nextValue);
+      return;
+    }
+    if (homeKeyboardField === 'budgetAmount') {
+      setBudgetInput(nextValue);
+      return;
+    }
+    if (homeKeyboardField === 'transferAmount') {
+      setTransferAmount(nextValue);
+    }
+  };
+  const homeKeyboardMeta = {
+    recordNote: { label: '备注', mode: 'text', placeholder: '输入备注内容', quickActions: ['外卖', '午餐', '通勤', '工资', '报销', '转账', '家庭', '学习'] },
+    budgetAmount: { label: '预算金额', suffix: '元', mode: 'number' },
+    transferAmount: { label: '转账金额', suffix: transferOutAccount?.currency || 'CNY', mode: 'number' },
+  };
 
   const renderFormList = () => {
     const accLabel = recordAccount ? recordAccount.name : '选择账户';
@@ -957,7 +987,9 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
                 <span className="text-[13px] font-bold text-[#1c1c1e]">添加备注</span>
                 <button onClick={() => setActivePicker(null)} className="p-[2px]"><X className="w-[16px] h-[16px] text-[#8e8e93]" /></button>
               </div>
-              <textarea autoFocus value={recordNote} onChange={(e) => setRecordNote(e.target.value)} placeholder="输入备注内容..." className="w-full border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-[14px] text-[#1c1c1e] outline-none bg-white resize-none h-[80px] focus:border-[#1677ff]" />
+              <button onClick={() => openHomeKeyboard('recordNote')} className="w-full min-h-[80px] border border-[#e5e5ea] rounded-[12px] px-[14px] py-[12px] text-left bg-white active:bg-[#f9f9f9] transition-colors">
+                <span className={`block text-[14px] whitespace-pre-wrap break-words ${recordNote ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>{recordNote || '输入备注内容...'}</span>
+              </button>
               <button onClick={() => setActivePicker(null)} className="w-full mt-[8px] h-[40px] bg-[#1677ff] text-white rounded-[10px] text-[14px] font-medium active:bg-blue-700 transition-colors">完成</button>
             </div>
           )}
@@ -1005,7 +1037,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               </div>
 
               <div className="bg-white rounded-[12px] px-[12px] overflow-hidden">
-                <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => setIsEditingBudget(!isEditingBudget)} />
+                <SettingRow iconBg="bg-[#f0f5ff]" IconElement={<div className="text-[12px] font-bold text-[#1677ff]">¥</div>} label="每月预算金额" value={`${budgetAmount.toLocaleString()}.00`} onClick={() => { setIsEditingBudget(true); openHomeKeyboard('budgetAmount'); }} />
                 <SettingRow iconBg="bg-[#ecfdf5]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]" />} label="周期" value={budgetPeriod} onClick={() => setIsBudgetPeriodOpen(!isBudgetPeriodOpen)} />
                 <SettingRow iconBg="bg-[#f5f3ff]" IconElement={<Clock className="w-[12px] h-[12px] text-[#8b5cf6]" />} label="生效时间" value={`${selectedYear}年${selectedMonth}月1日`} border={false} />
               </div>
@@ -1013,10 +1045,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               {isEditingBudget && (
                 <div className="bg-white rounded-[12px] p-[14px] space-y-[10px]">
                   <span className="text-[13px] font-bold text-[#1c1c1e]">调整预算金额</span>
-                  <div className="flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] focus-within:border-[#1677ff]">
+                  <button onClick={() => openHomeKeyboard('budgetAmount')} className="w-full flex items-center border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] text-left active:bg-[#f9f9f9] transition-colors">
                     <span className="text-[16px] font-bold text-[#1c1c1e] mr-[6px]">¥</span>
-                    <input autoFocus type="text" inputMode="decimal" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="输入预算金额" className="flex-1 text-[16px] font-bold text-[#1c1c1e] outline-none bg-transparent" />
-                  </div>
+                    <span className={`flex-1 text-[16px] font-bold ${budgetInput ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>{budgetInput || '输入预算金额'}</span>
+                  </button>
                   <div className="flex space-x-[8px]">
                     <button onClick={() => setIsEditingBudget(false)} className="flex-1 h-[38px] rounded-[10px] border border-[#e5e5ea] text-[14px] font-medium active:bg-gray-50">取消</button>
                     <button onClick={() => { const v = Number(budgetInput.replace(/,/g, '')); if (v > 0) { setBudgetAmount(v); setBudgetInput(v.toString()); if (updateBudget) updateBudget(v); } setIsEditingBudget(false); }} className="flex-1 h-[38px] rounded-[10px] bg-[#1677ff] text-white text-[14px] font-medium active:bg-blue-700">确认</button>
@@ -1035,7 +1067,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
                 </div>
               )}
 
-              <button onClick={() => setIsEditingBudget(true)} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
+              <button onClick={() => { setIsEditingBudget(true); openHomeKeyboard('budgetAmount'); }} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium shadow-lg active:bg-blue-700 transition-colors">调整预算金额</button>
             </div>
           </div>
         </>
@@ -1052,10 +1084,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               <div className="bg-white rounded-[16px] px-[16px] overflow-hidden">
                 <TransferRow label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} />
                 <TransferRow label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} onClick={() => setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} />
-                <div className="flex items-center justify-between py-[14px]">
+                <button onClick={() => openHomeKeyboard('transferAmount')} className="w-full flex items-center justify-between py-[14px] text-left active:bg-[#f9f9f9] transition-colors">
                   <span className="text-[14px] text-[#1c1c1e] shrink-0 w-[70px]">转账金额</span>
-                  <input value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 text-right text-[14px] text-[#1c1c1e] outline-none bg-transparent placeholder:text-[#c7c7cc]" />
-                </div>
+                  <span className={`flex-1 text-right text-[14px] ${transferAmount ? 'text-[#1c1c1e] font-semibold' : 'text-[#c7c7cc]'}`}>{transferAmount ? `¥ ${transferAmount}` : '请输入金额'}</span>
+                </button>
               </div>
 
               {/* 转账账户选择器 */}
@@ -1095,6 +1127,18 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           </div>
         </>
       )}
+
+      <CustomInputKeyboard
+        open={Boolean(homeKeyboardField)}
+        label={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].label : ''}
+        value={getHomeKeyboardValue()}
+        suffix={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].suffix || '' : ''}
+        mode={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].mode || 'number' : 'number'}
+        placeholder={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].placeholder || '' : ''}
+        quickActions={homeKeyboardField ? homeKeyboardMeta[homeKeyboardField].quickActions || [] : []}
+        onClose={closeHomeKeyboard}
+        onChange={setHomeKeyboardValue}
+      />
     </div>
   );
 }
