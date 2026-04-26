@@ -739,32 +739,12 @@ const AprLimitDisplay = ({ balance, aprValues, currency }) => {
   const baseRate = parseFloat(aprValues.baseRate) || 0;
   const overflowRate = parseFloat(aprValues.overflowRate) || 0;
   if (lim === 0 && baseRate === 0) return null;
-  const usedPct = lim > 0 ? Math.min(100, (bal / lim) * 100) : 0;
-  const isOverflow = lim > 0 && bal > lim;
   const dailyEarnings = lim > 0
     ? (Math.min(bal, lim) * (baseRate / 100) / 365 + Math.max(0, bal - lim) * (overflowRate / 100) / 365)
     : (bal * baseRate / 100 / 365);
   const monthlyEarnings = dailyEarnings * 30;
-  const barColor = usedPct < 80 ? '#1677ff' : usedPct < 100 ? '#ff9500' : '#ff3b30';
   return (
     <div className="mt-[14px] p-[12px] bg-[#f8faff] rounded-[12px] border border-[#e8f0fe]">
-      {lim > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-[6px]">
-            <span className="text-[12px] font-medium text-[#5c5c5e]">已用额度</span>
-            <div className="flex items-center space-x-[6px]">
-              {isOverflow && <span className="text-[9px] bg-[#fff1f0] text-[#ff3b30] px-[6px] py-[1px] rounded-full font-semibold border border-[#ffd6d3]">已超限</span>}
-              <span className="text-[12px] font-bold" style={{ color: barColor }}>{usedPct.toFixed(1)}%</span>
-            </div>
-          </div>
-          <div className="h-[5px] bg-[#e5e5ea] rounded-full overflow-hidden mb-[6px]">
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, usedPct)}%`, backgroundColor: barColor }}></div>
-          </div>
-          <div className="text-[10px] text-[#8e8e93] mb-[10px]">
-            {bal.toLocaleString('en-US', { maximumFractionDigits: 2 })} / {lim.toLocaleString('en-US', { maximumFractionDigits: 2 })} {currency}
-          </div>
-        </>
-      )}
       <div className="grid grid-cols-2 gap-[8px]">
         <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
           <div className="text-[10px] text-[#8e8e93] mb-[2px]">预计日收益</div>
@@ -1335,9 +1315,9 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       </button>
 
       {isInsightModalOpen && (
-        <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[20px]">
+        <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[12px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] max-h-[85vh] overflow-y-auto bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[18px] flex flex-col hide-scrollbar">
+          <div className="relative w-full max-w-[430px] max-h-[92vh] overflow-y-auto bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[max(18px,env(safe-area-inset-bottom))] flex flex-col hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
             <div className="px-[20px] flex justify-between items-start">
                <div>
@@ -1346,13 +1326,13 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
                </div>
                <button onClick={() => setIsInsightModalOpen(false)} className="p-[4px] active:bg-gray-100 rounded-full transition-colors mt-[-4px] mr-[-4px]"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
             </div>
-            <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px]">
-               <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px]">
+            <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px] gap-[8px]">
+               <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px] overflow-x-auto hide-scrollbar flex-1 min-w-0">
                   {['支出分析', '收入分析', '对比分析', '建议'].map((tab) => (
                     <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
-               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e]">{monthLabel}</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
+               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e] whitespace-nowrap">{monthLabel}</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
             <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
             <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
@@ -1373,7 +1353,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       {isDetailModalOpen && (
         <div className="fixed inset-0 z-[400] flex justify-center items-end px-[12px] pb-[20px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsDetailModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[24px] pt-[12px] px-[20px] flex flex-col max-h-[85vh] overflow-y-auto hide-scrollbar">
+          <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[max(24px,env(safe-area-inset-bottom))] pt-[12px] px-[20px] flex flex-col max-h-[92vh] overflow-y-auto hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mb-[20px]"></div>
             <div className="relative">
                <button onClick={() => setIsDetailModalOpen(false)} className="absolute -top-[4px] right-0 p-[4px] active:bg-gray-100 rounded-full transition-colors"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
@@ -2005,13 +1985,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[80vh]">
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[92vh]">
             <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
                <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
                <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
-            <div className="overflow-y-auto hide-scrollbar flex-1 px-[16px] pt-[10px] pb-[8px]">
+            <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[16px] pt-[10px] pb-[16px]">
               <div className="mb-[14px]">
                  <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">1. 币种</h3>
                  <div className="flex overflow-x-auto hide-scrollbar space-x-[8px] pb-[2px]">

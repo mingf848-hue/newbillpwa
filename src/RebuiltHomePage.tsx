@@ -252,6 +252,7 @@ const EXPENSE_CATEGORIES = [
   { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
+const HOME_EXPENSE_OVERVIEW_COLORS = ['#1677ff', '#8b5cf6', '#10b981', '#fbbf24', '#f59e0b', '#e5e7eb'];
 const INCOME_CATEGORIES = [
   { name: '工资', icon: Briefcase, color: '#10b981' },
   { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
@@ -336,6 +337,39 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       else acc.expense += Math.abs(amount);
       return acc;
     }, { income: 0, expense: 0 });
+  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
+
+  const monthlyExpenseCategoryOverview = useMemo(() => {
+    const grouped = transactions.reduce((acc, tx) => {
+      const date = parseTransactionDate(tx.fullDate);
+      if (!date) return acc;
+      if (date.getFullYear() !== selectedYear || date.getMonth() + 1 !== selectedMonth) return acc;
+      if (tx.isIncome || !shouldCountInCashflow(tx)) return acc;
+      const key = tx.tag || '其他';
+      acc[key] = (acc[key] || 0) + Math.abs(convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates));
+      return acc;
+    }, {});
+
+    const entries = Object.entries(grouped)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .map((item, index) => ({ ...item, color: HOME_EXPENSE_OVERVIEW_COLORS[index % HOME_EXPENSE_OVERVIEW_COLORS.length] }));
+    const total = entries.reduce((sum, item) => sum + item.amount, 0);
+    const topItems = entries.slice(0, 4).map((item) => ({
+      ...item,
+      percent: total > 0 ? (item.amount / total) * 100 : 0,
+      percentLabel: `${total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0.0'}%`,
+    }));
+    let start = 0;
+    const gradient = topItems.length > 0
+      ? `conic-gradient(${topItems.map((item) => {
+          const end = start + item.percent;
+          const segment = `${item.color} ${start}% ${end}%`;
+          start = end;
+          return segment;
+        }).join(', ')})`
+      : 'conic-gradient(#e5e7eb 0% 100%)';
+    return { items: topItems, gradient };
   }, [transactions, selectedYear, selectedMonth, exchangeRates]);
 
   const budgetUsed = monthlyExpenses;
@@ -644,24 +678,22 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               <div className="flex items-center text-[10px] text-[#8e8e93]">本月 <ChevronDown className="w-[10px] h-[10px] ml-[2px]" /></div>
             </div>
             <div className="flex items-center justify-between flex-1">
-              <div className="w-[58px] h-[58px] shrink-0 relative"><DonutChart /></div>
+              <div className="w-[58px] h-[58px] shrink-0 relative">
+                <div className="w-full h-full rounded-full" style={{ background: monthlyExpenseCategoryOverview.gradient, mask: 'radial-gradient(transparent 58%, black 59%)', WebkitMask: 'radial-gradient(transparent 58%, black 59%)' }}></div>
+              </div>
               <div className="flex-1 flex flex-col justify-center space-y-[3px] ml-[10px] overflow-hidden">
-                {[
-                  {c:'bg-[#1677ff]',l:'餐饮',v:'31.8%'},
-                  {c:'bg-[#8b5cf6]',l:'交通',v:'20.4%'},
-                  {c:'bg-[#10b981]',l:'购物',v:'16.7%'},
-                  {c:'bg-[#fbbf24]',l:'娱乐',v:'13.5%'},
-                  {c:'bg-[#f59e0b]',l:'理财',v:'9.6%'},
-                  {c:'bg-[#e5e7eb]',l:'其他',v:'8.0%'}
-                ].slice(0, 4).map((x,i)=>(
+                {monthlyExpenseCategoryOverview.items.map((x, i) => (
                   <div key={i} className="flex justify-between items-center text-[9px]">
                     <div className="flex items-center truncate pr-1">
-                      <div className={`w-[3px] h-[3px] rounded-full ${x.c} mr-[4px] shrink-0`}></div>
-                      <span className="truncate">{x.l}</span>
+                      <div className="w-[3px] h-[3px] rounded-full mr-[4px] shrink-0" style={{ backgroundColor: x.color }}></div>
+                      <span className="truncate">{x.name}</span>
                     </div>
-                    <span className="text-[#8e8e93] shrink-0">{x.v}</span>
+                    <span className="text-[#8e8e93] shrink-0">{x.percentLabel}</span>
                   </div>
                 ))}
+                {monthlyExpenseCategoryOverview.items.length === 0 && (
+                  <div className="text-[10px] text-[#8e8e93]">暂无支出数据</div>
+                )}
               </div>
             </div>
           </div>
