@@ -253,6 +253,7 @@ const EXPENSE_CATEGORIES = [
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
 const HOME_EXPENSE_OVERVIEW_COLORS = ['#1677ff', '#8b5cf6', '#10b981', '#fbbf24', '#f59e0b', '#e5e7eb'];
+const RECORD_KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'];
 const INCOME_CATEGORIES = [
   { name: '工资', icon: Briefcase, color: '#10b981' },
   { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
@@ -458,6 +459,29 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setInputValue('');
     setActivePicker(null);
     setTransferPickerOpen(null);
+  };
+
+  const appendRecordKey = (key) => {
+    setInputValue((prev) => {
+      const current = String(prev || '');
+      if (key === '.') {
+        if (current.includes('.')) return current;
+        return current ? `${current}.` : '0.';
+      }
+      if (current === '0' && !current.includes('.')) return key;
+      return `${current}${key}`;
+    });
+  };
+
+  const deleteRecordKey = () => {
+    setInputValue((prev) => String(prev || '').slice(0, -1));
+  };
+
+  const addQuickAmount = (amount) => {
+    setInputValue((prev) => {
+      const next = (parseFloat(String(prev || '0')) || 0) + amount;
+      return Number.isInteger(next) ? String(next) : next.toFixed(2);
+    });
   };
 
   const saveTransaction = async (payload) => {
@@ -675,7 +699,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
         </div>
 
         <div className="flex justify-between items-center px-[12px] py-[6px]">
-          <div onClick={() => setActiveModal('record')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
+          <div onClick={() => { setActiveModal('record'); setShowInlineKeyboard(true); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
           <div onClick={() => setActiveModal('budget')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#10b981] rounded-full flex items-center justify-center shadow-md shadow-green-100/50"><PieChartIcon className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">预算</span></div>
           <div onClick={() => setActiveModal('transfer')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#8b5cf6] rounded-full flex items-center justify-center shadow-md shadow-purple-100/50"><ArrowRightLeft className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">转账</span></div>
           <div onPointerDown={handleAiStart} onPointerUp={handleAiEnd} onPointerCancel={handleAiEnd} className="flex flex-col items-center space-y-[6px] relative active:scale-95 transition-transform cursor-pointer touch-none"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><Mic className="w-[20px] h-[20px] text-white" strokeWidth={2} /><div className="absolute -top-[2px] -right-[4px] bg-gradient-to-r from-[#ff6b8b] to-[#ff8787] text-white text-[7px] font-extrabold px-[3px] py-[1.5px] rounded-full border border-white leading-none">AI</div></div><span className="text-[11px] font-medium text-[#1c1c1e]">智记</span></div>
@@ -818,9 +842,39 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           <div className="flex space-x-[20px] border-b border-gray-50 pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[10px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[10px]">
             <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
-            <input value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="请输入金额" inputMode="decimal" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300" />
+            <input value={inputValue} readOnly inputMode="none" onFocus={() => setShowInlineKeyboard(true)} onClick={() => setShowInlineKeyboard(true)} placeholder="请输入金额" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300 cursor-pointer" />
             <Camera className="w-[20px] h-[20px] text-gray-400" />
           </div>
+          {showInlineKeyboard && (
+            <div className="space-y-[12px]">
+              <div className="grid grid-cols-4 gap-[8px]">
+                {[10, 50, 100, 200].map((amount) => (
+                  <button key={amount} onClick={() => addQuickAmount(amount)} className="h-[40px] rounded-[12px] border border-[#e5e5ea] bg-white text-[14px] font-medium text-[#1c1c1e] active:bg-[#f4f8ff] transition-colors">
+                    +{amount}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_88px] gap-[8px]">
+                {RECORD_KEYPAD_KEYS.slice(0, 9).map((key) => (
+                  <button key={key} onClick={() => appendRecordKey(key)} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
+                    {key}
+                  </button>
+                ))}
+                <button onClick={() => setInputValue('')} className="row-span-2 rounded-[14px] bg-[#eef4ff] text-[24px] font-medium text-[#1677ff] active:bg-[#dfeaff] transition-colors">
+                  C
+                </button>
+                <button onClick={() => appendRecordKey('.')} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
+                  .
+                </button>
+                <button onClick={() => appendRecordKey('0')} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
+                  0
+                </button>
+                <button onClick={deleteRecordKey} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[22px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
+                  删除
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-[2px]">{renderFormList()}</div>
 
           {/* 分类选择器 */}
