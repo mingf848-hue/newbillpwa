@@ -50,6 +50,19 @@ const getDailyInterest = (account) => {
   return ((basePrincipal * baseRate) + (overflowPrincipal * overflowRate)) / 365;
 };
 
+const inferPlatformMeta = (account) => {
+  const source = `${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`;
+  if (/火币|HTX/i.test(source)) return { iconType: 'huobi', label: '火币' };
+  if (/bitget/i.test(source)) return { iconType: 'bitget', label: 'Bitget' };
+  if (/okx/i.test(source)) return { iconType: 'okx', label: 'OKX' };
+  if (/binance|币安/i.test(source)) return { iconType: 'binance', label: '币安' };
+  if (/bybit/i.test(source)) return { iconType: 'bybit', label: 'Bybit' };
+  if (/gate\.?io/i.test(source)) return { iconType: 'gateio', label: 'Gate.io' };
+  if (/kucoin/i.test(source)) return { iconType: 'kucoin', label: 'KuCoin' };
+  if (/mexc/i.test(source)) return { iconType: 'mexc', label: 'MEXC' };
+  return { iconType: account?.icon || 'landmark', label: account?.name || '理财账户' };
+};
+
 export default async function handler(_req, res) {
   try {
     const userAgent = String(_req.headers?.['user-agent'] || '');
@@ -74,6 +87,7 @@ export default async function handler(_req, res) {
       if (existing.length > 0) continue;
 
       const interest = getDailyInterest(account);
+      const platformMeta = inferPlatformMeta(account);
       const nextBalance = parseAmount(account.balance) + interest;
       const year = localNow.getUTCFullYear();
       const month = localNow.getUTCMonth() + 1;
@@ -91,9 +105,9 @@ export default async function handler(_req, res) {
         body: JSON.stringify({
           dateLabel: `今天 ${month}月${day}日`,
           iconBg: 'bg-[#10b981]',
-          iconType: account.icon || 'landmark',
-          title: `${account.name} APY 派息`,
-          subtitle: account.name,
+          iconType: platformMeta.iconType,
+          title: `${platformMeta.label} 活期理财派息`,
+          subtitle: platformMeta.label,
           tag: '理财',
           tagType: 'investment',
           amount: `+${formatAmount(interest)}`,

@@ -154,6 +154,48 @@ const getTransactionAmountCny = (tx, exchangeRates, { absolute = false } = {}) =
   return absolute ? Math.abs(amount) : amount;
 };
 
+const INVESTMENT_PLATFORM_RULES = [
+  { match: /火币|HTX/i, iconType: 'huobi', label: '火币' },
+  { match: /bitget/i, iconType: 'bitget', label: 'Bitget' },
+  { match: /okx/i, iconType: 'okx', label: 'OKX' },
+  { match: /binance|币安/i, iconType: 'binance', label: '币安' },
+  { match: /bybit/i, iconType: 'bybit', label: 'Bybit' },
+  { match: /gate\.?io/i, iconType: 'gateio', label: 'Gate.io' },
+  { match: /kucoin/i, iconType: 'kucoin', label: 'KuCoin' },
+  { match: /mexc/i, iconType: 'mexc', label: 'MEXC' },
+];
+
+const inferInvestmentPlatformMeta = (...values) => {
+  const source = values.filter(Boolean).join(' ');
+  return INVESTMENT_PLATFORM_RULES.find((rule) => rule.match.test(source)) || null;
+};
+
+const normalizeTransactionPresentation = (tx) => {
+  if (!tx || typeof tx !== 'object') return tx;
+  const isInvestmentTx = tx.tagType === 'investment' || tx.tag === '理财';
+  if (!isInvestmentTx) return tx;
+
+  const platformMeta = inferInvestmentPlatformMeta(tx.paymentMethod, tx.subtitle, tx.title, tx.note);
+  const isApyPayout = String(tx.title || '').includes('APY 派息') || String(tx.note || '').startsWith('APY每日派息:');
+
+  if (!platformMeta && !isApyPayout) return tx;
+
+  const nextTx = { ...tx };
+
+  if (platformMeta) {
+    nextTx.iconType = platformMeta.iconType;
+    if (isApyPayout) {
+      nextTx.subtitle = platformMeta.label;
+    }
+  }
+
+  if (isApyPayout) {
+    nextTx.title = `${platformMeta?.label || tx.paymentMethod || tx.subtitle || '理财'} 活期理财派息`;
+  }
+
+  return nextTx;
+};
+
 const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
 
 const isAdjustmentTransaction = (tx) => {
@@ -1591,16 +1633,20 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
-      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[20] bg-[#f4f5f8] shadow-[0_1px_0_rgba(228,232,238,0.96)] shrink-0" style={{ transform: 'translateZ(0)' }}>
-        <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
-        <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
-          <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
-          <ProfileAvatarButton onClick={onOpenProfile} />
+      <div className="sticky top-0 z-[20] shrink-0 relative overflow-hidden bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
+        <div className="absolute inset-0 bg-[#f4f5f8] pointer-events-none"></div>
+        <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
+          <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
+          <div className="flex items-center space-x-[16px]">
+            <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+            <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
+            <ProfileAvatarButton onClick={onOpenProfile} />
+          </div>
         </div>
       </div>
-      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] shrink-0" style={{ transform: 'translateZ(0)' }}>
-      <div className="px-[16px] flex items-center justify-between space-x-[8px] mt-[4px] relative z-30">
+      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] shrink-0 relative overflow-hidden bg-[#f4f5f8] pt-[4px]" style={{ transform: 'translateZ(0)' }}>
+      <div className="absolute inset-0 bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
+      <div className="px-[16px] flex items-center justify-between space-x-[8px] relative z-30">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
             <Calendar className={`w-[15px] h-[15px] ${isCalendarOpen ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={2} /><span className="text-[13px] font-medium">{selectedMonthLabel}</span><ChevronDown className={`w-[13px] h-[13px] ${isCalendarOpen ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={2.5} />
@@ -2171,7 +2217,12 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
   const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
-  const activeTransactions = useMemo(() => transactions.filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx)), [transactions]);
+  const activeTransactions = useMemo(
+    () => transactions
+      .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
+      .map((tx) => normalizeTransactionPresentation(tx)),
+    [transactions]
+  );
 
   const notify = (msg) => {
     setToastMsg(msg);
