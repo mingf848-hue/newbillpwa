@@ -176,6 +176,9 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
 };
 
+const EXCHANGE_CONTEXT_KEYWORDS = ['OKX', 'BINANCE', 'BITGET', 'BYBIT', 'HUOBI', 'HTX', 'GATE', 'MEXC', 'KUCOIN', '交易所', '币安', '火币'];
+const CRYPTO_CURRENCIES = ['USDT', 'BTC', 'ETH'];
+
 const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
 
 const isAdjustmentTransaction = (tx) => {
@@ -183,7 +186,25 @@ const isAdjustmentTransaction = (tx) => {
   return tx?.tagType === 'adjustment' || tx?.tag === '调整' || title.includes('调整记录');
 };
 
-const shouldCountInCashflow = (tx) => !isTransferTransaction(tx) && !isAdjustmentTransaction(tx);
+const isExchangeAssetLedgerTransaction = (tx) => {
+  const title = String(tx?.title || '').toUpperCase();
+  const subtitle = String(tx?.subtitle || '').toUpperCase();
+  const paymentMethod = String(tx?.paymentMethod || '').toUpperCase();
+  const currency = String(tx?.currency || 'CNY').toUpperCase();
+  const iconType = String(tx?.iconType || '').toUpperCase();
+  const hasExchangeContext = EXCHANGE_CONTEXT_KEYWORDS.some((keyword) => (
+    title.includes(keyword) || subtitle.includes(keyword) || paymentMethod.includes(keyword) || iconType.includes(keyword)
+  ));
+  const isCryptoCurrency = CRYPTO_CURRENCIES.includes(currency);
+  const isLedgerStyleTitle = title.includes('其他记录') || title.includes('调整记录');
+  return isLedgerStyleTitle && (hasExchangeContext || isCryptoCurrency);
+};
+
+const shouldCountInCashflow = (tx) => (
+  !isTransferTransaction(tx) &&
+  !isAdjustmentTransaction(tx) &&
+  !isExchangeAssetLedgerTransaction(tx)
+);
 
 const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
 
