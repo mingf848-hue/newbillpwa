@@ -866,46 +866,48 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
       {/* 记一笔面板 */}
       <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'record' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-[24px] z-[100] transition-transform duration-300 ease-out shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${activeModal === 'record' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="flex flex-col items-center pt-[10px] pb-[8px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold">记一笔</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
-        <div className="flex-1 overflow-y-auto hide-scrollbar p-[16px] space-y-[16px]">
-          <div className="flex space-x-[20px] border-b border-gray-50 pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[10px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
-          <div className="flex items-center justify-between border-b border-gray-50 py-[10px]">
-            <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
-            <input value={inputValue} readOnly inputMode="none" onFocus={() => setShowInlineKeyboard(true)} onClick={() => setShowInlineKeyboard(true)} placeholder="请输入金额" className="flex-1 ml-[10px] bg-transparent text-[20px] font-bold text-[#1c1c1e] outline-none placeholder:text-gray-300 cursor-pointer" />
-            <Camera className="w-[20px] h-[20px] text-gray-400" />
+      <div className={`absolute bottom-0 left-0 right-0 ${showInlineKeyboard ? 'bg-[#f4f5f8]' : 'bg-white'} rounded-t-[24px] z-[100] transition-all duration-300 ease-out shadow-2xl flex flex-col ${activeModal === 'record' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px]">
+          <div className="flex flex-col items-center pt-[10px] pb-[8px] border-b border-[#f0f0f0]">
+            <div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div>
+            <span className="text-[15px] font-bold">{showInlineKeyboard ? '输入金额' : '记一笔'}</span>
+            <button onClick={showInlineKeyboard ? () => setShowInlineKeyboard(false) : closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc] cursor-pointer">
+              {showInlineKeyboard ? <span className="text-[14px] font-medium text-[#1677ff]">完成</span> : <X className="w-[20px] h-[20px]" />}
+            </button>
           </div>
-          {showInlineKeyboard && (
-            <div className="space-y-[12px]">
-              <div className="grid grid-cols-4 gap-[8px]">
-                {[10, 50, 100, 200].map((amount) => (
-                  <button key={amount} onClick={() => addQuickAmount(amount)} className="h-[40px] rounded-[12px] border border-[#e5e5ea] bg-white text-[14px] font-medium text-[#1c1c1e] active:bg-[#f4f8ff] transition-colors">
-                    +{amount}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_88px] gap-[8px]">
-                {RECORD_KEYPAD_KEYS.slice(0, 9).map((key) => (
-                  <button key={key} onClick={() => appendRecordKey(key)} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
-                    {key}
-                  </button>
-                ))}
-                <button onClick={() => setInputValue('')} className="row-span-2 rounded-[14px] bg-[#eef4ff] text-[24px] font-medium text-[#1677ff] active:bg-[#dfeaff] transition-colors">
-                  C
-                </button>
-                <button onClick={() => appendRecordKey('.')} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
-                  .
-                </button>
-                <button onClick={() => appendRecordKey('0')} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[28px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
-                  0
-                </button>
-                <button onClick={deleteRecordKey} className="h-[56px] rounded-[14px] bg-[#f8f8fa] text-[22px] font-medium text-[#1c1c1e] active:bg-[#eaf1ff] transition-colors">
-                  删除
-                </button>
-              </div>
+          <div className="flex space-x-[20px] border-b border-gray-50 px-[20px] pt-[8px] pb-[8px]">{['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab);setRecordCategory('餐饮');setRecordCategoryIncome('工资');setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}</div>
+          <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={() => setShowInlineKeyboard(true)}>
+            <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
+            <div className="flex items-center flex-1 ml-[10px] h-[30px]">
+              <span className={`text-[24px] font-bold ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
+              {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px]"></div>}
             </div>
-          )}
-          <div className="space-y-[2px]">{renderFormList()}</div>
+            {showInlineKeyboard ? (inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('');}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />) : <Camera className="w-[20px] h-[20px] text-gray-400" />}
+          </div>
+        </div>
+        <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: '310px' }}>
+          <div className={`absolute top-0 left-0 right-0 w-full h-full bg-white transition-transform duration-300 ease-out pb-[20px] flex flex-col ${showInlineKeyboard ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
+            <div className="px-[24px] flex-1 overflow-y-auto hide-scrollbar">{renderFormList()}</div>
+            <div className="px-[24px] pb-[10px] flex space-x-[12px]">
+              <button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button>
+              <button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button>
+            </div>
+          </div>
+          <div className={`absolute top-0 left-0 right-0 w-full h-full bg-[#f4f5f8] transition-transform duration-300 ease-out flex flex-col pb-[16px] pt-[8px] ${showInlineKeyboard ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
+            <div className="px-[16px] pb-[8px] flex justify-between space-x-[8px]">
+              {[10, 50, 100, 200].map((amount) => (
+                <button key={amount} onClick={() => addQuickAmount(amount)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{amount}</button>
+              ))}
+            </div>
+            <div className="px-[16px] grid grid-cols-4 gap-[6px]">
+              {['1','2','3','4','5','6','7','8','9','删除','C','.','0'].map((key) => {
+                if (key === 'C') return <button key={key} onClick={() => setInputValue('')} className="row-span-2 bg-[#eaf1ff] rounded-[8px] flex items-center justify-center shadow-sm active:bg-[#dfeaff] transition-colors"><span className="text-[16px] font-medium text-[#1677ff]">C</span></button>;
+                if (key === '删除') return <button key={key} onClick={deleteRecordKey} className="bg-white h-[42px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><span className="text-[18px] font-medium text-[#1c1c1e]">删除</span></button>;
+                return <button key={key} onClick={() => appendRecordKey(key)} className="bg-white h-[42px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><span className={`${key === '.' ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span></button>;
+              })}
+            </div>
+          </div>
+        </div>
 
           {/* 分类选择器 */}
           {activePicker === 'category' && (
@@ -1010,8 +1012,6 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
             </div>
           )}
 
-          <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button><button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button></div>
-        </div>
       </div>
 
       {/* 预算管理面板 */}
