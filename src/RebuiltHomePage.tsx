@@ -372,6 +372,44 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     return { items: topItems, gradient };
   }, [transactions, selectedYear, selectedMonth, exchangeRates]);
 
+  const monthlyBalanceTrendPath = useMemo(() => {
+    const monthTransactions = transactions
+      .filter((tx) => {
+        const date = parseTransactionDate(tx.fullDate);
+        return date && date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && shouldCountInCashflow(tx);
+      })
+      .sort((a, b) => new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime());
+
+    if (monthTransactions.length === 0) {
+      return 'M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10';
+    }
+
+    let running = 0;
+    const points = monthTransactions.map((tx, index) => {
+      const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+      running += tx.isIncome ? amount : -Math.abs(amount);
+      return { x: index, y: running };
+    });
+
+    const values = points.map((point) => point.y);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const width = 200;
+    const height = 80;
+    const scaled = points.map((point, index) => ({
+      x: points.length === 1 ? width : (index / (points.length - 1)) * width,
+      y: 68 - ((point.y - min) / range) * 50,
+    }));
+
+    return scaled.reduce((path, point, index) => {
+      if (index === 0) return `M${point.x},${point.y}`;
+      const prev = scaled[index - 1];
+      const controlX = (prev.x + point.x) / 2;
+      return `${path} C${controlX},${prev.y} ${controlX},${point.y} ${point.x},${point.y}`;
+    }, '');
+  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
+
   const budgetUsed = monthlyExpenses;
   const budgetRemaining = budgetAmount - budgetUsed;
   const budgetProgressPercent = budgetAmount > 0 ? Math.min(100, (budgetUsed / budgetAmount) * 100) : 0;
@@ -627,7 +665,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           <div className="text-[38px] font-bold text-[#1677ff] tracking-tight leading-none mb-[12px]">{formatMoney(monthlyBalance)}</div>
           <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#1677ff] flex items-center font-medium"><ArrowUpRight className="w-[12px] h-[12px] mr-[1px]" /> {getDeltaPct(monthlyBalance, previousBalance).toFixed(1)}%</span></div>
           <div className="absolute bottom-0 right-0 w-[60%] h-[80px] pointer-events-none opacity-80">
-            <svg viewBox="0 0 200 80" className="w-full h-full" preserveAspectRatio="none"><path d="M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10" fill="none" stroke="#1677ff" strokeWidth="2.5" strokeLinecap="round" /></svg>
+            <svg viewBox="0 0 200 80" className="w-full h-full" preserveAspectRatio="none"><path d={monthlyBalanceTrendPath} fill="none" stroke="#1677ff" strokeWidth="2.5" strokeLinecap="round" /></svg>
           </div>
         </div>
 
@@ -894,7 +932,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       {activeModal === 'budget' && (
         <>
           <div className="absolute inset-0 bg-black/40 z-[90]" onClick={closeModals} />
-          <div className="absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[90vh] animate-in slide-in-from-bottom duration-300">
+          <div className="absolute bottom-[12px] left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] shadow-2xl flex flex-col pb-[24px] max-h-[88vh] animate-in slide-in-from-bottom duration-300">
             <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
             <div className="overflow-y-auto hide-scrollbar flex-1 p-[16px] space-y-[14px]">
               <div className="bg-white rounded-[16px] p-[16px] shadow-sm">

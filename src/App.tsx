@@ -1564,8 +1564,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   );
 
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
-      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
+    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col">
+      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[20] bg-[#f4f5f8]/95 backdrop-blur-sm shrink-0">
         <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
         <div className="flex items-center space-x-[16px]">
           <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
@@ -1573,7 +1573,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           <ProfileAvatarButton onClick={onOpenProfile} />
         </div>
       </div>
-
+      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] bg-[#f4f5f8]/95 backdrop-blur-sm shrink-0">
       <div className="px-[16px] flex items-center justify-between space-x-[8px] mt-[4px] relative z-30">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
@@ -1655,8 +1655,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="px-[16px] mt-[16px] space-y-[16px] relative z-0">
+      <div className="px-[16px] mt-[16px] space-y-[16px] relative z-0 flex-1 overflow-y-auto hide-scrollbar" style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth' }}>
         {filteredData.length === 0 ? (
            <div className="py-[40px] text-center text-[#8e8e93] text-[13px] bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">没有找到相关交易记录</div>
         ) : (
@@ -1983,9 +1984,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       )}
 
       {isAccountDetailModalOpen && selectedAccount && (
-        <div className="fixed inset-0 z-[100] flex justify-center items-end">
+        <div className="fixed inset-0 z-[100] flex justify-center items-end px-[12px] pb-[12px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[92vh]">
+          <div className="relative bg-white w-full max-w-[430px] rounded-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[92vh]">
             <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
                <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
