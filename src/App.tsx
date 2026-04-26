@@ -761,6 +761,72 @@ const AprLimitDisplay = ({ balance, aprValues, currency }) => {
   );
 };
 
+const ASSET_KEYBOARD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'];
+
+const AssetInputKeyboard = ({ open, label, value, suffix, onClose, onChange }) => {
+  if (!open) return null;
+
+  const applyKey = (key) => {
+    const currentValue = String(value || '');
+    if (key === 'delete') {
+      onChange(currentValue.slice(0, -1));
+      return;
+    }
+    if (key === '.') {
+      if (currentValue.includes('.')) return;
+      onChange(currentValue ? `${currentValue}.` : '0.');
+      return;
+    }
+    if (currentValue === '0' && !currentValue.includes('.')) {
+      onChange(key);
+      return;
+    }
+    onChange(`${currentValue}${key}`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[160] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/25 backdrop-blur-[1px]" onClick={onClose}></div>
+      <div className="relative w-full max-w-[430px] rounded-t-[24px] bg-white px-[16px] pt-[10px] pb-[calc(env(safe-area-inset-bottom,0px)+16px)] shadow-2xl animate-in slide-in-from-bottom-6 duration-200 ease-out">
+        <div className="mx-auto mb-[12px] h-[4px] w-[36px] rounded-full bg-[#e5e5ea]"></div>
+        <div className="mb-[14px] flex items-center justify-between">
+          <div>
+            <div className="text-[12px] font-medium text-[#8e8e93]">{label}</div>
+            <div className="mt-[2px] flex items-baseline space-x-[4px]">
+              <span className="text-[24px] font-bold text-[#1c1c1e]">{value || '0'}</span>
+              {suffix ? <span className="text-[12px] font-semibold text-[#8e8e93]">{suffix}</span> : null}
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-full bg-[#f4f5f8] px-[12px] py-[8px] text-[13px] font-semibold text-[#5c5c5e] active:bg-[#e9e9ee] transition-colors">完成</button>
+        </div>
+        <div className="grid grid-cols-3 gap-[10px]">
+          {ASSET_KEYBOARD_KEYS.map((key) => (
+            <button
+              key={key}
+              onClick={() => applyKey(key)}
+              className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[22px] font-bold text-[#1c1c1e] active:bg-[#e6edf9] transition-colors"
+            >
+              {key}
+            </button>
+          ))}
+          <button
+            onClick={() => onChange('')}
+            className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[15px] font-semibold text-[#8e8e93] active:bg-[#e6edf9] transition-colors"
+          >
+            清空
+          </button>
+          <button
+            onClick={() => applyKey('delete')}
+            className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[15px] font-semibold text-[#1c1c1e] active:bg-[#e6edf9] transition-colors"
+          >
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // ==========================================
 // 3. GLOBAL TAB BAR & MESSAGE CENTER
@@ -1726,6 +1792,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [aprConfigEnabled, setAprConfigEnabled] = useState(true);
   const [aprValues, setAprValues] = useState({ limit: '0', baseRate: '0', overflowRate: '0' });
   const [exchangeAccountName, setExchangeAccountName] = useState('');
+  const [assetKeyboardField, setAssetKeyboardField] = useState(null);
 
   const currenciesList = [
     { id: 'USDT', icon: <TetherIcon />, label: 'USDT' }, { id: 'BTC', icon: <BitcoinIcon />, label: 'BTC' },
@@ -1743,6 +1810,39 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setSelectedCurrency(currency);
     setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
     setIsAccountDetailModalOpen(true);
+  };
+
+  const closeAssetKeyboard = () => setAssetKeyboardField(null);
+  const openAssetKeyboard = (field) => setAssetKeyboardField(field);
+  const getAssetKeyboardValue = () => {
+    if (assetKeyboardField === 'balance') return accountBalance;
+    if (assetKeyboardField === 'limit') return aprValues.limit;
+    if (assetKeyboardField === 'baseRate') return aprValues.baseRate;
+    if (assetKeyboardField === 'overflowRate') return aprValues.overflowRate;
+    return '';
+  };
+  const setAssetKeyboardValue = (nextValue) => {
+    if (assetKeyboardField === 'balance') {
+      setAccountBalance(nextValue);
+      return;
+    }
+    if (assetKeyboardField === 'limit') {
+      setAprValues((prev) => ({ ...prev, limit: nextValue }));
+      return;
+    }
+    if (assetKeyboardField === 'baseRate') {
+      setAprValues((prev) => ({ ...prev, baseRate: nextValue }));
+      return;
+    }
+    if (assetKeyboardField === 'overflowRate') {
+      setAprValues((prev) => ({ ...prev, overflowRate: nextValue }));
+    }
+  };
+  const assetKeyboardMeta = {
+    balance: { label: '余额', suffix: selectedCurrency },
+    limit: { label: '高息限额', suffix: selectedCurrency },
+    baseRate: { label: '基础利率 (APR)', suffix: '%' },
+    overflowRate: { label: '超出利率 (APR)', suffix: '%' },
   };
 
   const saveAccountDetail = async () => {
@@ -1765,6 +1865,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         ...payload
       });
     }
+    closeAssetKeyboard();
     setIsAccountDetailModalOpen(false);
   };
 
@@ -1780,6 +1881,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0'
     });
+    closeAssetKeyboard();
     setIsAddExchangeModalOpen(false);
   };
 
@@ -1946,9 +2048,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isAddExchangeModalOpen && (
         <div className="fixed inset-0 z-[130] flex justify-center items-center px-[20px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAddExchangeModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAddExchangeModalOpen(false); }}></div>
           <div className="relative w-full max-w-[390px] max-h-[90vh] bg-white rounded-[24px] flex flex-col shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out">
-            <div className="px-[20px] pt-[20px] pb-[16px] flex justify-between items-center shrink-0 border-b border-transparent"><div className="w-[28px]"></div><h2 className="text-[17px] font-bold text-[#1c1c1e]">添加交易所账户</h2><button onClick={() => setIsAddExchangeModalOpen(false)} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
+            <div className="px-[20px] pt-[20px] pb-[16px] flex justify-between items-center shrink-0 border-b border-transparent"><div className="w-[28px]"></div><h2 className="text-[17px] font-bold text-[#1c1c1e]">添加交易所账户</h2><button onClick={() => { closeAssetKeyboard(); setIsAddExchangeModalOpen(false); }} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
             <div className="px-[20px] overflow-y-auto hide-scrollbar flex-1 pb-[10px]">
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择交易所</h3>
@@ -1972,9 +2074,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
               <div className="mb-[8px]">
                 <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
                 <div className={`space-y-[14px] overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[400px]' : 'opacity-0 max-h-0'}`}>
-                  <div><div className="flex items-center space-x-[4px] mb-[6px] ml-[2px]"><label className="text-[12px] font-medium text-[#5c5c5e]">高息限额</label><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div><div className="relative"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[40px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><span className="text-[11px] text-[#8e8e93] block mt-[6px] ml-[2px]">超过该金额后按超出利率计算</span></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">基础利率 (APR)</label><div className="relative"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">超出利率 (APR)</label><div className="relative"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
+                  <div><div className="flex items-center space-x-[4px] mb-[6px] ml-[2px]"><label className="text-[12px] font-medium text-[#5c5c5e]">高息限额</label><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('limit')} onClick={() => openAssetKeyboard('limit')} value={aprValues.limit} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[40px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><span className="text-[11px] text-[#8e8e93] block mt-[6px] ml-[2px]">超过该金额后按超出利率计算</span></div>
+                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">基础利率 (APR)</label><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
+                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">超出利率 (APR)</label><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
                 </div>
               </div>
             </div>
@@ -1985,12 +2087,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end px-[12px] pb-[12px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }}></div>
           <div className="relative bg-white w-full max-w-[430px] rounded-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[92vh]">
             <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
                <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
             <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[16px] pt-[10px] pb-[16px]">
               <div className="mb-[14px]">
@@ -1998,7 +2100,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  <div className="flex overflow-x-auto hide-scrollbar space-x-[8px] pb-[2px]">
                     {currenciesList.map((currency) => {
                       const isSelected = selectedCurrency === currency.id;
-                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] px-[12px] py-[7px] flex items-center space-x-[6px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
+                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] px-[12px] py-[7px] flex items-center space-x-[6px] cursor-pointer shrink-0 transition-colors border-2 ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-transparent bg-white hover:border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
                     })}
                  </div>
               </div>
@@ -2006,22 +2108,22 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">2. 余额</h3>
                  <div className="border border-[#e5e5ea] rounded-[10px] p-[10px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
                     <span className="text-[11px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
-                    <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[18px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[2px]"><ClearInputIcon /></button>}</div>
+                    <div className="flex items-center justify-between"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('balance')} onClick={() => openAssetKeyboard('balance')} value={accountBalance} className="text-[18px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent cursor-pointer"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[2px]"><ClearInputIcon /></button>}</div>
                  </div>
                  <div className="flex items-center justify-between mt-[8px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
               </div>
               <div className="mb-[10px]">
                  <div className="flex items-center space-x-[4px] mb-[8px]"><h3 className="text-[13px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
                  <div className="grid grid-cols-3 gap-[6px]">
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('limit')} onClick={() => openAssetKeyboard('limit')} value={aprValues.limit} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
                  </div>
                  <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
               </div>
             </div>
             <div className="px-[16px] py-[10px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
-               <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
+               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
                <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
             </div>
           </div>
@@ -2055,6 +2157,15 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           </div>
         </div>
       )}
+
+      <AssetInputKeyboard
+        open={Boolean(assetKeyboardField)}
+        label={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].label : ''}
+        value={getAssetKeyboardValue()}
+        suffix={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].suffix : ''}
+        onClose={closeAssetKeyboard}
+        onChange={setAssetKeyboardValue}
+      />
     </div>
   );
 };
