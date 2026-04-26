@@ -1315,37 +1315,37 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       </button>
 
       {isInsightModalOpen && (
-        <div className="fixed inset-0 z-[300] flex justify-center items-end px-[12px] pb-[12px]">
+        <div className="fixed inset-0 z-[300] flex justify-center items-end px-[14px] pb-[92px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
-          <div className="relative w-full max-w-[430px] max-h-[92vh] overflow-y-auto bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[max(18px,env(safe-area-inset-bottom))] flex flex-col hide-scrollbar">
-            <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[10px] mb-[12px]"></div>
-            <div className="px-[20px] flex justify-between items-start">
+          <div className="relative w-full max-w-[410px] max-h-[62vh] overflow-y-auto bg-white rounded-[22px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[14px] flex flex-col hide-scrollbar">
+            <div className="w-[34px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[8px] mb-[10px]"></div>
+            <div className="px-[18px] flex justify-between items-start">
                <div>
-                  <h2 className="text-[18px] font-bold text-[#1c1c1e]">本月支出较上月变化 <span className="text-[#ff4d4f]">{getDeltaPct(currentExpense, previousExpense).toFixed(1)}%</span></h2>
-                  <p className="text-[12px] text-[#8e8e93] mt-[4px]">{insightData[0] ? `主要变化来自 ${insightData[0].name} (${insightData[0].percent})` : '当前月份暂无足够数据'}</p>
+                  <h2 className="text-[16px] font-bold text-[#1c1c1e]">本月支出较上月变化 <span className="text-[#ff4d4f]">{getDeltaPct(currentExpense, previousExpense).toFixed(1)}%</span></h2>
+                  <p className="text-[11px] text-[#8e8e93] mt-[3px]">{insightData[0] ? `主要变化来自 ${insightData[0].name} (${insightData[0].percent})` : '当前月份暂无足够数据'}</p>
                </div>
                <button onClick={() => setIsInsightModalOpen(false)} className="p-[4px] active:bg-gray-100 rounded-full transition-colors mt-[-4px] mr-[-4px]"><X className="w-[20px] h-[20px] text-[#8e8e93]" strokeWidth={2} /></button>
             </div>
-            <div className="flex items-center justify-between px-[20px] mt-[16px] mb-[14px] gap-[8px]">
+            <div className="flex items-center justify-between px-[18px] mt-[12px] mb-[10px] gap-[8px]">
                <div className="flex items-center bg-[#f4f5f8] p-[3px] rounded-[10px] mr-[8px] overflow-x-auto hide-scrollbar flex-1 min-w-0">
                   {['支出分析', '收入分析', '对比分析', '建议'].map((tab) => (
-                    <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[13px] px-[12px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
+                    <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[12px] px-[10px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
                <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e] whitespace-nowrap">{monthLabel}</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
             </div>
-            <div className="flex justify-between items-center px-[20px] mb-[12px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
-            <div className="flex flex-col space-y-[14px] overflow-y-auto hide-scrollbar">
+            <div className="flex justify-between items-center px-[18px] mb-[10px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
+            <div className="flex flex-col space-y-[10px] overflow-y-auto hide-scrollbar">
                {insightData.map((item) => (
-                  <div key={item.rank} className="flex items-center px-[20px] w-full">
+                  <div key={item.rank} className="flex items-center px-[18px] w-full">
                      <div className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${item.badgeBg} ${item.badgeText}`}>{item.rank}</div>
                      <div className="w-[24px] h-[24px] rounded-full bg-[#f4f5f8] flex items-center justify-center shrink-0 ml-[10px]">{React.cloneElement(item.icon, { className: "w-[12px] h-[12px] text-[#3a3a3c]" })}</div>
-                     <div className="flex-1 flex flex-col justify-center ml-[10px] mr-[14px]"><span className="text-[14px] text-[#3a3a3c] font-medium leading-none">{item.name}</span><div className="h-[4px] bg-[#ff4d4f] rounded-full mt-[6px]" style={{ width: item.width }}></div></div>
-                     <div className="flex items-center shrink-0"><span className="text-[14px] font-bold text-[#1c1c1e] tabular-nums">{item.amount}</span><span className="text-[13px] font-medium text-[#ff4d4f] tabular-nums ml-[12px] w-[58px] text-right flex items-center justify-end">{item.percent} <ArrowUp className="w-[12px] h-[12px] ml-[2px]" strokeWidth={3} /></span></div>
+                     <div className="flex-1 flex flex-col justify-center ml-[10px] mr-[12px]"><span className="text-[13px] text-[#3a3a3c] font-medium leading-none">{item.name}</span><div className="h-[4px] bg-[#ff4d4f] rounded-full mt-[5px]" style={{ width: item.width }}></div></div>
+                     <div className="flex items-center shrink-0"><span className="text-[13px] font-bold text-[#1c1c1e] tabular-nums">{item.amount}</span><span className="text-[12px] font-medium text-[#ff4d4f] tabular-nums ml-[10px] w-[54px] text-right flex items-center justify-end">{item.percent} <ArrowUp className="w-[11px] h-[11px] ml-[2px]" strokeWidth={3} /></span></div>
                   </div>
                ))}
             </div>
-            <div className="px-[20px] mt-[18px]"><button onClick={() => setIsDetailModalOpen(true)} className="w-full py-[12px] bg-[#f8faff] text-[#1677ff] text-[14px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
+            <div className="px-[18px] mt-[12px]"><button onClick={() => setIsDetailModalOpen(true)} className="w-full py-[10px] bg-[#f8faff] text-[#1677ff] text-[13px] font-semibold rounded-[12px] active:bg-[#eef4ff] transition-colors">查看支出分类详情</button></div>
           </div>
         </div>
       )}
