@@ -1033,6 +1033,57 @@ const StatsPage = ({ setIsMessageCenterOpen, notify, onOpenProfile, onOpenSearch
   );
 };
 
+const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
+  const [swipeX, setSwipeX] = useState(0);
+  const [startX, setStartX] = useState(0);
+  const touchStartX = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    setStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - touchStartX.current;
+    if (diff < 0) setSwipeX(Math.max(diff, -80));
+    else setSwipeX(0);
+  };
+
+  const handleTouchEnd = () => {
+    if (swipeX < -40) setSwipeX(-80);
+    else setSwipeX(0);
+  };
+
+  return (
+    <div className="relative overflow-hidden bg-white">
+      <button
+        onClick={() => onEdit(tx)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
+        style={{ transform: `translateX(${swipeX}px)` }}
+      >
+        <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
+        <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
+        <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
+        <div className="flex items-center justify-end space-x-[4px] min-w-0">
+          <div className="flex flex-col items-end min-w-0"><div className={`text-[13px] font-semibold mb-[1px] whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount} <span className="text-[10px] font-medium ml-[1px]">{tx.currency}</span></div><div className="text-[10px] text-[#8e8e93]">{tx.time}</div></div>
+          <ChevronRight className="w-[14px] h-[14px] text-[#c7c7cc] shrink-0" strokeWidth={2.5} />
+        </div>
+      </button>
+      <button
+        onClick={() => onDelete(tx)}
+        className={`absolute right-0 top-0 h-full bg-[#ff3b30] text-white px-[20px] flex items-center justify-center font-medium text-[14px] active:bg-[#e32a1f] transition-colors ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
+        style={{ opacity: Math.min(1, Math.abs(swipeX) / 40) }}
+      >
+        删除
+      </button>
+    </div>
+  );
+};
+
 const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
@@ -1053,6 +1104,12 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
     updateTransaction(selectedTx.id, { title: tempNote || selectedTx.title, note: tempNote });
     setSelectedTx(null);
     notify('账单备注已保存');
+  };
+  const handleDeleteTransaction = (tx) => {
+    if (tx.id) {
+      updateTransaction(tx.id, { deleted: true });
+      notify('账单已删除');
+    }
   };
   const changeCalendarMonth = (delta) => {
     setSelectedMonth((prev) => Math.min(12, Math.max(1, prev + delta)));
@@ -1204,15 +1261,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
               </div>
               <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
                 {group.transactions.map((tx, tIdx) => (
-                  <button key={tx.id} onClick={() => handleOpenModal(tx)} className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${tIdx !== group.transactions.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
-                    <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
-                    <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
-                    <div className="flex justify-center shrink-0"><Tag type={tx.tagType} text={tx.tag} /></div>
-                    <div className="flex items-center justify-end space-x-[4px] min-w-0">
-                      <div className="flex flex-col items-end min-w-0"><div className={`text-[13px] font-semibold mb-[1px] whitespace-nowrap ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount} <span className="text-[10px] font-medium ml-[1px]">{tx.currency}</span></div><div className="text-[10px] text-[#8e8e93]">{tx.time}</div></div>
-                      <ChevronRight className="w-[14px] h-[14px] text-[#c7c7cc] shrink-0" strokeWidth={2.5} />
-                    </div>
-                  </button>
+                  <SwipeableTransactionRow key={tx.id} tx={tx} tIdx={tIdx} isLast={group.transactions.length - 1} onEdit={handleOpenModal} onDelete={handleDeleteTransaction} />
                 ))}
               </div>
             </div>
