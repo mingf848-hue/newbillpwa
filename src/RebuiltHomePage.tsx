@@ -254,6 +254,7 @@ const EXPENSE_CATEGORIES = [
 ];
 const HOME_EXPENSE_OVERVIEW_COLORS = ['#1677ff', '#8b5cf6', '#10b981', '#fbbf24', '#f59e0b', '#e5e7eb'];
 const RECORD_KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'];
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || import.meta.env.NEXT_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
 const INCOME_CATEGORIES = [
   { name: '工资', icon: Briefcase, color: '#10b981' },
   { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
@@ -262,9 +263,31 @@ const INCOME_CATEGORIES = [
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, exchangeRates, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch }) {
+const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
+
+const normalizeAiCategory = (value, isIncome = false) => {
+  const source = String(value || '').trim();
+  if (!source) return isIncome ? '工资' : '其他';
+  if (/food|meal|餐|外卖/i.test(source)) return '餐饮';
+  if (/transport|taxi|metro|地铁|公交|交通/i.test(source)) return '交通';
+  if (/shop|shopping|购物|超市|商店/i.test(source)) return '购物';
+  if (/fun|game|娱乐|电影/i.test(source)) return '娱乐';
+  if (/rent|home|住房|房租/i.test(source)) return '住房';
+  if (/medical|health|医院|医疗/i.test(source)) return '医疗';
+  if (/education|study|学习|教育/i.test(source)) return '教育';
+  if (/invest|理财|收益|利息/i.test(source)) return '理财';
+  if (/salary|工资/i.test(source)) return '工资';
+  if (/bonus|奖金/i.test(source)) return '奖金';
+  if (/part[- ]?time|兼职/i.test(source)) return '兼职';
+  if (/transfer|转账|划转/i.test(source)) return '转账';
+  if (isIncome) return '其他';
+  return EXPENSE_CATEGORIES.find((item) => item.name === source)?.name || INCOME_CATEGORIES.find((item) => item.name === source)?.name || '其他';
+};
+
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, exchangeRates, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch, notify }) {
   const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [recordActiveTab, setRecordActiveTab] = useState('支出');
   const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -273,6 +296,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [selectedMonth, setSelectedMonth] = useState(4);
   const [selectedYear, setSelectedYear] = useState(2026);
   const pressTimer = useRef(null);
+  const speechRecognitionRef = useRef(null);
+  const speechTranscriptRef = useRef('');
+  const speechShouldProcessRef = useRef(false);
+  const receiptInputRef = useRef(null);
 
   // Record form state
   const [recordCategory, setRecordCategory] = useState('餐饮');
@@ -282,6 +309,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [recordNote, setRecordNote] = useState('');
   const [recordTag, setRecordTag] = useState('');
   const [activePicker, setActivePicker] = useState(null);
+  const [aiDraft, setAiDraft] = useState(null);
 
   // Budget state
   const [budgetAmount, setBudgetAmount] = useState(budget);
@@ -424,6 +452,88 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     [transactions]
   );
 
+  const resolveAccountByHint = (hint) => {
+    if (!accounts.length) return null;
+    const text = String(hint || '').trim().toLowerCase();
+    if (!text) return accounts[0];
+
+    const direct = accounts.find((account) => {
+      const source = `${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''} ${account?.type || ''}`.toLowerCase();
+      return source.includes(text) || text.includes(String(account?.name || '').toLowerCase());
+    });
+    if (direct) return direct;
+
+    if (/(alipay|支付宝)/i.test(text)) return accounts.find((account) => /alipay|支付宝/i.test(`${account?.name || ''} ${account?.sub || ''}`)) || accounts[0];
+    if (/(wechat|微信)/i.test(text)) return accounts.find((account) => /wechat|微信/i.test(`${account?.name || ''} ${account?.sub || ''}`)) || accounts[0];
+    if (/(apple pay|card|visa|master|bank|银行卡|银行|mashreq|adcb)/i.test(text)) return accounts.find((account) => account?.type === 'bank' || /bank|银行|mashreq|adcb/i.test(`${account?.name || ''} ${account?.sub || ''}`)) || accounts[0];
+    if (/(okx|bitget|htx|火币|binance|币安|bybit|gate|kucoin|mexc)/i.test(text)) return accounts.find((account) => account?.type === 'exchange' && `${account?.name || ''} ${account?.sub || ''}`.toLowerCase().includes(text.replace('htx', '火币'))) || accounts.find((account) => account?.type === 'exchange') || accounts[0];
+    return accounts[0];
+  };
+
+  const parseGeminiJsonText = (responseData) => {
+    const rawText = responseData?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
+    const cleaned = String(rawText).replace(/```json/gi, '').replace(/```/g, '').trim();
+    if (!cleaned) throw new Error('AI 未返回可解析内容');
+    return JSON.parse(cleaned);
+  };
+
+  const createAiDraftFromItems = (items, source) => {
+    const normalizedItems = (Array.isArray(items) ? items : [items])
+      .filter(Boolean)
+      .map((item) => {
+        const isIncome = String(item?.type || '').toLowerCase() === 'income';
+        const account = resolveAccountByHint(item?.accountHint || item?.account || item?.paymentMethod || '');
+        const category = normalizeAiCategory(item?.category, isIncome);
+        const amount = Math.abs(Number(item?.amount) || 0);
+        return {
+          amount,
+          isIncome,
+          category,
+          merchant: String(item?.merchant || item?.title || category || '').trim(),
+          note: String(item?.note || item?.product_name || '').trim(),
+          currency: String(item?.currency || account?.currency || 'CNY').toUpperCase(),
+          account,
+          accountHint: item?.accountHint || item?.account || '',
+          raw: item,
+        };
+      })
+      .filter((item) => item.amount > 0);
+
+    if (!normalizedItems.length) throw new Error('未识别到有效金额');
+
+    return {
+      source,
+      items: normalizedItems,
+      transcript: source === 'voice' ? String(items?.transcript || '') : '',
+      primary: normalizedItems[0],
+    };
+  };
+
+  const buildTransactionFromAiItem = (item, index = 0) => {
+    const date = new Date();
+    date.setSeconds(date.getSeconds() + index);
+    const { dateLabel, fullDate, time } = formatTransactionDate(date);
+    const account = item.account || accounts[0] || null;
+    const title = item.merchant || item.category;
+    const note = item.note || title;
+    return {
+      dateLabel,
+      iconBg: account ? 'bg-[#1677ff]' : 'bg-[#10a37f]',
+      iconType: account ? (account.icon || 'landmark') : 'openai',
+      title,
+      subtitle: account ? account.name : (item.accountHint || 'AI 识别'),
+      tag: item.category,
+      tagType: RECORD_TAG_TYPE_MAP[item.category] || (item.isIncome ? 'investment' : 'shopping'),
+      amount: `${item.isIncome ? '+' : '-'}${formatMoney(item.amount)}`,
+      isIncome: item.isIncome,
+      time,
+      fullDate,
+      currency: item.currency || account?.currency || 'CNY',
+      paymentMethod: account ? account.name : (item.accountHint || 'AI 识别'),
+      note,
+    };
+  };
+
   // Init account selections when accounts load
   useEffect(() => {
     if (accounts.length > 0) {
@@ -434,24 +544,131 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     }
   }, [accounts]);
 
+  useEffect(() => () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    try {
+      speechRecognitionRef.current?.stop?.();
+    } catch {}
+  }, []);
+
   const formatDateForDisplay = (date) => {
     const d = new Date(date);
     return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const requestVoiceParse = async (transcript) => {
+    const response = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: GEMINI_MODEL,
+        prompt: `
+你是一个严谨的中文记账助理。请把这段语音转写内容整理成一条记账 JSON，不要输出 Markdown。
+
+要求：
+1. 只返回一个 JSON 对象。
+2. 字段固定为：amount, type, category, merchant, note, currency, accountHint。
+3. type 只能是 expense 或 income。
+4. category 只能从这些中文分类中选择：餐饮、交通、购物、娱乐、住房、医疗、教育、理财、工资、奖金、兼职、其他、转账。
+5. currency 尽量返回 CNY、AED、USDT、BTC、ETH 之一；无法判断默认 CNY。
+6. accountHint 尽量提取 支付宝、微信、Apple Pay、银行卡、现金、OKX、Bitget、火币、HTX、币安、Bybit 等；不确定就返回空字符串。
+
+语音内容：
+${transcript}
+        `,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || '语音识别失败');
+    return parseGeminiJsonText(data);
+  };
+
+  const finalizeAiDraft = async (source, items, extra = {}) => {
+    const draft = createAiDraftFromItems(items, source);
+    if (extra.transcript) draft.transcript = extra.transcript;
+    setAiDraft(draft);
+    setActiveModal('ai');
+  };
+
+  const processVoiceTranscript = async (transcript) => {
+    if (!transcript) {
+      notify?.('未识别到语音内容');
+      return;
+    }
+    try {
+      setIsAiProcessing(true);
+      const parsed = await requestVoiceParse(transcript);
+      await finalizeAiDraft('voice', { ...parsed, transcript }, { transcript });
+      notify?.('AI 语音识别成功');
+    } catch (error) {
+      notify?.(error instanceof Error ? error.message : 'AI 语音识别失败');
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
+
+  const initSpeechRecognition = () => {
+    if (speechRecognitionRef.current || typeof window === 'undefined') return speechRecognitionRef.current;
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) return null;
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'zh-CN';
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || []).map((result) => result?.[0]?.transcript || '').join('').trim();
+      speechTranscriptRef.current = transcript;
+    };
+    recognition.onerror = (event) => {
+      setIsRecording(false);
+      setIsAiProcessing(false);
+      speechShouldProcessRef.current = false;
+      notify?.(`语音识别失败: ${event?.error || 'unknown'}`);
+    };
+    recognition.onend = () => {
+      setIsRecording(false);
+      const shouldProcess = speechShouldProcessRef.current;
+      speechShouldProcessRef.current = false;
+      if (shouldProcess && speechTranscriptRef.current.trim()) {
+        processVoiceTranscript(speechTranscriptRef.current.trim());
+      } else if (shouldProcess) {
+        notify?.('未识别到语音内容');
+      }
+    };
+    speechRecognitionRef.current = recognition;
+    return recognition;
   };
 
   const handleAiStart = (e) => {
     e.preventDefault();
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
+      const recognition = initSpeechRecognition();
+      if (!recognition) {
+        notify?.('当前浏览器不支持语音识别');
+        return;
+      }
+      speechTranscriptRef.current = '';
+      speechShouldProcessRef.current = true;
       setIsRecording(true);
+      try {
+        recognition.start();
+      } catch (error) {
+        try { recognition.stop(); } catch {}
+        setTimeout(() => {
+          try { recognition.start(); } catch {}
+        }, 60);
+      }
     }, 150);
   };
 
   const handleAiEnd = () => {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     if (isRecording) {
-      setIsRecording(false);
-      setActiveModal('ai');
+      try {
+        speechRecognitionRef.current?.stop();
+      } catch {}
     }
   };
 
@@ -463,6 +680,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setIsTransferKeyboardOpen(false);
     setActivePicker(null);
     setTransferPickerOpen(null);
+    setAiDraft(null);
   };
 
   const handleKeyboardPress = (key, type) => {
@@ -505,6 +723,40 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     closeModals();
   };
 
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleReceiptUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsAiProcessing(true);
+      const imageBase64 = await readFileAsDataUrl(file);
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64,
+          model: GEMINI_MODEL,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || '截图识别失败');
+      await finalizeAiDraft('image', data.items);
+      notify?.(`截图识别成功${Array.isArray(data.items) && data.items.length > 1 ? `，共 ${data.items.length} 笔` : ''}`);
+    } catch (error) {
+      notify?.(error instanceof Error ? error.message : '截图识别失败');
+    } finally {
+      event.target.value = '';
+      setIsAiProcessing(false);
+    }
+  };
+
   const handleSaveRecord = async () => {
     const amount = Number(inputValue || 0);
     if (!amount) return;
@@ -512,7 +764,6 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     const category = isIncome ? recordCategoryIncome : recordCategory;
     const account = recordAccount;
     const { dateLabel, fullDate, time } = formatTransactionDate(recordDate);
-    const TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
     await saveTransaction({
       dateLabel,
       iconBg: account ? `bg-[#1677ff]` : (isIncome ? 'bg-[#10b981]' : 'bg-[#1677ff]'),
@@ -520,7 +771,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       title: category + (recordNote ? `（${recordNote}）` : ''),
       subtitle: account ? account.name : (isIncome ? '收入账户' : '支出账户'),
       tag: category,
-      tagType: TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
+      tagType: RECORD_TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
       amount: `${isIncome ? '+' : '-'}${formatMoney(amount)}`,
       isIncome,
       time,
@@ -532,24 +783,16 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   };
 
   const handleSaveAiRecord = async () => {
-    const now = new Date();
-    const { dateLabel, fullDate, time } = formatTransactionDate(now);
-    await saveTransaction({
-      dateLabel,
-      iconBg: 'bg-[#10a37f]',
-      iconType: 'openai',
-      title: 'AI 语音记账',
-      subtitle: '默认账户',
-      tag: '订阅',
-      tagType: 'subscription',
-      amount: '-20.00',
-      isIncome: false,
-      time,
-      fullDate,
-      currency: 'CNY',
-      paymentMethod: '默认账户',
-      note: '外卖'
-    });
+    if (!aiDraft?.items?.length) return;
+    try {
+      for (const [index, item] of aiDraft.items.entries()) {
+        await createTransaction(buildTransactionFromAiItem(item, index));
+      }
+      notify?.(`AI 记账成功${aiDraft.items.length > 1 ? `，已保存 ${aiDraft.items.length} 笔` : ''}`);
+      closeModals();
+    } catch (error) {
+      notify?.(error instanceof Error ? error.message : 'AI 记账保存失败');
+    }
   };
 
   const handleSaveTransfer = async () => {
@@ -806,6 +1049,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
           50% { transform: scaleY(1); opacity: 1; }
         }
       `}} />
+      <input ref={receiptInputRef} type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
 
       {/* 头部 */}
       <header className="shrink-0 px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
@@ -979,7 +1223,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       ========================================== */}
 
       {/* AI 录音特效 */}
-      <div className={`absolute inset-0 bg-white/70 backdrop-blur-md z-[100] flex flex-col items-center justify-end pb-[120px] transition-all duration-300 pointer-events-none ${isRecording ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+      <div className={`absolute inset-0 bg-white/70 backdrop-blur-md z-[100] flex flex-col items-center justify-end pb-[120px] transition-all duration-300 pointer-events-none ${(isRecording || isAiProcessing) ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="flex flex-col items-center space-y-[28px]">
           <div className="relative flex items-center justify-center w-[176px] h-[176px]">
             <div className="absolute inset-[18px] rounded-full border border-[#1677ff]/15 ai-ripple"></div>
@@ -999,8 +1243,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
             </div>
           </div>
           <div className="flex flex-col items-center space-y-[6px]">
-            <span className="text-[15px] font-semibold text-[#1677ff] animate-pulse">松开手指，完成录音</span>
-            <span className="text-[12px] text-[#7aaaf9]">正在聆听并准备生成记账信息</span>
+            <span className="text-[15px] font-semibold text-[#1677ff] animate-pulse">{isAiProcessing ? 'Gemini 正在识别中' : '松开手指，完成录音'}</span>
+            <span className="text-[12px] text-[#7aaaf9]">{isAiProcessing ? '正在生成记账信息' : '正在聆听并准备生成记账信息'}</span>
           </div>
         </div>
       </div>
@@ -1010,13 +1254,16 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${activeModal === 'ai' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold text-[#1c1c1e]">确认记账</span></div>
         <div className="p-[16px] space-y-[12px]">
-          <div className="flex items-center justify-center space-x-[6px] py-[4px] text-[#1677ff]"><Sparkles className="w-[14px] h-[14px]" /><span className="text-[12px] text-[#8e8e93]">AI 已识别，以下是为你生成的记账信息</span></div>
+          <div className="flex items-center justify-center space-x-[6px] py-[4px] text-[#1677ff]"><Sparkles className="w-[14px] h-[14px]" /><span className="text-[12px] text-[#8e8e93]">AI 已识别{aiDraft?.items?.length > 1 ? ` ${aiDraft.items.length} 笔` : ''}，以下是为你生成的记账信息</span></div>
           <div className="bg-white rounded-[16px] px-[16px] shadow-sm">
-            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<Utensils className="w-[12px] h-[12px] text-[#ff3b30]"/>} label="分类" value="餐饮 > 午餐" />
-            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<span className="text-[12px] font-bold text-[#ff3b30]">¥</span>} label="金额" value="20.00" extra="CNY" />
-            <AiConfirmRow iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" IconElement={<FileText className="w-[12px] h-[12px] text-[#1677ff]"/>} label="备注" value="外卖" />
-            <AiConfirmRow iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]"/>} label="日期" value="2026年4月30日" />
-            <AiConfirmRow iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" IconElement={<Wallet className="w-[12px] h-[12px] text-[#8b5cf6]"/>} label="账户" value="默认账户" border={false} />
+            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<Utensils className="w-[12px] h-[12px] text-[#ff3b30]"/>} label="分类" value={aiDraft?.primary?.category || '其他'} />
+            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<span className="text-[12px] font-bold text-[#ff3b30]">¥</span>} label="金额" value={formatMoney(aiDraft?.primary?.amount || 0)} extra={aiDraft?.primary?.currency || 'CNY'} />
+            <AiConfirmRow iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" IconElement={<FileText className="w-[12px] h-[12px] text-[#1677ff]"/>} label="备注" value={aiDraft?.primary?.note || aiDraft?.primary?.merchant || '无备注'} />
+            <AiConfirmRow iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]"/>} label="来源" value={aiDraft?.source === 'voice' ? 'AI 语音识别' : 'AI 截图识别'} />
+            <AiConfirmRow iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" IconElement={<Wallet className="w-[12px] h-[12px] text-[#8b5cf6]"/>} label="账户" value={aiDraft?.primary?.account?.name || aiDraft?.primary?.accountHint || '默认账户'} border={!(aiDraft?.source === 'voice' && aiDraft?.transcript)} />
+            {aiDraft?.source === 'voice' && aiDraft?.transcript ? (
+              <AiConfirmRow iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" IconElement={<Mic className="w-[12px] h-[12px] text-[#fa8c16]"/>} label="语音内容" value={aiDraft.transcript} border={false} />
+            ) : null}
           </div>
           <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-[#e5e5ea] font-medium text-[15px] active:bg-gray-50 transition-colors">取消</button><button onClick={handleSaveAiRecord} className="flex-1 h-[44px] rounded-[10px] bg-[#1677ff] text-white font-medium text-[15px] shadow-lg shadow-blue-200 active:bg-blue-700 transition-colors">确认记账</button></div>
         </div>
@@ -1042,7 +1289,21 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               <span className={`text-[24px] font-bold ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
               {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px]"></div>}
             </div>
-            {showInlineKeyboard ? (inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('')}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />) : <Camera className="w-[20px] h-[20px] text-gray-400" />}
+            {showInlineKeyboard ? (
+              inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('')}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  receiptInputRef.current?.click();
+                }}
+                className="active:scale-95 transition-transform"
+                aria-label="上传截图识别记账"
+              >
+                <Camera className="w-[20px] h-[20px] text-gray-400" />
+              </button>
+            )}
           </div>
         </div>
 
