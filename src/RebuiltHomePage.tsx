@@ -176,6 +176,8 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
 };
 
+const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
+
 // ==========================================
 // 主应用页面 (App)
 // ==========================================
@@ -276,12 +278,38 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
         if (!date) return false;
         return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && !tx.isIncome;
       })
+      .reduce((sum, tx) => sum + Math.abs(convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates)), 0);
+  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
+
+  const monthlyIncome = useMemo(() => {
+    return transactions
+      .filter(tx => {
+        const date = parseTransactionDate(tx.fullDate);
+        if (!date) return false;
+        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && tx.isIncome;
+      })
       .reduce((sum, tx) => sum + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates), 0);
+  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
+
+  const previousMonthStats = useMemo(() => {
+    const prevDate = new Date(selectedYear, selectedMonth - 2, 1);
+    const prevYear = prevDate.getFullYear();
+    const prevMonth = prevDate.getMonth() + 1;
+    return transactions.reduce((acc, tx) => {
+      const date = parseTransactionDate(tx.fullDate);
+      if (!date || date.getFullYear() !== prevYear || date.getMonth() + 1 !== prevMonth) return acc;
+      const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+      if (tx.isIncome) acc.income += amount;
+      else acc.expense += Math.abs(amount);
+      return acc;
+    }, { income: 0, expense: 0 });
   }, [transactions, selectedYear, selectedMonth, exchangeRates]);
 
   const budgetUsed = monthlyExpenses;
   const budgetRemaining = budgetAmount - budgetUsed;
   const budgetProgressPercent = budgetAmount > 0 ? Math.min(100, (budgetUsed / budgetAmount) * 100) : 0;
+  const monthlyBalance = monthlyIncome - monthlyExpenses;
+  const previousBalance = previousMonthStats.income - previousMonthStats.expense;
 
   const recentTransactions = useMemo(
     () => [...transactions].sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime()).slice(0, 5),
@@ -529,16 +557,16 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
         {/* 余额卡片 */}
         <div className="bg-white rounded-[24px] p-[20px] shadow-sm relative overflow-hidden">
           <div className="flex items-center space-x-[6px] text-[#8e8e93] mb-[8px]"><span className="text-[12px]">本月结余 (人民币)</span><Eye className="w-[14px] h-[14px]" /></div>
-          <div className="text-[38px] font-bold text-[#1677ff] tracking-tight leading-none mb-[12px]">40,446.45</div>
-          <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#1677ff] flex items-center font-medium"><ArrowUpRight className="w-[12px] h-[12px] mr-[1px]" /> 20.1%</span></div>
+          <div className="text-[38px] font-bold text-[#1677ff] tracking-tight leading-none mb-[12px]">{formatMoney(monthlyBalance)}</div>
+          <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#1677ff] flex items-center font-medium"><ArrowUpRight className="w-[12px] h-[12px] mr-[1px]" /> {getDeltaPct(monthlyBalance, previousBalance).toFixed(1)}%</span></div>
           <div className="absolute bottom-0 right-0 w-[60%] h-[80px] pointer-events-none opacity-80">
             <svg viewBox="0 0 200 80" className="w-full h-full" preserveAspectRatio="none"><path d="M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10" fill="none" stroke="#1677ff" strokeWidth="2.5" strokeLinecap="round" /></svg>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-[12px]">
-          <div className="bg-white rounded-[20px] p-[14px] shadow-sm"><div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px]">47,556.16</div><div className="flex items-center text-[10px] text-[#10b981] font-medium"><ArrowUpRight className="w-[10px] h-[10px]" /> 18.7%</div></div>
-          <div className="bg-white rounded-[20px] p-[14px] shadow-sm"><div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px]">7,109.71</div><div className="flex items-center text-[10px] text-[#ff3b30] font-medium"><ArrowUpRight className="w-[10px] h-[10px]" /> 13.2%</div></div>
+          <div className="bg-white rounded-[20px] p-[14px] shadow-sm"><div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px]">{formatMoney(monthlyIncome)}</div><div className="flex items-center text-[10px] text-[#10b981] font-medium"><ArrowUpRight className="w-[10px] h-[10px]" /> {getDeltaPct(monthlyIncome, previousMonthStats.income).toFixed(1)}%</div></div>
+          <div className="bg-white rounded-[20px] p-[14px] shadow-sm"><div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px]">{formatMoney(monthlyExpenses)}</div><div className="flex items-center text-[10px] text-[#ff3b30] font-medium"><ArrowUpRight className="w-[10px] h-[10px]" /> {getDeltaPct(monthlyExpenses, previousMonthStats.expense).toFixed(1)}%</div></div>
         </div>
 
         <div className="flex justify-between items-center px-[12px] py-[6px]">

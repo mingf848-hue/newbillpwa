@@ -87,6 +87,14 @@ const getWeekRange = (referenceDate) => {
 };
 
 const DEFAULT_DISPLAY_CURRENCY = 'CNY';
+const EXCHANGE_RATES_CACHE_KEY = 'bitledger_exchange_rates_cache';
+const FALLBACK_EXCHANGE_RATES = {
+  CNY: 1,
+  USDT: 6.833,
+  AED: 6.833 / 3.674,
+  BTC: 500000,
+  ETH: 18000,
+};
 
 const parseMoneyNumber = (value) => {
   const num = parseFloat(String(value ?? '').replace(/,/g, '').replace(/[^\d.-]/g, ''));
@@ -115,9 +123,14 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * rate;
 };
 
+const getTransactionAmountCny = (tx, exchangeRates, { absolute = false } = {}) => {
+  const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+  return absolute ? Math.abs(amount) : amount;
+};
+
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
   transactions.reduce((sum, tx) => (
-    predicate(tx) ? sum + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates) : sum
+    predicate(tx) ? sum + getTransactionAmountCny(tx, exchangeRates) : sum
   ), 0)
 );
 
@@ -133,60 +146,38 @@ const getCategoryVisual = (category) => {
   return mapping[category] || { icon: <EllipsisIcon />, badgeBg: 'bg-[#f4f5f8]', badgeText: 'text-[#8c8c8c]', iconColor: 'text-[#3a3a3c]', color: '#c5cbe1' };
 };
 
-const fetchOkxConversionPage = async (path) => {
-  const response = await fetch(`https://www.okx.com/en-us/${path}`, {
-    headers: { Accept: 'text/html' },
+const COINGECKO_IDS = {
+  USDT: 'tether',
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+};
+
+const fetchCoinGeckoRates = async () => {
+  const response = await fetch('/api/exchange-rates', {
+    headers: { Accept: 'application/json' },
   });
   if (!response.ok) {
-    throw new Error(`OKX request failed: ${response.status}`);
+    throw new Error(`Exchange rates request failed: ${response.status}`);
   }
-  return response.text();
+  return response.json();
 };
 
-const extractOkxRate = (html, base, quote) => {
-  const upperBase = normalizeCurrency(base);
-  const upperQuote = normalizeCurrency(quote);
-  const patterns = [
-    new RegExp(`1\\s+${upperBase}\\s+is currently worth\\s+(?:¥)?\\s*${upperQuote === 'CNY' ? '' : upperQuote}\\s*([0-9]+(?:\\.[0-9]+)?)`, 'i'),
-    new RegExp(`1\\s+${upperBase}\\s+equals\\s+(?:¥)?\\s*([0-9]+(?:\\.[0-9]+)?)\\s+${upperQuote}`, 'i'),
-    new RegExp(`1\\s+${upperBase}\\s+is valued at approximately\\s+(?:¥)?\\s*([0-9]+(?:\\.[0-9]+)?)\\s+${upperQuote}`, 'i'),
-  ];
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match) return Number(match[1]);
-  }
-  return null;
-};
-
-const fetchOkxPairRate = async (base, quote) => {
-  const lowerBase = normalizeCurrency(base).toLowerCase();
-  const lowerQuote = normalizeCurrency(quote).toLowerCase();
-  const paths = [`convert/${lowerBase}-to-${lowerQuote}`, `exchange/${lowerBase}-to-${lowerQuote}`];
-  for (const path of paths) {
-    try {
-      const html = await fetchOkxConversionPage(path);
-      const rate = extractOkxRate(html, base, quote);
-      if (rate && Number.isFinite(rate)) return rate;
-    } catch (error) {
-      console.warn(`Failed to load OKX ${base}/${quote} from ${path}`, error);
-    }
-  }
-  throw new Error(`Unable to resolve OKX rate for ${base}/${quote}`);
-};
-
-const fetchCurrencyToCnyRate = async (currency) => {
+const fetchCurrencyToCnyRate = async (currency, marketRates) => {
   const normalized = normalizeCurrency(currency);
   if (normalized === DEFAULT_DISPLAY_CURRENCY) return 1;
+  if (marketRates?.[normalized]) return marketRates[normalized];
+  if (COINGECKO_IDS[normalized]) return marketRates?.[normalized] ?? 0;
+  return 0;
+};
 
+const readCachedExchangeRates = () => {
   try {
-    return await fetchOkxPairRate(normalized, DEFAULT_DISPLAY_CURRENCY);
-  } catch (directError) {
-    const [cnyPerUsdt, targetPerUsdt] = await Promise.all([
-      fetchOkxPairRate('USDT', DEFAULT_DISPLAY_CURRENCY),
-      fetchOkxPairRate('USDT', normalized),
-    ]);
-    if (!targetPerUsdt) throw directError;
-    return cnyPerUsdt / targetPerUsdt;
+    const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
   }
 };
 
@@ -194,7 +185,7 @@ function useSupabaseData() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [budget, setBudget] = useState(20000);
-  const [exchangeRates, setExchangeRates] = useState({ [DEFAULT_DISPLAY_CURRENCY]: 1 });
+  const [exchangeRates, setExchangeRates] = useState(() => readCachedExchangeRates() || { ...FALLBACK_EXCHANGE_RATES });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -251,17 +242,23 @@ function useSupabaseData() {
 
     let cancelled = false;
     const loadRates = async () => {
-      const entries = await Promise.all(currencies.map(async (currency) => {
-        try {
-          const rate = await fetchCurrencyToCnyRate(currency);
-          return [currency, rate];
-        } catch (error) {
-          console.warn(`Falling back to 0 rate for ${currency}`, error);
-          return [currency, currency === DEFAULT_DISPLAY_CURRENCY ? 1 : 0];
+      try {
+        const marketRates = await fetchCoinGeckoRates();
+        const entries = await Promise.all(currencies.map(async (currency) => [currency, await fetchCurrencyToCnyRate(currency, marketRates)]));
+        const resolvedRates = Object.fromEntries(entries);
+        localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(resolvedRates));
+        if (!cancelled) {
+          setExchangeRates(resolvedRates);
         }
-      }));
-      if (!cancelled) {
-        setExchangeRates(Object.fromEntries(entries));
+      } catch (error) {
+        console.warn('Falling back to cached/default exchange rates', error);
+        const cachedRates = readCachedExchangeRates();
+        if (!cancelled) {
+          setExchangeRates({
+            ...FALLBACK_EXCHANGE_RATES,
+            ...(cachedRates || {}),
+          });
+        }
       }
     };
 
@@ -983,7 +980,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   );
 
   const currentExpense = useMemo(
-    () => sumTransactionsCny(currentMonthTransactions, exchangeRates, (tx) => !tx.isIncome),
+    () => currentMonthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
     [currentMonthTransactions, exchangeRates]
   );
   const currentIncome = useMemo(
@@ -992,7 +989,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   );
   const currentBalance = currentIncome - currentExpense;
   const previousExpense = useMemo(
-    () => sumTransactionsCny(previousMonthTransactions, exchangeRates, (tx) => !tx.isIncome),
+    () => previousMonthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
     [previousMonthTransactions, exchangeRates]
   );
   const previousIncome = useMemo(
@@ -1007,7 +1004,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       .filter((tx) => !tx.isIncome)
       .reduce((acc, tx) => {
         const key = tx.tag || '其他';
-        acc[key] = (acc[key] || 0) + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+        acc[key] = (acc[key] || 0) + getTransactionAmountCny(tx, exchangeRates, { absolute: true });
         return acc;
       }, {});
     return Object.entries(grouped)
@@ -1020,7 +1017,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       .filter((tx) => !tx.isIncome)
       .reduce((acc, tx) => {
         const key = tx.tag || '其他';
-        acc[key] = (acc[key] || 0) + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+        acc[key] = (acc[key] || 0) + getTransactionAmountCny(tx, exchangeRates, { absolute: true });
         return acc;
       }, {});
   }, [previousMonthTransactions, exchangeRates]);
@@ -1067,7 +1064,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       const { start, end } = getMonthDateRange(selectedYear, month);
       const monthTransactions = transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), start, end));
       const income = sumTransactionsCny(monthTransactions, exchangeRates, (tx) => tx.isIncome);
-      const expense = sumTransactionsCny(monthTransactions, exchangeRates, (tx) => !tx.isIncome);
+      const expense = monthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0);
       return {
         month: `${month}月`,
         monthNumber: month,
@@ -1483,7 +1480,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       groupsMap[tx.dateLabel].transactions.push(tx);
     });
     return Object.values(groupsMap).map(group => {
-      const expense = group.transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
+      const expense = group.transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + getTransactionAmountCny(t, exchangeRates, { absolute: true }), 0);
       const income = group.transactions.filter(t => t.isIncome).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
       return {
         ...group,
@@ -1498,7 +1495,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     [filteredData]
   );
   const currentExpenseCny = useMemo(
-    () => sumTransactionsCny(filteredTransactions, exchangeRates, (tx) => !tx.isIncome),
+    () => filteredTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
     [filteredTransactions, exchangeRates]
   );
   const currentIncomeCny = useMemo(
@@ -1611,7 +1608,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
               </div>
               <div className="bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
                 {group.transactions.map((tx, tIdx) => (
-                  <SwipeableTransactionRow key={tx.id} tx={tx} tIdx={tIdx} isLast={group.transactions.length - 1} onEdit={handleOpenModal} onDelete={handleDeleteTransaction} />
+                  <SwipeableTransactionRow key={tx.id || `${group.dateLabel}-${tx.fullDate}-${tIdx}`} tx={tx} tIdx={tIdx} isLast={group.transactions.length - 1} onEdit={handleOpenModal} onDelete={handleDeleteTransaction} />
                 ))}
               </div>
             </div>
@@ -1738,7 +1735,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         return txDate && isSameDay(txDate, today);
       })
       .reduce((sum, tx) => sum + (tx.isIncome ? 1 : -1) * convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates), 0);
-  }, [exchangeRates, latestTxDate, transactions]);
+  }, [exchangeRates, transactions]);
   const assetDistribution = [
     { name: '银行账户', pct: getPct('bank'), val: getVal('bank'), color: 'bg-[#1677ff]', stroke: '#1677ff' },
     { name: '交易所资产', pct: getPct('exchange'), val: getVal('exchange'), color: 'bg-[#7dd3fc]', stroke: '#7dd3fc' },
