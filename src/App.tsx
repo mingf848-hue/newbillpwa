@@ -153,9 +153,6 @@ const getTransactionAmountCny = (tx, exchangeRates, { absolute = false } = {}) =
   return absolute ? Math.abs(amount) : amount;
 };
 
-const EXCHANGE_CONTEXT_KEYWORDS = ['OKX', 'BINANCE', 'BITGET', 'BYBIT', 'HUOBI', 'HTX', 'GATE', 'MEXC', 'KUCOIN', '交易所', '币安', '火币'];
-const CRYPTO_CURRENCIES = ['USDT', 'BTC', 'ETH'];
-
 const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
 
 const isAdjustmentTransaction = (tx) => {
@@ -163,24 +160,16 @@ const isAdjustmentTransaction = (tx) => {
   return tx?.tagType === 'adjustment' || tx?.tag === '调整' || title.includes('调整记录');
 };
 
-const isExchangeAssetLedgerTransaction = (tx) => {
-  const title = String(tx?.title || '').toUpperCase();
-  const subtitle = String(tx?.subtitle || '').toUpperCase();
-  const paymentMethod = String(tx?.paymentMethod || '').toUpperCase();
-  const currency = normalizeCurrency(tx?.currency);
-  const iconType = String(tx?.iconType || '').toUpperCase();
-  const hasExchangeContext = EXCHANGE_CONTEXT_KEYWORDS.some((keyword) => (
-    title.includes(keyword) || subtitle.includes(keyword) || paymentMethod.includes(keyword) || iconType.includes(keyword)
-  ));
-  const isCryptoCurrency = CRYPTO_CURRENCIES.includes(currency);
-  const isLedgerStyleTitle = title.includes('其他记录') || title.includes('调整记录');
-  return isLedgerStyleTitle && (hasExchangeContext || isCryptoCurrency);
+const isInternalAccountTransferTransaction = (tx) => {
+  const title = String(tx?.title || '');
+  const note = String(tx?.note || '');
+  return title.includes('转入') || title.includes('转出') || note.includes('账户转账');
 };
 
 const shouldCountInCashflow = (tx) => (
   !isTransferTransaction(tx) &&
   !isAdjustmentTransaction(tx) &&
-  !isExchangeAssetLedgerTransaction(tx)
+  !isInternalAccountTransferTransaction(tx)
 );
 
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
