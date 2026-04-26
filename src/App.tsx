@@ -1663,6 +1663,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         </div>
       </div>
 
+      </div>
+
       <div className="px-[16px] mt-[16px] relative z-10">
         <div className="bg-white rounded-[20px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex relative">
           <div className="flex-1 pr-[16px] relative">
@@ -1678,9 +1680,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           </div>
         </div>
       </div>
-      </div>
 
-      <div className="px-[16px] mt-[16px] space-y-[16px] relative z-0 flex-1 overflow-y-auto hide-scrollbar" style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth' }}>
+      <div className="px-[16px] mt-[16px] space-y-[16px] relative z-0 pb-[24px]">
         {filteredData.length === 0 ? (
            <div className="py-[40px] text-center text-[#8e8e93] text-[13px] bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">没有找到相关交易记录</div>
         ) : (
