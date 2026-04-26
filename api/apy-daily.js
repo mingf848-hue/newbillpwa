@@ -52,6 +52,16 @@ const getDailyInterest = (account) => {
 
 export default async function handler(_req, res) {
   try {
+    const userAgent = String(_req.headers?.['user-agent'] || '');
+    const authorization = String(_req.headers?.authorization || '');
+    const cronSecret = process.env.CRON_SECRET;
+    const isVercelCron = userAgent.includes('vercel-cron/1.0');
+    const hasCronSecret = cronSecret && authorization === `Bearer ${cronSecret}`;
+    if (!isVercelCron && !hasCronSecret) {
+      json(res, 401, { ok: false, error: 'Unauthorized cron request' });
+      return;
+    }
+
     const localNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const today = localNow.toISOString().slice(0, 10);
     const note = `APY每日派息:${today}`;
