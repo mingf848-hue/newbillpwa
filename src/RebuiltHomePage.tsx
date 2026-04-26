@@ -176,6 +176,15 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
 };
 
+const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+
+const isAdjustmentTransaction = (tx) => {
+  const title = String(tx?.title || '');
+  return tx?.tagType === 'adjustment' || tx?.tag === '调整' || title.includes('调整记录');
+};
+
+const shouldCountInCashflow = (tx) => !isTransferTransaction(tx) && !isAdjustmentTransaction(tx);
+
 const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
 
 // ==========================================
@@ -276,7 +285,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       .filter(tx => {
         const date = parseTransactionDate(tx.fullDate);
         if (!date) return false;
-        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && !tx.isIncome;
+        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && !tx.isIncome && shouldCountInCashflow(tx);
       })
       .reduce((sum, tx) => sum + Math.abs(convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates)), 0);
   }, [transactions, selectedYear, selectedMonth, exchangeRates]);
@@ -286,7 +295,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       .filter(tx => {
         const date = parseTransactionDate(tx.fullDate);
         if (!date) return false;
-        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && tx.isIncome;
+        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && tx.isIncome && shouldCountInCashflow(tx);
       })
       .reduce((sum, tx) => sum + convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates), 0);
   }, [transactions, selectedYear, selectedMonth, exchangeRates]);
@@ -297,7 +306,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     const prevMonth = prevDate.getMonth() + 1;
     return transactions.reduce((acc, tx) => {
       const date = parseTransactionDate(tx.fullDate);
-      if (!date || date.getFullYear() !== prevYear || date.getMonth() + 1 !== prevMonth) return acc;
+      if (!date || date.getFullYear() !== prevYear || date.getMonth() + 1 !== prevMonth || !shouldCountInCashflow(tx)) return acc;
       const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
       if (tx.isIncome) acc.income += amount;
       else acc.expense += Math.abs(amount);

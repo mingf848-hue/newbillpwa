@@ -95,6 +95,13 @@ const FALLBACK_EXCHANGE_RATES = {
   BTC: 500000,
   ETH: 18000,
 };
+const EXCHANGE_RATE_BOUNDS = {
+  CNY: { min: 0.99, max: 1.01 },
+  USDT: { min: 4, max: 12 },
+  AED: { min: 1, max: 3.5 },
+  BTC: { min: 100000, max: 2000000 },
+  ETH: { min: 5000, max: 100000 },
+};
 
 const parseMoneyNumber = (value) => {
   const num = parseFloat(String(value ?? '').replace(/,/g, '').replace(/[^\d.-]/g, ''));
@@ -117,6 +124,24 @@ const formatDisplayMoney = (value, digits = 2) => (
   Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 );
 
+const sanitizeExchangeRates = (input) => {
+  const safeRates = { ...FALLBACK_EXCHANGE_RATES };
+  if (!input || typeof input !== 'object') return safeRates;
+
+  Object.entries(input).forEach(([currency, rawValue]) => {
+    const normalized = normalizeCurrency(currency);
+    const value = Number(rawValue);
+    const bounds = EXCHANGE_RATE_BOUNDS[normalized];
+
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (bounds && (value < bounds.min || value > bounds.max)) return;
+
+    safeRates[normalized] = value;
+  });
+
+  return safeRates;
+};
+
 const convertAmountToCny = (amount, currency, exchangeRates) => {
   const normalized = normalizeCurrency(currency);
   const rate = exchangeRates?.[normalized] ?? (normalized === DEFAULT_DISPLAY_CURRENCY ? 1 : 0);
@@ -127,6 +152,15 @@ const getTransactionAmountCny = (tx, exchangeRates, { absolute = false } = {}) =
   const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
   return absolute ? Math.abs(amount) : amount;
 };
+
+const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+
+const isAdjustmentTransaction = (tx) => {
+  const title = String(tx?.title || '');
+  return tx?.tagType === 'adjustment' || tx?.tag === '调整' || title.includes('调整记录');
+};
+
+const shouldCountInCashflow = (tx) => !isTransferTransaction(tx) && !isAdjustmentTransaction(tx);
 
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
   transactions.reduce((sum, tx) => (
@@ -175,13 +209,14 @@ const readCachedExchangeRates = () => {
     const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY);
     if (!cached) return null;
     const parsed = JSON.parse(cached);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? sanitizeExchangeRates(parsed) : null;
   } catch {
     return null;
   }
 };
 
 function useSupabaseData() {
+  const hasInitializedRef = useRef(false);
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [budget, setBudget] = useState(20000);
@@ -189,6 +224,9 @@ function useSupabaseData() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     const initData = async () => {
       try {
         setLoading(true);
@@ -196,18 +234,6 @@ function useSupabaseData() {
         let txs = [];
         try { accs = await fetchSupabase("accounts?select=*"); } catch (e) { console.warn("Accounts table missing or fetch failed"); }
         try { txs = await fetchSupabase("transactions?select=*"); } catch (e) { console.warn("Transactions table missing or fetch failed"); }
-
-        // Auto-seed to Database if empty
-        if (accs.length === 0) {
-          console.log("Seeding accounts to Supabase...");
-          try { accs = await fetchSupabase("accounts", "POST", SEED_ACCOUNTS); }
-          catch (e) { accs = SEED_ACCOUNTS; }
-        }
-        if (txs.length === 0) {
-          console.log("Seeding transactions to Supabase...");
-          try { txs = await fetchSupabase("transactions", "POST", SEED_TRANSACTIONS); }
-          catch (e) { txs = SEED_TRANSACTIONS; }
-        }
 
         // Load budget from settings table or localStorage fallback
         try {
@@ -245,7 +271,7 @@ function useSupabaseData() {
       try {
         const marketRates = await fetchCoinGeckoRates();
         const entries = await Promise.all(currencies.map(async (currency) => [currency, await fetchCurrencyToCnyRate(currency, marketRates)]));
-        const resolvedRates = Object.fromEntries(entries);
+        const resolvedRates = sanitizeExchangeRates(Object.fromEntries(entries));
         localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(resolvedRates));
         if (!cancelled) {
           setExchangeRates(resolvedRates);
@@ -253,11 +279,10 @@ function useSupabaseData() {
       } catch (error) {
         console.warn('Falling back to cached/default exchange rates', error);
         const cachedRates = readCachedExchangeRates();
+        const fallbackRates = sanitizeExchangeRates(cachedRates || FALLBACK_EXCHANGE_RATES);
+        localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(fallbackRates));
         if (!cancelled) {
-          setExchangeRates({
-            ...FALLBACK_EXCHANGE_RATES,
-            ...(cachedRates || {}),
-          });
+          setExchangeRates(fallbackRates);
         }
       }
     };
@@ -978,29 +1003,37 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
     () => transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), previousRange.start, previousRange.end)),
     [transactions, previousRange]
   );
+  const currentCashflowTransactions = useMemo(
+    () => currentMonthTransactions.filter(shouldCountInCashflow),
+    [currentMonthTransactions]
+  );
+  const previousCashflowTransactions = useMemo(
+    () => previousMonthTransactions.filter(shouldCountInCashflow),
+    [previousMonthTransactions]
+  );
 
   const currentExpense = useMemo(
-    () => currentMonthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
-    [currentMonthTransactions, exchangeRates]
+    () => currentCashflowTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
+    [currentCashflowTransactions, exchangeRates]
   );
   const currentIncome = useMemo(
-    () => sumTransactionsCny(currentMonthTransactions, exchangeRates, (tx) => tx.isIncome),
-    [currentMonthTransactions, exchangeRates]
+    () => sumTransactionsCny(currentCashflowTransactions, exchangeRates, (tx) => tx.isIncome),
+    [currentCashflowTransactions, exchangeRates]
   );
   const currentBalance = currentIncome - currentExpense;
   const previousExpense = useMemo(
-    () => previousMonthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
-    [previousMonthTransactions, exchangeRates]
+    () => previousCashflowTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
+    [previousCashflowTransactions, exchangeRates]
   );
   const previousIncome = useMemo(
-    () => sumTransactionsCny(previousMonthTransactions, exchangeRates, (tx) => tx.isIncome),
-    [previousMonthTransactions, exchangeRates]
+    () => sumTransactionsCny(previousCashflowTransactions, exchangeRates, (tx) => tx.isIncome),
+    [previousCashflowTransactions, exchangeRates]
   );
   const previousBalance = previousIncome - previousExpense;
   const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
 
   const expenseGroups = useMemo(() => {
-    const grouped = currentMonthTransactions
+    const grouped = currentCashflowTransactions
       .filter((tx) => !tx.isIncome)
       .reduce((acc, tx) => {
         const key = tx.tag || '其他';
@@ -1010,17 +1043,17 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
     return Object.entries(grouped)
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount);
-  }, [currentMonthTransactions, exchangeRates]);
+  }, [currentCashflowTransactions, exchangeRates]);
 
   const previousExpenseGroups = useMemo(() => {
-    return previousMonthTransactions
+    return previousCashflowTransactions
       .filter((tx) => !tx.isIncome)
       .reduce((acc, tx) => {
         const key = tx.tag || '其他';
         acc[key] = (acc[key] || 0) + getTransactionAmountCny(tx, exchangeRates, { absolute: true });
         return acc;
       }, {});
-  }, [previousMonthTransactions, exchangeRates]);
+  }, [previousCashflowTransactions, exchangeRates]);
 
   const pieData = useMemo(() => {
     const total = expenseGroups.reduce((sum, item) => sum + item.amount, 0);
@@ -1062,7 +1095,9 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       : monthRangeOptions.filter((month) => month >= trendRange.start && month <= trendRange.end);
     return months.map((month) => {
       const { start, end } = getMonthDateRange(selectedYear, month);
-      const monthTransactions = transactions.filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), start, end));
+      const monthTransactions = transactions
+        .filter((tx) => isDateInRange(parseTransactionDate(tx.fullDate), start, end))
+        .filter(shouldCountInCashflow);
       const income = sumTransactionsCny(monthTransactions, exchangeRates, (tx) => tx.isIncome);
       const expense = monthTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0);
       return {
@@ -1358,6 +1393,12 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   const [swipeX, setSwipeX] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
   const touchStartX = useRef(0);
+  const isDeleteRevealed = swipeX <= -40;
+
+  useEffect(() => {
+    setSwipeX(0);
+    setIsRemoving(false);
+  }, [tx.id, tx.fullDate, tx.amount]);
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
@@ -1381,10 +1422,19 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
     setTimeout(() => onDelete(tx), 260);
   };
 
+  const handleRowClick = () => {
+    if (isRemoving) return;
+    if (swipeX !== 0) {
+      setSwipeX(0);
+      return;
+    }
+    onEdit(tx);
+  };
+
   return (
     <div className={`relative overflow-hidden bg-white ${isRemoving ? 'bill-row-shatter' : ''}`}>
       <button
-        onClick={() => onEdit(tx)}
+        onClick={handleRowClick}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -1400,9 +1450,15 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
         </div>
       </button>
       <button
-        onClick={handleDeleteClick}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDeleteClick();
+        }}
         className={`absolute right-0 top-0 h-full bg-[#ff3b30] text-white px-[20px] flex items-center justify-center font-medium text-[14px] active:bg-[#e32a1f] transition-colors ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
-        style={{ opacity: Math.min(1, Math.abs(swipeX) / 40) }}
+        style={{
+          opacity: Math.min(1, Math.abs(swipeX) / 40),
+          pointerEvents: isDeleteRevealed && !isRemoving ? 'auto' : 'none',
+        }}
       >
         删除
       </button>
@@ -1480,8 +1536,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       groupsMap[tx.dateLabel].transactions.push(tx);
     });
     return Object.values(groupsMap).map(group => {
-      const expense = group.transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + getTransactionAmountCny(t, exchangeRates, { absolute: true }), 0);
-      const income = group.transactions.filter(t => t.isIncome).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
+      const expense = group.transactions.filter((t) => !t.isIncome && shouldCountInCashflow(t)).reduce((sum, t) => sum + getTransactionAmountCny(t, exchangeRates, { absolute: true }), 0);
+      const income = group.transactions.filter((t) => t.isIncome && shouldCountInCashflow(t)).reduce((sum, t) => sum + convertAmountToCny(parseMoneyNumber(t.amount), t.currency, exchangeRates), 0);
       return {
         ...group,
         totalExpense: expense.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
@@ -1495,11 +1551,11 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     [filteredData]
   );
   const currentExpenseCny = useMemo(
-    () => filteredTransactions.filter((tx) => !tx.isIncome).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
+    () => filteredTransactions.filter((tx) => !tx.isIncome && shouldCountInCashflow(tx)).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
     [filteredTransactions, exchangeRates]
   );
   const currentIncomeCny = useMemo(
-    () => sumTransactionsCny(filteredTransactions, exchangeRates, (tx) => tx.isIncome),
+    () => sumTransactionsCny(filteredTransactions, exchangeRates, (tx) => tx.isIncome && shouldCountInCashflow(tx)),
     [filteredTransactions, exchangeRates]
   );
 
