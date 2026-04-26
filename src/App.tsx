@@ -163,7 +163,15 @@ const isAdjustmentTransaction = (tx) => {
 const isInternalAccountTransferTransaction = (tx) => {
   const title = String(tx?.title || '');
   const note = String(tx?.note || '');
-  return title.includes('转入') || title.includes('转出') || note.includes('账户转账');
+  const tag = String(tx?.tag || '');
+  return (
+    title.includes('转入') ||
+    title.includes('转出') ||
+    title.includes('划转') ||
+    note.includes('账户转账') ||
+    note.includes('划转') ||
+    tag.includes('划转')
+  );
 };
 
 const isManualBalanceAdjustmentTransaction = (tx) => {
