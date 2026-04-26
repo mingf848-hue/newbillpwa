@@ -1179,13 +1179,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, updateTransaction, no
       <div className="px-[16px] mt-[16px] relative z-10">
         <div className="bg-white rounded-[20px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex relative">
           <div className="flex-1 pr-[16px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (AED)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月支出 (人民币)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">7,109.71</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 13.2%</span></div>
             <button aria-label="查看支出账单" onClick={() => setSelectedType('支出')} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
           </div>
           <div className="w-[1px] bg-[#f0f0f0] my-[2px]"></div>
           <div className="flex-1 pl-[20px] relative">
-            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (AED)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
+            <div className="text-[11px] text-[#8e8e93] mb-[4px]">本月收入 (人民币)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">47,556.16</div>
             <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 18.7%</span></div>
             <button aria-label="查看收入账单" onClick={() => setSelectedType('收入')} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
           </div>
@@ -1519,40 +1519,42 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], notif
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAccountDetailModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out max-h-[90vh] overflow-y-auto">
-            <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
-            <div className="flex items-start justify-between mb-[24px]">
+          <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[90vh]">
+            <div className="w-full flex justify-center pt-[12px] pb-[4px] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-start justify-between px-[20px] pt-[8px] pb-[16px] shrink-0 border-b border-[#f4f5f8]">
                <div className="flex items-center space-x-[14px]"><div className="w-[48px] h-[48px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[18px] font-bold text-[#1c1c1e] leading-tight mb-[4px]">{selectedAccount.name}</h2><span className="text-[13px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
                <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors shrink-0"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
             </div>
-            <div className="mb-[24px]">
-               <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">1. 币种</h3>
-               <div className="flex overflow-x-auto hide-scrollbar space-x-[12px] pb-[4px]">
-                  {currenciesList.map((currency) => {
-                    const isSelected = selectedCurrency === currency.id;
-                    return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
-                  })}
-               </div>
+            <div className="overflow-y-auto hide-scrollbar flex-1 px-[20px] pt-[16px]">
+              <div className="mb-[24px]">
+                 <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">1. 币种</h3>
+                 <div className="flex overflow-x-auto hide-scrollbar space-x-[12px] pb-[4px]">
+                    {currenciesList.map((currency) => {
+                      const isSelected = selectedCurrency === currency.id;
+                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[10px] px-[16px] py-[10px] flex items-center space-x-[8px] cursor-pointer shrink-0 transition-colors ${isSelected ? 'border-2 border-[#1677ff] bg-[#f0f6ff]' : 'border border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[15px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[22px] h-[22px] bg-[#1677ff] rounded-bl-[10px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[14px] h-[14px] text-white" strokeWidth={3} /></div>)}</button>);
+                    })}
+                 </div>
+              </div>
+              <div className="mb-[24px]">
+                 <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">2. 余额</h3>
+                 <div className="border border-[#e5e5ea] rounded-[14px] p-[12px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
+                    <span className="text-[12px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
+                    <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[22px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[4px]"><ClearInputIcon /></button>}</div>
+                 </div>
+                 <p className="text-[12px] text-[#8e8e93] mt-[8px] ml-[2px]">当前可用余额，请输入数字，最多 8 位小数</p>
+                 <div className="flex items-center justify-between mt-[16px]"><span className="text-[14px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
+              </div>
+              <div className="mb-[32px]">
+                 <div className="flex items-center space-x-[6px] mb-[12px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[14px] h-[14px] text-[#c7c7cc]" strokeWidth={2} /></div>
+                 <div className="grid grid-cols-3 gap-[8px]">
+                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">高息限额</div><div className="relative mb-[8px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[34px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
+                    <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
+                 </div>
+                 <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
+              </div>
             </div>
-            <div className="mb-[24px]">
-               <h3 className="text-[15px] font-bold text-[#1c1c1e] mb-[12px]">2. 余额</h3>
-               <div className="border border-[#e5e5ea] rounded-[14px] p-[12px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
-                  <span className="text-[12px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
-                  <div className="flex items-center justify-between"><input type="text" value={accountBalance} onChange={(e) => setAccountBalance(e.target.value)} className="text-[22px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[4px]"><ClearInputIcon /></button>}</div>
-               </div>
-               <p className="text-[12px] text-[#8e8e93] mt-[8px] ml-[2px]">当前可用余额，请输入数字，最多 8 位小数</p>
-               <div className="flex items-center justify-between mt-[16px]"><span className="text-[14px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
-            </div>
-            <div className="mb-[32px]">
-               <div className="flex items-center space-x-[6px] mb-[12px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">3. APY 配置</h3><Info className="w-[14px] h-[14px] text-[#c7c7cc]" strokeWidth={2} /></div>
-               <div className="grid grid-cols-3 gap-[8px]">
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">高息限额</div><div className="relative mb-[8px]"><input type="text" value={aprValues.limit} onChange={(e) => setAprValues((prev) => ({ ...prev, limit: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[34px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">享受高息的上限额度</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">基础利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.baseRate} onChange={(e) => setAprValues((prev) => ({ ...prev, baseRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">限额内的年化利率</div></div>
-                  <div className="border border-[#f0f0f0] rounded-[12px] p-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]"><div className="text-[12px] font-medium text-[#5c5c5e] mb-[8px]">超出利率</div><div className="relative mb-[8px]"><input type="text" value={aprValues.overflowRate} onChange={(e) => setAprValues((prev) => ({ ...prev, overflowRate: e.target.value }))} className="w-full bg-transparent text-[17px] font-bold text-[#1c1c1e] outline-none pr-[20px]" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[12px] font-medium text-[#8e8e93]">%</span></div><div className="text-[10px] text-[#8e8e93] leading-tight transform scale-95 origin-left">超出部分的年化利率</div></div>
-               </div>
-               <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
-            </div>
-            <div className="flex space-x-[12px] pb-[8px]">
+            <div className="px-[20px] py-[16px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[12px]">
                <button onClick={() => setIsAccountDetailModalOpen(false)} className="w-[120px] py-[14px] border border-[#e5e5ea] rounded-[14px] text-[16px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
                <button onClick={saveAccountDetail} className="flex-1 py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存修改</button>
             </div>

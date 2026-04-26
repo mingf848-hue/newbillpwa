@@ -235,8 +235,6 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [budgetPeriod, setBudgetPeriod] = useState('每月');
   const [isBudgetPeriodOpen, setIsBudgetPeriodOpen] = useState(false);
-  const budgetUsed = 10653.28;
-  const budgetRemaining = budgetAmount - budgetUsed;
 
   // Transfer state
   const [transferAmount, setTransferAmount] = useState('');
@@ -246,6 +244,21 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
+
+  // 计算本月实际支出（用于预算进度）
+  const monthlyExpenses = useMemo(() => {
+    return transactions
+      .filter(tx => {
+        const date = new Date(tx.fullDate.replace(/年|月/g, '-').replace('日', ''));
+        return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && !tx.isIncome;
+      })
+      .reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount.replace(/[^0-9.]/g, ''))), 0);
+  }, [transactions, selectedYear, selectedMonth]);
+
+  const budgetUsed = monthlyExpenses;
+  const budgetRemaining = budgetAmount - budgetUsed;
+  const budgetProgressPercent = budgetAmount > 0 ? Math.min(100, (budgetUsed / budgetAmount) * 100) : 0;
+
   const recentTransactions = useMemo(
     () => [...transactions].sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime()).slice(0, 5),
     [transactions]
@@ -483,7 +496,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
         {/* 余额卡片 */}
         <div className="bg-white rounded-[24px] p-[20px] shadow-sm relative overflow-hidden">
-          <div className="flex items-center space-x-[6px] text-[#8e8e93] mb-[8px]"><span className="text-[12px]">本月结余 (CNY)</span><Eye className="w-[14px] h-[14px]" /></div>
+          <div className="flex items-center space-x-[6px] text-[#8e8e93] mb-[8px]"><span className="text-[12px]">本月结余 (人民币)</span><Eye className="w-[14px] h-[14px]" /></div>
           <div className="text-[38px] font-bold text-[#1677ff] tracking-tight leading-none mb-[12px]">40,446.45</div>
           <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#1677ff] flex items-center font-medium"><ArrowUpRight className="w-[12px] h-[12px] mr-[1px]" /> 20.1%</span></div>
           <div className="absolute bottom-0 right-0 w-[60%] h-[80px] pointer-events-none opacity-80">
@@ -512,22 +525,22 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
               <div className="flex items-center text-[10px] text-[#8e8e93]">本月 <ChevronDown className="w-[10px] h-[10px] ml-[2px]" /></div>
             </div>
             <div className="text-[10px] text-[#8e8e93] mb-[12px]">
-              总预算 <span className="font-semibold text-[#1c1c1e]">20,000.00</span> CNY
+              总预算 <span className="font-semibold text-[#1c1c1e]">{budgetAmount.toLocaleString()}.00</span> 元
             </div>
             <div className="flex-1 mb-[10px]">
               <div className="h-[4px] bg-[#f0f0f0] rounded-full overflow-hidden mb-[4px]">
-                <div className="h-full bg-[#1677ff] rounded-full" style={{ width: '53%' }}></div>
+                <div className="h-full bg-[#1677ff] rounded-full" style={{ width: `${Math.min(100, budgetProgressPercent)}%` }}></div>
               </div>
-              <div className="text-right text-[11px] font-bold text-[#1677ff]">53%</div>
+              <div className="text-right text-[11px] font-bold text-[#1677ff]">{Math.round(budgetProgressPercent)}%</div>
             </div>
             <div className="space-y-[3px]">
               <div className="flex justify-between items-center text-[10px]">
                 <div className="flex items-center text-[#3a3a3c]"><div className="w-[4px] h-[4px] rounded-full bg-[#1677ff] mr-[6px]"></div>已支出</div>
-                <span className="font-semibold text-[#1c1c1e]">10,653.28</span>
+                <span className="font-semibold text-[#1c1c1e]">{budgetUsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
                 <div className="flex items-center text-[#8e8e93]"><div className="w-[4px] h-[4px] rounded-full bg-[#e5e5ea] mr-[6px]"></div>剩余额度</div>
-                <span className="font-semibold text-[#3a3a3c]">9,346.72</span>
+                <span className="font-semibold text-[#3a3a3c]">{Math.max(0, budgetRemaining).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
             </div>
           </div>
@@ -764,7 +777,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
                   <span>{selectedMonthLabel} · 总预算 <PenLine className="w-[10px] h-[10px] inline" /></span>
                   <span>本月剩余 <span className={`font-bold ${budgetRemaining >= 0 ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{budgetRemaining.toFixed(2)}</span></span>
                 </div>
-                <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">CNY</span></div>
+                <div className="text-[24px] font-bold mb-[12px]">{budgetAmount.toLocaleString()}.00 <span className="text-[10px] text-gray-400 ml-[4px]">元</span></div>
                 <div className="h-[4px] bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full bg-[#1677ff] transition-all" style={{width: `${Math.min(100, (budgetUsed / budgetAmount) * 100).toFixed(0)}%`}}></div>
                 </div>
