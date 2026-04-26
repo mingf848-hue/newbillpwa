@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/apy-daily",
+      "schedule": "0 22 * * *"
+    }
+  ]
+}

@@ -793,11 +793,27 @@ const GlobalTabBar = ({ activeTab, setActiveTab }) => (
   </div>
 );
 
-const MessageCenterModal = ({ isOpen, onClose, notify }) => {
+const MessageCenterModal = ({ isOpen, onClose, notify, exchangeRates, transactions = [], budget = 0, onBudgetClick }) => {
   if (!isOpen) return null;
+  const usdtToCny = Number(exchangeRates?.USDT || 0);
+  const usdtToAed = exchangeRates?.AED ? usdtToCny / Number(exchangeRates.AED) : 0;
+  const now = new Date();
+  const currentMonthExpense = transactions
+    .filter((tx) => {
+      const txDate = parseTransactionDate(tx.fullDate);
+      return txDate && txDate.getFullYear() === now.getFullYear() && txDate.getMonth() === now.getMonth() && !tx.isIncome && shouldCountInCashflow(tx);
+    })
+    .reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0);
+  const budgetUsage = budget > 0 ? Math.round((currentMonthExpense / budget) * 100) : 0;
+  const budgetRemaining = Math.max(0, budget - currentMonthExpense);
   const handleNoticeClick = (message) => {
     notify(message);
     onClose();
+  };
+  const handleBudgetNoticeClick = () => {
+    notify(`本月预算已使用 ${budgetUsage}%`);
+    onClose();
+    onBudgetClick?.();
   };
   return (
     <div className="fixed inset-0 z-[600] flex justify-center">
@@ -809,6 +825,16 @@ const MessageCenterModal = ({ isOpen, onClose, notify }) => {
                  <Bell className="w-[16px] h-[16px] mr-[6px]" strokeWidth={2} />
                  <span className="text-[14px] font-medium">消息中心</span>
               </div>
+              <div className="grid grid-cols-2 gap-[8px] mb-[8px]">
+                <div className="rounded-[14px] bg-[#f8fbff] border border-[#edf4ff] px-[10px] py-[8px]">
+                  <div className="text-[10px] text-[#8e8e93] mb-[2px]">USDT : RMB</div>
+                  <div className="text-[14px] font-bold text-[#1677ff]">{usdtToCny ? usdtToCny.toFixed(2) : '--'}</div>
+                </div>
+                <div className="rounded-[14px] bg-[#f7fffb] border border-[#e8f8f1] px-[10px] py-[8px]">
+                  <div className="text-[10px] text-[#8e8e93] mb-[2px]">USDT : AED</div>
+                  <div className="text-[14px] font-bold text-[#10b981]">{usdtToAed ? usdtToAed.toFixed(2) : '--'}</div>
+                </div>
+              </div>
               <div className="space-y-[8px]">
                   <button onClick={() => handleNoticeClick('已打开信用卡还款提醒')} className="w-full text-left flex items-start bg-white border border-[#f4f5f8] rounded-[16px] p-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] relative cursor-pointer active:bg-gray-50 transition-colors">
                      <div className="w-[36px] h-[36px] rounded-full bg-[#fff7ed] flex items-center justify-center shrink-0 mr-[12px]"><Calendar className="text-[#f59e0b] w-[18px] h-[18px]" strokeWidth={2.5} /></div>
@@ -819,12 +845,12 @@ const MessageCenterModal = ({ isOpen, onClose, notify }) => {
                      </div>
                      <div className="w-[6px] h-[6px] rounded-full bg-[#f59e0b] absolute top-[26px] right-[14px]"></div>
                   </button>
-                  <button onClick={() => handleNoticeClick('已打开预算预警通知')} className="w-full text-left flex items-start bg-white border border-[#f4f5f8] rounded-[16px] p-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] relative cursor-pointer active:bg-gray-50 transition-colors">
+                  <button onClick={handleBudgetNoticeClick} className="w-full text-left flex items-start bg-white border border-[#f4f5f8] rounded-[16px] p-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] relative cursor-pointer active:bg-gray-50 transition-colors">
                      <div className="w-[36px] h-[36px] rounded-full bg-[#fef2f2] flex items-center justify-center shrink-0 mr-[12px]"><AlertTriangle className="text-[#ff3b30] w-[18px] h-[18px]" strokeWidth={2.5} /></div>
                      <div className="flex-1 pr-[16px]">
                         <div className="text-[13px] font-bold text-[#1c1c1e]">预算预警通知</div>
-                        <div className="text-[14px] text-[#ff3b30] font-medium mt-[2px] mb-[2px]">本月餐饮预算已使用 80%</div>
-                        <div className="text-[11px] text-[#8e8e93]">建议控制本周支出</div>
+                        <div className="text-[14px] text-[#ff3b30] font-medium mt-[2px] mb-[2px]">本月预算已使用 {budgetUsage}%</div>
+                        <div className="text-[11px] text-[#8e8e93]">剩余额度 {formatDisplayMoney(budgetRemaining)} 元</div>
                      </div>
                      <div className="w-[6px] h-[6px] rounded-full bg-[#ff3b30] absolute top-[26px] right-[14px]"></div>
                   </button>
@@ -1584,16 +1610,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
               <div className="fixed inset-0 z-[40]" onClick={() => setIsCalendarOpen(false)}></div>
               <div className="absolute top-[42px] left-0 w-[310px] bg-white rounded-[20px] p-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-left">
                 <div className="absolute -top-[5px] left-[45px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
-                <div className="flex bg-[#f4f5f8] p-[3px] rounded-[10px] mb-[16px]">{['月', '年'].map((view) => <button key={view} onClick={() => setCalendarView(view)} className={`flex-1 rounded-[8px] py-[6px] text-[14px] transition-all ${calendarView === view ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] text-[#1677ff] font-semibold' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{view}</button>)}</div>
                 <div className="flex items-center justify-between mb-[14px] px-[8px]"><button aria-label="上个月" onClick={() => changeCalendarMonth(-1)} className="p-1 active:opacity-50"><ChevronLeft className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button><span className="text-[15px] font-medium text-[#1c1c1e]">{selectedMonthLabel}</span><button aria-label="下个月" onClick={() => changeCalendarMonth(1)} className="p-1 active:opacity-50"><ChevronRight className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button></div>
-                <div className="grid grid-cols-7 text-center mb-[8px]">{['一', '二', '三', '四', '五', '六', '日'].map(d => (<div key={d} className="text-[12px] text-[#8e8e93] font-medium py-[4px]">{d}</div>))}</div>
-                <div className="grid grid-cols-7 gap-y-[6px] text-center">
-                    {BILLS_CALENDAR_DAYS.map((dayObj, i) => {
-                      const isSelected = dayObj.type === 'curr' && dayObj.val === selectedDate;
-                      return (<button key={i} onClick={() => { if(dayObj.type === 'curr') setSelectedDate(dayObj.val); }} className="w-[32px] h-[32px] mx-auto flex items-center justify-center relative"><div className={`w-full h-full flex items-center justify-center rounded-full text-[15px] transition-all ${isSelected ? 'bg-[#1677ff] text-white font-semibold shadow-[0_2px_8px_rgba(22,119,255,0.4)]' : dayObj.type === 'curr' ? 'text-[#1c1c1e] hover:bg-[#f4f5f8] font-normal' : 'text-[#d1d1d6] font-normal'}`}>{dayObj.val}</div></button>);
-                    })}
+                <div className="grid grid-cols-3 gap-[8px]">
+                    {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                      <button key={month} onClick={() => setSelectedMonth(month)} className={`h-[42px] rounded-[12px] text-[14px] transition-all ${selectedMonth === month ? 'bg-[#1677ff] text-white font-semibold shadow-[0_6px_16px_rgba(22,119,255,0.24)]' : 'bg-[#f7f8fa] text-[#3a3a3c] font-medium active:bg-[#eef2f7]'}`}>{month}月</button>
+                    ))}
                 </div>
-                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { setSelectedDate(23); setSelectedMonth(4); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">今天</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
+                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => setSelectedMonth(4)} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">本月</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
               </div>
             </>
           )}
@@ -2040,43 +2063,43 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       )}
 
       {isAccountDetailModalOpen && selectedAccount && (
-        <div className="fixed inset-0 z-[100] flex justify-center items-end px-[12px] pb-[12px]">
+        <div className="fixed inset-0 z-[100] flex justify-center items-end px-[14px] pb-[88px]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }}></div>
-          <div className="relative bg-white w-full max-w-[430px] rounded-[24px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[92vh]">
-            <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
-            <div className="flex items-start justify-between px-[16px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
-               <div className="flex items-center space-x-[10px]"><div className="w-[40px] h-[40px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[16px] font-bold text-[#1c1c1e] leading-tight mb-[2px]">{accountName || selectedAccount.name}</h2><span className="text-[12px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
+          <div className="relative bg-white w-full max-w-[410px] rounded-[22px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[76vh]">
+            <div className="w-full flex justify-center pt-[6px] pb-[1px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-start justify-between px-[14px] pt-[4px] pb-[8px] shrink-0 border-b border-[#f4f5f8]">
+               <div className="flex items-center space-x-[8px]"><div className="w-[36px] h-[36px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[15px] font-bold text-[#1c1c1e] leading-tight mb-[1px]">{accountName || selectedAccount.name}</h2><span className="text-[11px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
                <div className="flex items-center space-x-[8px] shrink-0">
                  <button onClick={saveAccountDetail} className="h-[28px] px-[12px] rounded-full bg-[#1677ff] text-white text-[12px] font-bold active:bg-[#0f60d6] transition-colors">保存</button>
                  <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
                </div>
             </div>
-            <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[16px] pt-[10px] pb-[16px]">
-              <div className="mb-[14px]">
-                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">1. 账户名称</h3>
-                 <button onClick={() => openAssetKeyboard('accountName')} className="w-full border border-[#e5e5ea] rounded-[10px] px-[12px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] active:bg-[#f9f9f9] transition-colors">
+            <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[14px] pt-[8px] pb-[12px]">
+              <div className="mb-[10px]">
+                 <h3 className="text-[12px] font-bold text-[#1c1c1e] mb-[6px]">1. 账户名称</h3>
+                 <button onClick={() => openAssetKeyboard('accountName')} className="w-full border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] text-left text-[14px] font-medium text-[#1c1c1e] active:bg-[#f9f9f9] transition-colors">
                    {accountName || '输入账户名称'}
                  </button>
               </div>
-              <div className="mb-[14px]">
-                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">2. 币种</h3>
+              <div className="mb-[10px]">
+                 <h3 className="text-[12px] font-bold text-[#1c1c1e] mb-[6px]">2. 币种</h3>
                  <div className="flex overflow-x-auto hide-scrollbar space-x-[8px] pb-[2px]">
                     {currenciesList.map((currency) => {
                       const isSelected = selectedCurrency === currency.id;
-                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] px-[12px] py-[7px] flex items-center space-x-[6px] cursor-pointer shrink-0 transition-colors border-2 ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-transparent bg-white hover:border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}>{currency.icon}<span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
+                      return (<button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`relative rounded-[8px] h-[34px] min-w-[76px] px-[10px] flex items-center justify-center space-x-[6px] cursor-pointer shrink-0 transition-colors border-2 ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-transparent bg-white hover:border-[#e5e5ea] hover:bg-[#f9f9f9]'}`}><span className="w-[20px] h-[20px] flex items-center justify-center shrink-0">{currency.icon}</span><span className={`text-[13px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[6px] flex items-center justify-center shadow-sm"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>)}</button>);
                     })}
                  </div>
               </div>
-              <div className="mb-[14px]">
-                 <h3 className="text-[13px] font-bold text-[#1c1c1e] mb-[8px]">3. 余额</h3>
-                 <div className="border border-[#e5e5ea] rounded-[10px] p-[10px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
+              <div className="mb-[10px]">
+                 <h3 className="text-[12px] font-bold text-[#1c1c1e] mb-[6px]">3. 余额</h3>
+                 <div className="border border-[#e5e5ea] rounded-[10px] p-[9px] flex flex-col relative focus-within:border-[#1677ff] focus-within:ring-1 focus-within:ring-[#1677ff]/20 transition-all">
                     <span className="text-[11px] text-[#8e8e93] mb-[2px]">余额 ({selectedCurrency})</span>
                     <div className="flex items-center justify-between"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('balance')} onClick={() => openAssetKeyboard('balance')} value={accountBalance} className="text-[18px] font-bold text-[#1c1c1e] w-full outline-none bg-transparent cursor-pointer"/>{accountBalance && <button onClick={() => setAccountBalance('')} className="p-[2px]"><ClearInputIcon /></button>}</div>
                  </div>
-                 <div className="flex items-center justify-between mt-[8px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
+                 <div className="flex items-center justify-between mt-[6px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
               </div>
-              <div className="mb-[10px]">
-                 <div className="flex items-center space-x-[4px] mb-[8px]"><h3 className="text-[13px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
+              <div className="mb-[8px]">
+                 <div className="flex items-center space-x-[4px] mb-[6px]"><h3 className="text-[12px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
                  <div className="grid grid-cols-3 gap-[6px]">
                     <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('limit')} onClick={() => openAssetKeyboard('limit')} value={aprValues.limit} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
                     <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
@@ -2085,9 +2108,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
               </div>
             </div>
-            <div className="px-[16px] py-[10px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
-               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[100px] py-[10px] border border-[#e5e5ea] rounded-[10px] text-[14px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={saveAccountDetail} className="flex-1 py-[10px] rounded-[10px] text-[14px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
+            <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
+               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
+               <button onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
             </div>
           </div>
         </div>
@@ -2147,7 +2170,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
   const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
-  const activeTransactions = useMemo(() => transactions.filter((tx) => !tx.deleted), [transactions]);
+  const activeTransactions = useMemo(() => transactions.filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx)), [transactions]);
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -2256,7 +2279,15 @@ export default function App() {
             )}
         </div>
         
-        <MessageCenterModal isOpen={isMessageCenterOpen} onClose={() => setIsMessageCenterOpen(false)} notify={notify} />
+        <MessageCenterModal
+          isOpen={isMessageCenterOpen}
+          onClose={() => setIsMessageCenterOpen(false)}
+          notify={notify}
+          exchangeRates={exchangeRates}
+          transactions={activeTransactions}
+          budget={budget}
+          onBudgetClick={() => setActiveTab('home')}
+        />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
         <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
         <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={activeTransactions} />
