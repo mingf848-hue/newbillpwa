@@ -211,7 +211,12 @@ const normalizeTransactionPresentation = (tx) => {
   return nextTx;
 };
 
-const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+const isTransferTransaction = (tx) => {
+  const title = String(tx?.title || '');
+  const tag = String(tx?.tag || '');
+  if (tag === '调整' || title.includes('调整记录')) return false;
+  return tx?.tagType === 'transfer' || tag === '转账';
+};
 
 const isAdjustmentTransaction = (tx) => {
   const title = String(tx?.title || '');
@@ -234,7 +239,9 @@ const isInternalAccountTransferTransaction = (tx) => {
 
 const isManualBalanceAdjustmentTransaction = (tx) => {
   const note = String(tx?.note || '').trim();
-  return note === '余额人工修正' || note === '余额人工修正（不计入统计）';
+  return note === '余额人工修正' ||
+    note === '余额人工修正（不计入统计）' ||
+    note === '余额人工修正 (不计入统计)';
 };
 
 const shouldCountInCashflow = (tx) => (
@@ -328,9 +335,29 @@ function useSupabaseData() {
     });
   };
 
+  const setAccountBalanceInDb = async (targetAccount, nextBalance) => {
+    if (!targetAccount?.id || !Number.isFinite(nextBalance)) return;
+    await fetchSupabase(`accounts?id=eq.${encodeURIComponent(targetAccount.id)}`, "PATCH", {
+      balance: formatDisplayMoney(nextBalance),
+    });
+  };
+
   const getTransactionSyncAccount = (txLike) => {
     if (!txLike) return null;
     return findAccountByName(txLike.paymentMethod) || findAccountByName(txLike.subtitle) || null;
+  };
+
+  const getTransferAccounts = (txLike) => {
+    if (!txLike || !isTransferTransaction(txLike)) return null;
+    const outAccount = findAccountByName(txLike.paymentMethod) || findAccountByName(txLike.subtitle);
+    const title = String(txLike.title || '');
+    const toNameFromTitle = title.includes(' 转入 ') ? title.split(' 转入 ').slice(1).join(' 转入 ').trim() : '';
+    const inAccount = findAccountByName(toNameFromTitle) || accounts
+      .slice()
+      .sort((a, b) => String(b.name || '').length - String(a.name || '').length)
+      .find((account) => account?.name && title.endsWith(account.name));
+    if (!outAccount || !inAccount || outAccount.id === inAccount.id) return null;
+    return { outAccount, inAccount };
   };
 
   const rollbackWithReload = async () => {
@@ -343,6 +370,30 @@ function useSupabaseData() {
     if (!targetAccount) return;
     applyAccountBalanceDelta(targetAccount.name, delta);
     await syncAccountBalanceToDb(targetAccount, delta);
+  };
+
+  const syncTransferAccountDelta = async (txLike, direction = 1) => {
+    const transferAccounts = getTransferAccounts(txLike);
+    const amount = parseMoneyNumber(txLike?.amount);
+    if (!transferAccounts || !amount || !Number.isFinite(direction)) return;
+    const { outAccount, inAccount } = transferAccounts;
+    const signedAmount = Math.abs(amount) * direction;
+    const originalOutBalance = parseMoneyNumber(outAccount.balance);
+    const originalInBalance = parseMoneyNumber(inAccount.balance);
+    applyAccountBalanceDelta(outAccount.name, -signedAmount);
+    applyAccountBalanceDelta(inAccount.name, signedAmount);
+    try {
+      await syncAccountBalanceToDb(outAccount, -signedAmount);
+      await syncAccountBalanceToDb(inAccount, signedAmount);
+    } catch (error) {
+      try {
+        await setAccountBalanceInDb(outAccount, originalOutBalance);
+        await setAccountBalanceInDb(inAccount, originalInBalance);
+      } catch (rollbackError) {
+        console.error("Transfer balance rollback failed", rollbackError);
+      }
+      throw error;
+    }
   };
 
   const getTransactionBalanceDelta = (txLike) => {
@@ -471,7 +522,11 @@ function useSupabaseData() {
       setTransactions(prev => [created, ...prev]);
       const balanceDelta = getTransactionBalanceDelta(created);
       try {
-        await syncTransactionAccountDelta(created, balanceDelta);
+        if (isTransferTransaction(created)) {
+          await syncTransferAccountDelta(created, 1);
+        } else {
+          await syncTransactionAccountDelta(created, balanceDelta);
+        }
       } catch (syncError) {
         try {
           await fetchSupabase(`transactions?id=eq.${encodeURIComponent(created.id)}`, "DELETE");
@@ -491,13 +546,30 @@ function useSupabaseData() {
   const deleteTransaction = async (id) => {
     const transactionToDelete = transactions.find((tx) => tx.id === id);
     const revertDelta = -getTransactionBalanceDelta(transactionToDelete);
+    let balancesMoved = false;
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
     if (id !== undefined && id !== null) {
       try {
+        if (isTransferTransaction(transactionToDelete)) {
+          await syncTransferAccountDelta(transactionToDelete, -1);
+        } else {
+          await syncTransactionAccountDelta(transactionToDelete, revertDelta);
+        }
+        balancesMoved = true;
         await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "DELETE");
-        await syncTransactionAccountDelta(transactionToDelete, revertDelta);
       } catch (e) {
         console.error("Delete failed", e);
+        if (balancesMoved) {
+          try {
+            if (isTransferTransaction(transactionToDelete)) {
+              await syncTransferAccountDelta(transactionToDelete, 1);
+            } else {
+              await syncTransactionAccountDelta(transactionToDelete, -revertDelta);
+            }
+          } catch (rollbackError) {
+            console.error("Delete balance rollback failed", rollbackError);
+          }
+        }
         await rollbackWithReload();
       }
     }
@@ -531,16 +603,7 @@ function useSupabaseData() {
     }
   };
 
-  const transferFunds = async (fromAccount, toAccount, amount) => {
-    if (!fromAccount || !toAccount || !amount || amount <= 0) return;
-    const fromBalance = parseFloat(String(fromAccount.balance).replace(/,/g, '')) - amount;
-    const toBalance = parseFloat(String(toAccount.balance).replace(/,/g, '')) + amount;
-    const formatBal = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (fromAccount.id) await updateAccount(fromAccount.id, { balance: formatBal(fromBalance) });
-    if (toAccount.id) await updateAccount(toAccount.id, { balance: formatBal(toBalance) });
-  };
-
-  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds };
+  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget };
 }
 
 // ==========================================
@@ -1583,6 +1646,8 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   const [swipeX, setSwipeX] = useState(0);
   const [isRemoving, setIsRemoving] = useState(false);
   const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isHorizontalSwipe = useRef(false);
   const isDeleteRevealed = swipeX <= -40;
 
   useEffect(() => {
@@ -1592,11 +1657,21 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isHorizontalSwipe.current = false;
   };
 
   const handleTouchMove = (e) => {
     const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
     const diff = currentX - touchStartX.current;
+    const diffY = currentY - touchStartY.current;
+    if (!isHorizontalSwipe.current && Math.abs(diff) > Math.abs(diffY) + 6) {
+      isHorizontalSwipe.current = true;
+    }
+    if (isHorizontalSwipe.current && e.cancelable) {
+      e.preventDefault();
+    }
     if (diff < 0) setSwipeX(Math.max(diff, -80));
     else setSwipeX(0);
   };
@@ -1629,7 +1704,7 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''} ${isRemoving ? 'pointer-events-none' : ''}`}
-        style={{ transform: `translateX(${swipeX}px)` }}
+        style={{ transform: `translateX(${swipeX}px)`, touchAction: 'pan-y' }}
       >
         <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
         <div className="flex flex-col min-w-0 pr-[4px]"><div className="text-[13px] font-medium text-[#1c1c1e] mb-[1px] truncate">{tx.title}</div><div className="text-[11px] text-[#8e8e93] truncate">{tx.subtitle}</div></div>
@@ -1755,8 +1830,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
-      <div className="sticky top-0 z-[20] shrink-0 relative overflow-hidden bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
-        <div className="absolute inset-0 bg-[#f4f5f8] pointer-events-none"></div>
+      <div className="sticky top-0 z-[30] shrink-0 relative overflow-visible bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
+        <div className="absolute left-0 right-0 top-[-120px] bottom-[-8px] bg-[#f4f5f8] pointer-events-none"></div>
         <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
           <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
           <div className="flex items-center space-x-[16px]">
@@ -1766,8 +1841,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           </div>
         </div>
       </div>
-      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[19] shrink-0 relative overflow-hidden bg-[#f4f5f8] pt-[4px]" style={{ transform: 'translateZ(0)' }}>
-      <div className="absolute inset-0 bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
+      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[29] shrink-0 relative overflow-visible bg-[#f4f5f8] pt-[4px]" style={{ transform: 'translateZ(0)' }}>
+      <div className="absolute left-0 right-0 top-[-18px] bottom-[-12px] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
       <div className="px-[16px] flex items-center justify-between space-x-[8px] relative z-30">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
@@ -2376,7 +2451,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
-  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget, transferFunds } = useSupabaseData();
+  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget } = useSupabaseData();
   const activeTransactions = useMemo(
     () => transactions
       .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
@@ -2488,7 +2563,7 @@ export default function App() {
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
             ) : (
               <>
-                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
+                {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
                 {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}

@@ -176,7 +176,12 @@ const convertAmountToCny = (amount, currency, exchangeRates) => {
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
 };
 
-const isTransferTransaction = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+const isTransferTransaction = (tx) => {
+  const title = String(tx?.title || '');
+  const tag = String(tx?.tag || '');
+  if (tag === '调整' || title.includes('调整记录')) return false;
+  return tx?.tagType === 'transfer' || tag === '转账';
+};
 
 const isAdjustmentTransaction = (tx) => {
   const title = String(tx?.title || '');
@@ -284,7 +289,7 @@ const normalizeAiCategory = (value, isIncome = false) => {
   return EXPENSE_CATEGORIES.find((item) => item.name === source)?.name || INCOME_CATEGORIES.find((item) => item.name === source)?.name || '其他';
 };
 
-export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, exchangeRates, updateBudget, transferFunds, createTransaction, onOpenBills, onOpenProfile, onOpenSearch, notify }) {
+export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions = [], accounts = [], budget = 20000, exchangeRates, updateBudget, createTransaction, onOpenBills, onOpenProfile, onOpenSearch, notify }) {
   const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
@@ -807,12 +812,6 @@ ${transcript}
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
 
-    // Update both account balances in database
-    if (transferFunds && outAcc && inAcc) {
-      await transferFunds(outAcc, inAcc, amount);
-    }
-
-    // Record the transfer as a transaction
     await saveTransaction({
       dateLabel,
       iconBg: 'bg-[#8b5cf6]',
