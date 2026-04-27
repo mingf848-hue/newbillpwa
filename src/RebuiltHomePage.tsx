@@ -743,6 +743,7 @@ ${transcript}
         body: JSON.stringify({
           imageBase64,
           model: GEMINI_MODEL,
+          autoBook: false,
         }),
       });
       const data = await response.json();

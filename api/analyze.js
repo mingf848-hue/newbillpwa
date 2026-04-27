@@ -1,3 +1,5 @@
+import { requestSupabase, parseAmount, formatAmount, formatTransactionDate, matchAccountByHint } from './_supabase.js';
+
 const json = (res, statusCode, payload) => {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -5,6 +7,24 @@ const json = (res, statusCode, payload) => {
 };
 
 const cleanJson = (text) => String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+const normalizeCategory = (value, isIncome = false) => {
+  const source = String(value || '').trim();
+  if (!source) return isIncome ? '工资' : '其他';
+  if (/food|meal|餐|外卖/i.test(source)) return '餐饮';
+  if (/transport|taxi|metro|地铁|公交|交通/i.test(source)) return '交通';
+  if (/shop|shopping|购物|超市|商店/i.test(source)) return '购物';
+  if (/fun|game|娱乐|电影/i.test(source)) return '娱乐';
+  if (/rent|home|住房|房租/i.test(source)) return '住房';
+  if (/medical|health|医院|医疗/i.test(source)) return '医疗';
+  if (/education|study|学习|教育/i.test(source)) return '教育';
+  if (/invest|理财|收益|利息/i.test(source)) return '理财';
+  if (/salary|工资/i.test(source)) return '工资';
+  if (/bonus|奖金/i.test(source)) return '奖金';
+  if (/part[- ]?time|兼职/i.test(source)) return '兼职';
+  if (/transfer|转账|划转/i.test(source)) return '转账';
+  return source;
+};
+const TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { imageBase64, model } = req.body || {};
+    const { imageBase64, model, autoBook = true, transactionTime, manualPlatform } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY;
     const useModel = model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
@@ -80,7 +100,67 @@ export default async function handler(req, res) {
     const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
     const parsed = JSON.parse(cleanJson(text));
     const items = Array.isArray(parsed) ? parsed : [parsed];
-    json(res, 200, { success: true, items, rawText: text });
+
+    if (autoBook === false) {
+      json(res, 200, { success: true, items, rawText: text, autoBooked: false });
+      return;
+    }
+
+    const accounts = await requestSupabase('accounts?select=*');
+    const created = [];
+
+    for (const [index, item] of items.entries()) {
+      const isIncome = String(item?.type || '').toLowerCase() === 'income';
+      const amount = Math.abs(parseAmount(item?.amount));
+      if (!amount) continue;
+
+      const account = matchAccountByHint(accounts, manualPlatform || item?.accountHint || item?.account || item?.paymentMethod || '');
+      if (!account) continue;
+
+      const txDate = transactionTime ? new Date(transactionTime) : new Date();
+      txDate.setSeconds(txDate.getSeconds() + index);
+      const { dateLabel, fullDate, time } = formatTransactionDate(txDate);
+      const category = normalizeCategory(item?.category, isIncome);
+      const merchant = String(item?.merchant || item?.title || category || 'AI 识别记账').trim();
+      const note = String(item?.note || item?.product_name || merchant).trim();
+      const nextBalance = parseAmount(account.balance) + (isIncome ? amount : -amount);
+
+      await requestSupabase(`accounts?id=eq.${encodeURIComponent(account.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ balance: formatAmount(nextBalance) }),
+      });
+      account.balance = formatAmount(nextBalance);
+
+      const [transaction] = await requestSupabase('transactions', {
+        method: 'POST',
+        body: JSON.stringify({
+          dateLabel,
+          iconBg: 'bg-[#1677ff]',
+          iconType: account.icon || 'landmark',
+          title: merchant,
+          subtitle: account.name,
+          tag: category,
+          tagType: TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
+          amount: `${isIncome ? '+' : '-'}${formatAmount(amount)}`,
+          isIncome,
+          time,
+          fullDate,
+          currency: String(item?.currency || account.currency || 'CNY').toUpperCase(),
+          paymentMethod: account.name,
+          note,
+        }),
+      });
+      created.push(transaction);
+    }
+
+    json(res, 200, {
+      success: true,
+      items,
+      rawText: text,
+      autoBooked: true,
+      createdCount: created.length,
+      created,
+    });
   } catch (error) {
     json(res, 500, { error: error instanceof Error ? error.message : 'Unknown error' });
   }
