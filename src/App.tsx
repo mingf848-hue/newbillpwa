@@ -681,6 +681,7 @@ const CashIcon = ({ size = 36 }) => (
 );
 
 const CNYIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#E60012" /><text x="12" y="16.5" fontSize="13" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="sans-serif">¥</text></svg>);
+const AedIcon = () => (<svg viewBox="0 0 24 24" className="w-[20px] h-[20px] shrink-0"><circle cx="12" cy="12" r="12" fill="#00732F" /><text x="12" y="15.5" fontSize="7.5" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="sans-serif">AED</text></svg>);
 const TetherIcon = () => <BrandLogo type="usdt" size={20} />;
 const BitcoinIcon = () => <BrandLogo type="bitcoin" size={20} />;
 const EthereumIcon = () => <BrandLogo type="ethereum" size={20} />;
@@ -1668,7 +1669,7 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
     setIsRemoving(false);
   }, [tx.id, tx.fullDate, tx.amount]);
 
-  // Non-passive touchmove to block vertical scroll when swiping horizontally
+  // Non-passive touchmove with eager horizontal lock to block vertical scroll during swipe-delete
   useEffect(() => {
     const el = btnRef.current;
     if (!el) return;
@@ -1676,11 +1677,18 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
       const dx = e.touches[0].clientX - touchStartX.current;
       const dy = e.touches[0].clientY - touchStartY.current;
       if (gestureDir.current === 'none') {
-        if (Math.abs(dx) > Math.abs(dy) + 5) gestureDir.current = 'h';
-        else if (Math.abs(dy) > 5) gestureDir.current = 'v';
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+        // Lock direction as soon as either axis crosses a small threshold;
+        // horizontal wins on ties so a left swipe never starts vertical scrolling.
+        if (adx >= 3 && adx >= ady) {
+          gestureDir.current = 'h';
+        } else if (ady >= 3 && ady > adx) {
+          gestureDir.current = 'v';
+        }
       }
-      if (gestureDir.current === 'h' && e.cancelable) {
-        e.preventDefault();
+      if (gestureDir.current === 'h') {
+        if (e.cancelable) e.preventDefault();
         const newX = dx < 0 ? Math.max(dx, -80) : 0;
         swipeXRef.current = newX;
         setSwipeX(newX);
@@ -1769,45 +1777,68 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   const [selectedMonth, setSelectedMonth] = useState(4);
 
   // Pull-to-refresh state
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const billsContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const pullIndicatorRef = useRef<HTMLDivElement>(null);
+  const pullSpinnerRef = useRef<HTMLDivElement>(null);
   const pullStartYRef = useRef(0);
   const isPullingRef = useRef(false);
   const pullDistRef = useRef(0);
+  const pullRafRef = useRef<number | null>(null);
   const PULL_THRESHOLD = 64;
+  const PULL_MAX = PULL_THRESHOLD + 24;
 
   // Lock scroll when bill detail is open
   useScrollLock(!!selectedTx);
+
+  // Direct DOM updates for buttery-smooth pull (avoids React re-render on every touchmove)
+  const applyPullStyles = (dist: number, animated: boolean) => {
+    const ind = pullIndicatorRef.current;
+    const sp = pullSpinnerRef.current;
+    if (!ind) return;
+    ind.style.transition = animated ? 'height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none';
+    ind.style.height = `${dist}px`;
+    if (sp) {
+      sp.style.transition = animated ? 'opacity 0.2s ease, transform 0.2s ease' : 'none';
+      sp.style.opacity = String(Math.min(1, dist / 32));
+      sp.style.transform = `rotate(${(dist / PULL_THRESHOLD) * 360}deg)`;
+    }
+  };
 
   useEffect(() => {
     const scrollEl = document.querySelector('.scroll-area') as HTMLElement | null;
     if (!scrollEl) return;
 
     const onTouchStart = (e: TouchEvent) => {
+      if (isRefreshing) return;
       if (scrollEl.scrollTop <= 0) {
         pullStartYRef.current = e.touches[0].clientY;
         isPullingRef.current = true;
+        pullDistRef.current = 0;
       } else {
         isPullingRef.current = false;
       }
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!isPullingRef.current) return;
+      if (!isPullingRef.current || isRefreshing) return;
       const dy = e.touches[0].clientY - pullStartYRef.current;
       if (dy > 0 && scrollEl.scrollTop <= 0) {
         if (e.cancelable) e.preventDefault();
-        const dist = Math.min(dy * 0.55, PULL_THRESHOLD + 24);
+        // Rubber-band easing to simulate iOS feel
+        const dist = Math.min(PULL_MAX, dy <= PULL_THRESHOLD ? dy * 0.6 : PULL_THRESHOLD * 0.6 + (dy - PULL_THRESHOLD) * 0.25);
         pullDistRef.current = dist;
-        setPullDistance(dist);
-        setIsPulling(true);
+        if (pullRafRef.current == null) {
+          pullRafRef.current = requestAnimationFrame(() => {
+            pullRafRef.current = null;
+            applyPullStyles(pullDistRef.current, false);
+          });
+        }
       } else if (dy <= 0) {
         isPullingRef.current = false;
         pullDistRef.current = 0;
-        setPullDistance(0);
-        setIsPulling(false);
+        applyPullStyles(0, true);
       }
     };
 
@@ -1816,23 +1847,40 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       const dist = pullDistRef.current;
       isPullingRef.current = false;
       pullDistRef.current = 0;
-      setIsPulling(false);
-      setPullDistance(0);
+      if (pullRafRef.current != null) {
+        cancelAnimationFrame(pullRafRef.current);
+        pullRafRef.current = null;
+      }
       if (dist >= PULL_THRESHOLD) {
+        // Hold indicator open during refresh
+        const ind = pullIndicatorRef.current;
+        if (ind) {
+          ind.style.transition = 'height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1)';
+          ind.style.height = '56px';
+        }
         setIsRefreshing(true);
-        setTimeout(() => { setIsRefreshing(false); notify('数据已刷新'); }, 1500);
+        setTimeout(() => {
+          setIsRefreshing(false);
+          applyPullStyles(0, true);
+          notify('数据已刷新');
+        }, 1200);
+      } else {
+        applyPullStyles(0, true);
       }
     };
 
     scrollEl.addEventListener('touchstart', onTouchStart, { passive: true });
     scrollEl.addEventListener('touchmove', onTouchMove, { passive: false });
     scrollEl.addEventListener('touchend', onTouchEnd);
+    scrollEl.addEventListener('touchcancel', onTouchEnd);
     return () => {
       scrollEl.removeEventListener('touchstart', onTouchStart);
       scrollEl.removeEventListener('touchmove', onTouchMove);
       scrollEl.removeEventListener('touchend', onTouchEnd);
+      scrollEl.removeEventListener('touchcancel', onTouchEnd);
+      if (pullRafRef.current != null) cancelAnimationFrame(pullRafRef.current);
     };
-  }, []);
+  }, [isRefreshing]);
 
   const selectedMonthLabel = `2026年${selectedMonth}月`;
   const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
@@ -1910,27 +1958,55 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     [filteredTransactions, exchangeRates]
   );
 
-  const indicatorHeight = isRefreshing ? 56 : (isPulling ? pullDistance : 0);
-  const indicatorTransition = isPulling ? 'none' : 'height 0.3s ease-out';
-  const spinnerOpacity = isRefreshing ? 1 : Math.min(1, pullDistance / 32);
-  const spinnerRotate = isRefreshing ? undefined : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)`;
+  const previousPeriodStats = useMemo(() => {
+    const baseDate = new Date(2026, selectedMonth - 1, selectedDate);
+    const prevDate = new Date(baseDate);
+    if (selectedRange === '月') prevDate.setMonth(prevDate.getMonth() - 1);
+    else if (selectedRange === '周') prevDate.setDate(prevDate.getDate() - 7);
+    else prevDate.setDate(prevDate.getDate() - 1);
+    const { start: prevWeekStart, end: prevWeekEnd } = getWeekRange(prevDate);
+    const inRange = (txDate) => {
+      if (!txDate) return false;
+      if (selectedRange === '月') return txDate.getFullYear() === prevDate.getFullYear() && txDate.getMonth() === prevDate.getMonth();
+      if (selectedRange === '周') return txDate >= prevWeekStart && txDate <= prevWeekEnd;
+      return isSameDay(txDate, prevDate);
+    };
+    let income = 0, expense = 0;
+    transactions.forEach((tx) => {
+      const txDate = parseTransactionDate(tx.fullDate);
+      if (!inRange(txDate)) return;
+      if (!shouldCountInCashflow(tx)) return;
+      const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+      if (tx.isIncome) income += amount;
+      else expense += Math.abs(amount);
+    });
+    return { income, expense };
+  }, [transactions, selectedMonth, selectedDate, selectedRange, exchangeRates]);
+
+  const formatDeltaPct = (current, prev) => {
+    if (!prev) return current > 0 ? '+100.0%' : '0.0%';
+    const pct = ((current - prev) / prev) * 100;
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+  };
+  const expenseDeltaPct = formatDeltaPct(currentExpenseCny, previousPeriodStats.expense);
+  const incomeDeltaPct = formatDeltaPct(currentIncomeCny, previousPeriodStats.income);
 
   return (
     <div ref={billsContainerRef} className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
 
-      {/* Pull-to-refresh indicator */}
+      {/* Pull-to-refresh indicator (driven via direct DOM mutation for smoothness) */}
       <div
+        ref={pullIndicatorRef}
         className="flex items-center justify-center shrink-0 bg-[#f4f5f8] overflow-hidden"
-        style={{ height: indicatorHeight, transition: indicatorTransition }}
+        style={{ height: 0, willChange: 'height' }}
       >
-        {(indicatorHeight > 4) && (
-          <div
-            className={`w-9 h-9 rounded-full bg-white shadow-[0_2px_12px_rgba(0,0,0,0.1)] flex items-center justify-center ${isRefreshing ? 'animate-spin' : ''}`}
-            style={{ opacity: spinnerOpacity, transform: spinnerRotate }}
-          >
-            <RotateCcw className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} />
-          </div>
-        )}
+        <div
+          ref={pullSpinnerRef}
+          className={`w-9 h-9 rounded-full bg-white shadow-[0_2px_12px_rgba(0,0,0,0.1)] flex items-center justify-center ${isRefreshing ? 'animate-spin' : ''}`}
+          style={{ opacity: isRefreshing ? 1 : 0, willChange: 'transform, opacity' }}
+        >
+          <RotateCcw className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} />
+        </div>
       </div>
 
       <div className="sticky top-0 z-[30] shrink-0 relative overflow-visible bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
@@ -1938,7 +2014,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
           <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
           <div className="flex items-center space-x-[16px]">
-            <button aria-label="搜索" className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
+            <button aria-label="搜索" onClick={() => searchInputRef.current?.focus()} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
             <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity"><Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /><div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div></button>
             <ProfileAvatarButton onClick={onOpenProfile} />
           </div>
@@ -1967,7 +2043,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         </div>
         
         <div className="flex-1 flex items-center bg-white h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] cursor-text">
-          <Search className="w-[15px] h-[15px] text-[#c7c7cc] mr-[6px]" strokeWidth={2} /><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索账单、商家、备注" className="bg-transparent border-none outline-none text-[13px] text-[#1c1c1e] w-full placeholder-[#c7c7cc]"/>
+          <Search className="w-[15px] h-[15px] text-[#c7c7cc] mr-[6px]" strokeWidth={2} /><input ref={searchInputRef} type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索账单、商家、备注" className="bg-transparent border-none outline-none text-[13px] text-[#1c1c1e] w-full placeholder-[#c7c7cc]"/>
         </div>
 
         <div className="relative">
@@ -2014,13 +2090,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         <div className="bg-white rounded-[20px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex relative">
           <div className="flex-1 pr-[16px] relative">
             <div className="text-[11px] text-[#8e8e93] mb-[4px]">本期支出 (人民币)</div><div className="text-[20px] font-bold text-[#ff3b30] mb-[6px] leading-none">{formatDisplayMoney(currentExpenseCny)}</div>
-            <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 13.2%</span></div>
+            <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上{selectedRange === '日' ? '日' : selectedRange === '周' ? '周' : '月'}</span><span className={`flex items-center font-medium ${expenseDeltaPct.startsWith('-') ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}><ArrowUpRight className={`w-[9px] h-[9px] mr-[1px] ${expenseDeltaPct.startsWith('-') ? 'transform rotate-180' : ''}`} strokeWidth={3} /> {expenseDeltaPct}</span></div>
             <button aria-label="查看支出账单" onClick={() => setSelectedType('支出')} className="absolute bottom-[2px] right-[12px] w-[24px] h-[24px] bg-[#fff0f0] rounded-[6px] flex items-center justify-center active:bg-red-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></button>
           </div>
           <div className="w-[1px] bg-[#f0f0f0] my-[2px]"></div>
           <div className="flex-1 pl-[20px] relative">
             <div className="text-[11px] text-[#8e8e93] mb-[4px]">本期收入 (人民币)</div><div className="text-[20px] font-bold text-[#10b981] mb-[6px] leading-none">{formatDisplayMoney(currentIncomeCny)}</div>
-            <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[9px] h-[9px] mr-[1px]" strokeWidth={3} /> 18.7%</span></div>
+            <div className="flex items-center text-[10px]"><span className="text-[#8e8e93] mr-[4px]">较上{selectedRange === '日' ? '日' : selectedRange === '周' ? '周' : '月'}</span><span className={`flex items-center font-medium ${incomeDeltaPct.startsWith('-') ? 'text-[#ff3b30]' : 'text-[#10b981]'}`}><ArrowUpRight className={`w-[9px] h-[9px] mr-[1px] ${incomeDeltaPct.startsWith('-') ? 'transform rotate-180' : ''}`} strokeWidth={3} /> {incomeDeltaPct}</span></div>
             <button aria-label="查看收入账单" onClick={() => setSelectedType('收入')} className="absolute bottom-[2px] right-[4px] w-[24px] h-[24px] bg-[#ecfdf5] rounded-[6px] flex items-center justify-center active:bg-emerald-100 transition-colors"><ArrowUpRight className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2.5} /></button>
           </div>
         </div>
@@ -2098,14 +2174,17 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [accountName, setAccountName] = useState('');
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
 
-  useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || Boolean(assetKeyboardField));
+  useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
   const currenciesList = [
-    { id: 'USDT', icon: <TetherIcon />, label: 'USDT' }, { id: 'BTC', icon: <BitcoinIcon />, label: 'BTC' },
-    { id: 'ETH', icon: <EthereumIcon />, label: 'ETH' }, { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
+    { id: 'USDT', icon: <TetherIcon />, label: 'USDT' },
+    { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
+    { id: 'AED', icon: <AedIcon />, label: 'AED' },
   ];
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState<string>('cash');
 
-  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountName(accountData.name || ''); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); };
+  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountName(accountData.name || ''); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setSelectedIcon(accountData.iconType || (typeof accountData.icon === 'string' ? accountData.icon : 'cash')); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); };
   const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, icon, currency = 'AED') => {
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
@@ -2115,6 +2194,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAccountName(name);
     setAccountBalance('0.00');
     setSelectedCurrency(currency);
+    setSelectedIcon(inferredIcon);
     setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
     setIsAccountDetailModalOpen(true);
   };
@@ -2123,8 +2203,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const openAssetKeyboard = (field) => setAssetKeyboardField(field);
   const getAssetKeyboardValue = () => {
     if (assetKeyboardField === 'balance') return accountBalance;
-    if (assetKeyboardField === 'accountName') return accountName;
-    if (assetKeyboardField === 'exchangeAccountName') return exchangeAccountName;
     if (assetKeyboardField === 'limit') return aprValues.limit;
     if (assetKeyboardField === 'baseRate') return aprValues.baseRate;
     if (assetKeyboardField === 'overflowRate') return aprValues.overflowRate;
@@ -2133,14 +2211,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const setAssetKeyboardValue = (nextValue) => {
     if (assetKeyboardField === 'balance') {
       setAccountBalance(nextValue);
-      return;
-    }
-    if (assetKeyboardField === 'accountName') {
-      setAccountName(nextValue);
-      return;
-    }
-    if (assetKeyboardField === 'exchangeAccountName') {
-      setExchangeAccountName(nextValue);
       return;
     }
     if (assetKeyboardField === 'limit') {
@@ -2156,8 +2226,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     }
   };
   const assetKeyboardMeta = {
-    accountName: { label: '账户名称', suffix: '', mode: 'text', placeholder: '输入账户名称', quickActions: ['账户', '钱包', '银行卡', '现金', '储蓄', '信用卡'] },
-    exchangeAccountName: { label: '账户名称', suffix: '', mode: 'text', placeholder: '输入账户名称', quickActions: ['OKX', 'Binance', 'Bybit', 'Bitget', '现货账户', '资金账户'] },
     balance: { label: '余额', suffix: selectedCurrency },
     limit: { label: '高息限额', suffix: selectedCurrency },
     baseRate: { label: '基础利率 (APR)', suffix: '%' },
@@ -2174,6 +2242,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       name: nextName,
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency,
+      icon: selectedIcon || selectedAccount.iconType || 'cash',
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0'
@@ -2185,6 +2254,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         await updateAccount(selectedAccount.id, {
           name: payload.name,
           currency: payload.currency,
+          icon: payload.icon,
           apy_limit: payload.apy_limit,
           apy_base_rate: payload.apy_base_rate,
           apy_overflow_rate: payload.apy_overflow_rate,
@@ -2219,7 +2289,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         name: nextName,
         sub: selectedAccount.sub,
         type: selectedAccount.type || 'other',
-        icon: selectedAccount.iconType || 'cash',
         ...payload
       });
     }
@@ -2423,16 +2492,33 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">账户信息</h3>
                 <div className="mb-[14px]">
                   <label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户名称</label>
-                  <button onClick={() => openAssetKeyboard('exchangeAccountName')} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] active:bg-[#f9f9f9] transition-colors">
-                    {exchangeAccountName || '例如：OKX 现货账户'}
-                  </button>
+                  <input
+                    type="text"
+                    value={exchangeAccountName}
+                    onChange={(e) => setExchangeAccountName(e.target.value)}
+                    placeholder="例如：OKX 现货账户"
+                    className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 placeholder-[#c7c7cc] bg-white"
+                    autoComplete="off"
+                    maxLength={32}
+                  />
                 </div>
                 <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>
-                <div><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label><button className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">AED - 阿联酋迪拉姆</span><ChevronDown className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2} /></button></div>
+                <label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label>
+                <div className="flex space-x-[8px]">
+                  {currenciesList.map((currency) => {
+                    const isSelected = selectedCurrency === currency.id;
+                    return (
+                      <button key={currency.id} onClick={() => setSelectedCurrency(currency.id)} className={`flex-1 h-[44px] rounded-[12px] flex items-center justify-center space-x-[6px] transition-colors border-2 ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] bg-white active:bg-[#f9f9f9]'}`}>
+                        <span className="w-[20px] h-[20px] flex items-center justify-center shrink-0">{currency.icon}</span>
+                        <span className={`text-[14px] ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{currency.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="mb-[8px]">
                 <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
@@ -2454,7 +2540,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="relative bg-white w-full max-w-[410px] rounded-[22px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[76vh]">
             <div className="w-full flex justify-center pt-[6px] pb-[1px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[14px] pt-[4px] pb-[8px] shrink-0 border-b border-[#f4f5f8]">
-               <div className="flex items-center space-x-[8px]"><div className="w-[36px] h-[36px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0">{selectedAccount.icon}</div><div className="flex flex-col justify-center"><h2 className="text-[15px] font-bold text-[#1c1c1e] leading-tight mb-[1px]">{accountName || selectedAccount.name}</h2><span className="text-[11px] text-[#8e8e93] font-medium">{selectedAccount.sub}</span></div></div>
+               <div className="flex items-center space-x-[8px] min-w-0">
+                 <button onClick={() => setIsIconPickerOpen(true)} aria-label="更改头像" className="relative w-[36px] h-[36px] flex items-center justify-center bg-[#f4f5f8] rounded-full overflow-hidden shrink-0 active:scale-95 transition-transform">
+                   {getIconByString(selectedIcon, 'medium')}
+                   <span className="absolute -bottom-[1px] -right-[1px] w-[14px] h-[14px] rounded-full bg-[#1677ff] flex items-center justify-center shadow-[0_2px_6px_rgba(22,119,255,0.35)]"><Pen className="w-[8px] h-[8px] text-white" strokeWidth={3} /></span>
+                 </button>
+                 <div className="flex flex-col justify-center min-w-0"><h2 className="text-[15px] font-bold text-[#1c1c1e] leading-tight mb-[1px] truncate">{accountName || selectedAccount.name}</h2><span className="text-[11px] text-[#8e8e93] font-medium truncate">{selectedAccount.sub}</span></div>
+               </div>
                <div className="flex items-center space-x-[8px] shrink-0">
                  <button onClick={saveAccountDetail} className="h-[28px] px-[12px] rounded-full bg-[#1677ff] text-white text-[12px] font-bold active:bg-[#0f60d6] transition-colors">保存</button>
                  <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center hover:bg-[#e5e5ea] transition-colors"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
@@ -2463,9 +2555,15 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <div className="overflow-y-auto hide-scrollbar flex-1 min-h-0 px-[14px] pt-[8px] pb-[12px]">
               <div className="mb-[10px]">
                  <h3 className="text-[12px] font-bold text-[#1c1c1e] mb-[6px]">1. 账户名称</h3>
-                 <button onClick={() => openAssetKeyboard('accountName')} className="w-full border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] text-left text-[14px] font-medium text-[#1c1c1e] active:bg-[#f9f9f9] transition-colors">
-                   {accountName || '输入账户名称'}
-                 </button>
+                 <input
+                   type="text"
+                   value={accountName}
+                   onChange={(e) => setAccountName(e.target.value)}
+                   placeholder="输入账户名称"
+                   className="w-full border border-[#e5e5ea] rounded-[10px] px-[12px] py-[10px] text-left text-[14px] font-medium text-[#1c1c1e] outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 placeholder-[#c7c7cc] bg-white"
+                   autoComplete="off"
+                   maxLength={32}
+                 />
               </div>
               <div className="mb-[10px]">
                  <h3 className="text-[12px] font-bold text-[#1c1c1e] mb-[6px]">2. 币种</h3>
@@ -2497,6 +2595,33 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
                <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
                <button onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isIconPickerOpen && (
+        <div className="fixed inset-0 z-[140] flex justify-center items-end px-[14px] pb-[24px]">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsIconPickerOpen(false)} style={{ touchAction: 'none' }}></div>
+          <div className="relative bg-white w-full max-w-[410px] rounded-[22px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[70vh]">
+            <div className="w-full flex justify-center pt-[8px] pb-[2px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
+            <div className="flex items-center justify-between px-[18px] pt-[6px] pb-[10px] shrink-0 border-b border-[#f4f5f8]">
+              <h3 className="text-[15px] font-bold text-[#1c1c1e]">选择头像</h3>
+              <button onClick={() => setIsIconPickerOpen(false)} className="w-[26px] h-[26px] bg-[#f4f5f8] rounded-full flex items-center justify-center"><X className="w-[14px] h-[14px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+            </div>
+            <div className="overflow-y-auto hide-scrollbar flex-1 px-[16px] py-[14px]">
+              <div className="grid grid-cols-5 gap-[10px]">
+                {['cash', 'landmark', 'mastercard', ...Object.keys(BRAND_LOGOS)].filter((v, i, a) => a.indexOf(v) === i).map((iconKey) => {
+                  const isSelected = selectedIcon === iconKey;
+                  return (
+                    <button key={iconKey} onClick={() => { setSelectedIcon(iconKey); setIsIconPickerOpen(false); }} className={`relative aspect-square rounded-[14px] flex items-center justify-center transition-all active:scale-95 ${isSelected ? 'bg-[#f0f6ff] ring-2 ring-[#1677ff]' : 'bg-[#f7f8fb] active:bg-[#eef2f7]'}`}>
+                      <div className="w-[36px] h-[36px] flex items-center justify-center">{getIconByString(iconKey, 'medium')}</div>
+                      {isSelected && <div className="absolute -top-[2px] -right-[2px] w-[18px] h-[18px] bg-[#1677ff] rounded-full flex items-center justify-center shadow"><Check className="w-[11px] h-[11px] text-white" strokeWidth={3} /></div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] text-[#8e8e93] text-center mt-[14px]">头像图标由 Simple Icons / Clearbit API 提供</div>
             </div>
           </div>
         </div>

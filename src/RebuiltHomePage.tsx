@@ -57,6 +57,16 @@ const ProfileAvatarButton = ({ onClick }: { onClick?: () => void }) => (
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 
+const CURRENCY_SYMBOLS = {
+  CNY: '¥',
+  USD: '$',
+  USDT: 'USDT',
+  AED: 'AED',
+  BTC: '₿',
+  ETH: 'Ξ',
+};
+const getCurrencySymbol = (currency) => CURRENCY_SYMBOLS[String(currency || 'CNY').toUpperCase()] || String(currency || '¥');
+
 // --- 支出概览环形图 ---
 const DonutChart = () => (
   <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
@@ -310,7 +320,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [recordCategory, setRecordCategory] = useState('餐饮');
   const [recordCategoryIncome, setRecordCategoryIncome] = useState('工资');
   const [recordAccount, setRecordAccount] = useState(null);
-  const [recordDate, setRecordDate] = useState(new Date(2026, 3, 25, 9, 41));
+  const [recordDate, setRecordDate] = useState(() => new Date());
   const [recordNote, setRecordNote] = useState('');
   const [recordTag, setRecordTag] = useState('');
   const [activePicker, setActivePicker] = useState(null);
@@ -336,6 +346,15 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [transferInAccount, setTransferInAccount] = useState(null);
   const [isTransferKeyboardOpen, setIsTransferKeyboardOpen] = useState(false);
   const [transferPickerOpen, setTransferPickerOpen] = useState(null);
+
+  // Lock outer scroll while any home modal/keyboard is open
+  useEffect(() => {
+    const el = document.querySelector('.scroll-area') as HTMLElement | null;
+    if (!el) return;
+    const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen;
+    if (locked) el.style.overflow = 'hidden';
+    return () => { el.style.overflow = ''; };
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen]);
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
@@ -949,11 +968,17 @@ ${transcript}
             className="w-full h-[42px] bg-white rounded-[10px] px-[10px] text-[13px] font-medium text-[#1c1c1e] outline-none"
           />
           <div className="grid grid-cols-3 gap-[6px]">
-            {[
-              { label: '今天', date: new Date(2026, 3, 25, 9, 41) },
-              { label: '昨天', date: new Date(2026, 3, 24, 9, 41) },
-              { label: '月初', date: new Date(2026, 3, 1, 9, 41) },
-            ].map((item) => (
+            {(() => {
+              const now = new Date();
+              const today = new Date(now);
+              const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+              const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, now.getHours(), now.getMinutes());
+              return [
+                { label: '今天', date: today },
+                { label: '昨天', date: yesterday },
+                { label: '月初', date: monthStart },
+              ];
+            })().map((item) => (
               <button key={item.label} onClick={() => { setRecordDate(item.date); setActivePicker(null); }} className="h-[34px] bg-white rounded-[8px] text-[12px] font-medium text-[#1677ff] active:bg-gray-50">{item.label}</button>
             ))}
           </div>
@@ -1131,7 +1156,7 @@ ${transcript}
         </div>
 
         <div className="flex justify-between items-center px-[12px] py-[6px]">
-          <div onClick={() => { setActiveModal('record'); setShowInlineKeyboard(true); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
+          <div onClick={() => { setRecordDate(new Date()); setInputValue(''); setRecordNote(''); setRecordTag(''); setActivePicker(null); setActiveModal('record'); setShowInlineKeyboard(true); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
           <div onClick={() => setActiveModal('budget')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#10b981] rounded-full flex items-center justify-center shadow-md shadow-green-100/50"><PieChartIcon className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">预算</span></div>
           <div onClick={() => setActiveModal('transfer')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#8b5cf6] rounded-full flex items-center justify-center shadow-md shadow-purple-100/50"><ArrowRightLeft className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">转账</span></div>
           <div onPointerDown={handleAiStart} onPointerUp={handleAiEnd} onPointerCancel={handleAiEnd} className="flex flex-col items-center space-y-[6px] relative active:scale-95 transition-transform cursor-pointer touch-none"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><Mic className="w-[20px] h-[20px] text-white" strokeWidth={2} /><div className="absolute -top-[2px] -right-[4px] bg-gradient-to-r from-[#ff6b8b] to-[#ff8787] text-white text-[7px] font-extrabold px-[3px] py-[1.5px] rounded-full border border-white leading-none">AI</div></div><span className="text-[11px] font-medium text-[#1c1c1e]">智记</span></div>
@@ -1250,7 +1275,7 @@ ${transcript}
       </div>
 
       {/* AI 识别确认页 */}
-      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${activeModal === 'ai' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${activeModal === 'ai' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} style={{ touchAction: activeModal === 'ai' ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${activeModal === 'ai' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold text-[#1c1c1e]">确认记账</span></div>
         <div className="p-[16px] space-y-[12px]">
@@ -1270,7 +1295,7 @@ ${transcript}
       </div>
 
       {/* 记一笔面板 */}
-      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'record' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'record' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} style={{ touchAction: activeModal === 'record' ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 ${showInlineKeyboard ? 'bg-[#f4f5f8]' : 'bg-white'} rounded-t-[24px] z-[100] transition-all duration-300 ease-out shadow-2xl flex flex-col ${activeModal === 'record' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px]">
           <div className="flex flex-col items-center pt-[10px] pb-[8px] border-b border-[#f0f0f0]">
@@ -1284,7 +1309,7 @@ ${transcript}
             {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab); setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
           </div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={()=>setShowInlineKeyboard(true)}>
-            <span className="text-[20px] font-bold text-[#1c1c1e]">¥</span>
+            <span className="text-[20px] font-bold text-[#1c1c1e]">{getCurrencySymbol(recordAccount?.currency || 'CNY')}</span>
             <div className="flex items-center flex-1 ml-[10px] h-[30px]">
               <span className={`text-[24px] font-bold ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
               {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px]"></div>}
@@ -1343,7 +1368,7 @@ ${transcript}
       </div>
 
       {/* 预算管理面板 */}
-      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'budget' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'budget' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} style={{ touchAction: activeModal === 'budget' ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out flex flex-col pb-[24px] ${activeModal === 'budget' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">预算管理</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
         <div className="p-[16px] space-y-[14px]">
@@ -1353,7 +1378,7 @@ ${transcript}
         </div>
       </div>
 
-      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isBudgetKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsBudgetKeyboardOpen(false)} />
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isBudgetKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsBudgetKeyboardOpen(false)} style={{ touchAction: isBudgetKeyboardOpen ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isBudgetKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsBudgetKeyboardOpen(false)}>取消</span><span className="font-bold">修改预算</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>{const v = Number(budgetInput)||0; setBudgetAmount(v); if (updateBudget) updateBudget(v); setIsBudgetKeyboardOpen(false);}}>保存</span></div></div>
         <div className="p-[20px] bg-white flex items-center justify-center space-x-[8px] text-[32px] font-bold border-b border-gray-50"><span>¥</span><span>{budgetInput || '0'}</span><div className="w-[2px] h-[28px] bg-[#1677ff] animate-pulse"></div></div>
@@ -1369,7 +1394,7 @@ ${transcript}
       </div>
 
       {/* 转账管理面板 */}
-      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'transfer' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} />
+      <div className={`absolute inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${activeModal === 'transfer' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} style={{ touchAction: activeModal === 'transfer' ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[100] transition-transform duration-300 ease-out flex flex-col pb-[24px] ${activeModal === 'transfer' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><span className="text-[15px] font-bold">转账</span><button onClick={closeModals} className="absolute right-[16px] top-[10px] p-[4px] text-[#c7c7cc]"><X className="w-[20px] h-[20px]" /></button></div>
         <div className="p-[16px] space-y-[12px]">
@@ -1379,16 +1404,16 @@ ${transcript}
             {renderTransferAccountPicker('out')}
             <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} />
             {renderTransferAccountPicker('in')}
-            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `¥ ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} />
+            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} />
           </div>
           <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
         </div>
       </div>
 
-      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isTransferKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsTransferKeyboardOpen(false)} />
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isTransferKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsTransferKeyboardOpen(false)} style={{ touchAction: isTransferKeyboardOpen ? 'none' : 'auto' }} />
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isTransferKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsTransferKeyboardOpen(false)}>取消</span><span className="font-bold">转账金额</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>setIsTransferKeyboardOpen(false)}>确定</span></div></div>
-        <div className="p-[20px] bg-white flex items-center justify-center space-x-[8px] text-[32px] font-bold border-b border-gray-50"><span>¥</span><span>{transferAmount || '0'}</span><div className="w-[2px] h-[28px] bg-[#1677ff] animate-pulse"></div></div>
+        <div className="p-[20px] bg-white flex items-center justify-center space-x-[8px] text-[32px] font-bold border-b border-gray-50"><span>{getCurrencySymbol(transferOutAccount?.currency || 'CNY')}</span><span>{transferAmount || '0'}</span><div className="w-[2px] h-[28px] bg-[#1677ff] animate-pulse"></div></div>
         <div className="p-[16px] grid grid-cols-4 gap-[6px]">
           {['1','2','3','delete','4','5','6','clear','7','8','9','save','.','0'].map(k => {
             if (k === 'delete') return <button key={k} onClick={()=>handleKeyboardPress('delete', 'transfer')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><Delete className="w-[18px] h-[18px]" /></button>;
