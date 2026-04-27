@@ -88,17 +88,11 @@ export default async function handler(_req, res) {
 
       const interest = getDailyInterest(account);
       const platformMeta = inferPlatformMeta(account);
-      const nextBalance = parseAmount(account.balance) + interest;
       const year = localNow.getUTCFullYear();
       const month = localNow.getUTCMonth() + 1;
       const day = localNow.getUTCDate();
       const hours = `${localNow.getUTCHours()}`.padStart(2, '0');
       const minutes = `${localNow.getUTCMinutes()}`.padStart(2, '0');
-
-      await requestSupabase(`accounts?id=eq.${encodeURIComponent(account.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ balance: formatAmount(nextBalance) }),
-      });
 
       const [transaction] = await requestSupabase('transactions', {
         method: 'POST',
@@ -119,6 +113,19 @@ export default async function handler(_req, res) {
           note,
         }),
       });
+
+      try {
+        const nextBalance = parseAmount(account.balance) + interest;
+        await requestSupabase(`accounts?id=eq.${encodeURIComponent(account.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ balance: formatAmount(nextBalance) }),
+        });
+      } catch (error) {
+        await requestSupabase(`transactions?id=eq.${encodeURIComponent(transaction.id)}`, {
+          method: 'DELETE',
+        });
+        throw error;
+      }
       created.push(transaction);
     }
 

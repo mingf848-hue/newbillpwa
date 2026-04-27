@@ -123,14 +123,6 @@ export default async function handler(req, res) {
       const category = normalizeCategory(item?.category, isIncome);
       const merchant = String(item?.merchant || item?.title || category || 'AI 识别记账').trim();
       const note = String(item?.note || item?.product_name || merchant).trim();
-      const nextBalance = parseAmount(account.balance) + (isIncome ? amount : -amount);
-
-      await requestSupabase(`accounts?id=eq.${encodeURIComponent(account.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ balance: formatAmount(nextBalance) }),
-      });
-      account.balance = formatAmount(nextBalance);
-
       const [transaction] = await requestSupabase('transactions', {
         method: 'POST',
         body: JSON.stringify({
@@ -150,6 +142,20 @@ export default async function handler(req, res) {
           note,
         }),
       });
+
+      try {
+        const nextBalance = parseAmount(account.balance) + (isIncome ? amount : -amount);
+        await requestSupabase(`accounts?id=eq.${encodeURIComponent(account.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ balance: formatAmount(nextBalance) }),
+        });
+        account.balance = formatAmount(nextBalance);
+      } catch (error) {
+        await requestSupabase(`transactions?id=eq.${encodeURIComponent(transaction.id)}`, {
+          method: 'DELETE',
+        });
+        throw error;
+      }
       created.push(transaction);
     }
 

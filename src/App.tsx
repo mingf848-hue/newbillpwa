@@ -302,14 +302,32 @@ function useSupabaseData() {
     }));
   };
 
-  const syncAccountBalanceToDb = async (accountName, delta) => {
-    if (!accountName || !Number.isFinite(delta) || delta === 0) return;
-    const targetAccount = accounts.find((account) => account.name === accountName);
-    if (!targetAccount?.id) return;
-    const nextBalance = parseMoneyNumber(targetAccount.balance) + delta;
+  const findAccountByName = (accountName) => accounts.find((account) => account.name === accountName);
+
+  const syncAccountBalanceToDb = async (targetAccount, delta) => {
+    if (!targetAccount?.id || !Number.isFinite(delta) || delta === 0) return;
+    const currentBalance = parseMoneyNumber(targetAccount.balance);
+    const nextBalance = currentBalance + delta;
     await fetchSupabase(`accounts?id=eq.${encodeURIComponent(targetAccount.id)}`, "PATCH", {
       balance: formatDisplayMoney(nextBalance),
     });
+  };
+
+  const getTransactionSyncAccount = (txLike) => {
+    if (!txLike) return null;
+    return findAccountByName(txLike.paymentMethod) || findAccountByName(txLike.subtitle) || null;
+  };
+
+  const rollbackWithReload = async () => {
+    await reloadData();
+  };
+
+  const syncTransactionAccountDelta = async (txLike, delta) => {
+    if (!Number.isFinite(delta) || delta === 0) return;
+    const targetAccount = getTransactionSyncAccount(txLike);
+    if (!targetAccount) return;
+    applyAccountBalanceDelta(targetAccount.name, delta);
+    await syncAccountBalanceToDb(targetAccount, delta);
   };
 
   const getTransactionBalanceDelta = (txLike) => {
@@ -423,46 +441,49 @@ function useSupabaseData() {
     const balanceDelta = nextDelta - previousDelta;
 
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-    if (previousTransaction?.paymentMethod && balanceDelta !== 0) {
-      applyAccountBalanceDelta(previousTransaction.paymentMethod, balanceDelta);
-    }
     if (id !== undefined && id !== null) {
       try {
         await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "PATCH", updates);
-        if (previousTransaction?.paymentMethod && balanceDelta !== 0) {
-          await syncAccountBalanceToDb(previousTransaction.paymentMethod, balanceDelta);
-        }
+        await syncTransactionAccountDelta(previousTransaction, balanceDelta);
       }
-      catch (e) { console.error("Update failed", e); }
+      catch (e) { console.error("Update failed", e); await rollbackWithReload(); }
     }
   };
 
   const createTransaction = async (payload) => {
-    const [created] = await fetchSupabase("transactions", "POST", payload);
-    setTransactions(prev => [created, ...prev]);
-    const balanceDelta = getTransactionBalanceDelta(created);
-    if (created?.paymentMethod && balanceDelta !== 0) {
-      applyAccountBalanceDelta(created.paymentMethod, balanceDelta);
-      await syncAccountBalanceToDb(created.paymentMethod, balanceDelta);
+    try {
+      const [created] = await fetchSupabase("transactions", "POST", payload);
+      setTransactions(prev => [created, ...prev]);
+      const balanceDelta = getTransactionBalanceDelta(created);
+      try {
+        await syncTransactionAccountDelta(created, balanceDelta);
+      } catch (syncError) {
+        try {
+          await fetchSupabase(`transactions?id=eq.${encodeURIComponent(created.id)}`, "DELETE");
+        } catch (rollbackError) {
+          console.error("Create rollback failed", rollbackError);
+        }
+        throw syncError;
+      }
+      return created;
+    } catch (e) {
+      console.error("Create failed", e);
+      await rollbackWithReload();
+      throw e;
     }
-    return created;
   };
 
   const deleteTransaction = async (id) => {
     const transactionToDelete = transactions.find((tx) => tx.id === id);
     const revertDelta = -getTransactionBalanceDelta(transactionToDelete);
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
-    if (transactionToDelete?.paymentMethod && revertDelta !== 0) {
-      applyAccountBalanceDelta(transactionToDelete.paymentMethod, revertDelta);
-    }
     if (id !== undefined && id !== null) {
       try {
         await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "DELETE");
-        if (transactionToDelete?.paymentMethod && revertDelta !== 0) {
-          await syncAccountBalanceToDb(transactionToDelete.paymentMethod, revertDelta);
-        }
+        await syncTransactionAccountDelta(transactionToDelete, revertDelta);
       } catch (e) {
         console.error("Delete failed", e);
+        await rollbackWithReload();
       }
     }
   };
@@ -1860,7 +1881,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], exchangeRates, notify, createAccount, updateAccount, onOpenProfile, onOpenSearch }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], exchangeRates, notify, createAccount, updateAccount, createTransaction, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
@@ -1947,8 +1968,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const saveAccountDetail = async () => {
     if (!selectedAccount) return;
+    const nextName = accountName.trim() || selectedAccount.name;
+    const nextBalanceNumber = Number(accountBalance || 0);
+    const previousBalanceNumber = parseMoneyNumber(selectedAccount.balance);
+    const balanceDelta = nextBalanceNumber - previousBalanceNumber;
     const payload = {
-      name: accountName.trim() || selectedAccount.name,
+      name: nextName,
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency,
       apy_limit: aprValues.limit || '0',
@@ -1956,10 +1981,44 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       apy_overflow_rate: aprValues.overflowRate || '0'
     };
     if (selectedAccount.id) {
-      await updateAccount(selectedAccount.id, payload);
+      if (isAdjustOnly || balanceDelta === 0) {
+        await updateAccount(selectedAccount.id, payload);
+      } else {
+        await updateAccount(selectedAccount.id, {
+          name: payload.name,
+          currency: payload.currency,
+          apy_limit: payload.apy_limit,
+          apy_base_rate: payload.apy_base_rate,
+          apy_overflow_rate: payload.apy_overflow_rate,
+        });
+        if (createTransaction) {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = now.getMonth() + 1;
+          const day = now.getDate();
+          const hours = `${now.getHours()}`.padStart(2, '0');
+          const minutes = `${now.getMinutes()}`.padStart(2, '0');
+          await createTransaction({
+            dateLabel: `今天 ${month}月${day}日`,
+            iconBg: 'bg-[#1677ff]',
+            iconType: selectedAccount.icon || 'landmark',
+            title: `${nextName} 余额调整`,
+            subtitle: nextName,
+            tag: '其他',
+            tagType: balanceDelta > 0 ? 'investment' : 'shopping',
+            amount: `${balanceDelta > 0 ? '+' : '-'}${formatDisplayMoney(Math.abs(balanceDelta))}`,
+            isIncome: balanceDelta > 0,
+            time: `${hours}:${minutes}`,
+            fullDate: `${year}年${month}月${day}日 ${hours}:${minutes}`,
+            currency: selectedCurrency,
+            paymentMethod: selectedAccount.name,
+            note: '账户余额调整（计入收支）',
+          });
+        }
+      }
     } else {
       await createAccount({
-        name: accountName.trim() || selectedAccount.name,
+        name: nextName,
         sub: selectedAccount.sub,
         type: selectedAccount.type || 'other',
         icon: selectedAccount.iconType || 'cash',
@@ -2408,7 +2467,7 @@ export default function App() {
                 {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} transferFunds={transferFunds} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>

@@ -35,13 +35,6 @@ export default async function handler(req, res) {
     }
 
     const { dateLabel, fullDate, time } = formatTransactionDate(date);
-    const nextBalance = parseAmount(targetAccount.balance) - txAmount;
-
-    await requestSupabase(`accounts?id=eq.${encodeURIComponent(targetAccount.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ balance: formatAmount(nextBalance) }),
-    });
-
     const [transaction] = await requestSupabase('transactions', {
       method: 'POST',
       body: JSON.stringify({
@@ -61,6 +54,19 @@ export default async function handler(req, res) {
         note: note || `Apple Pay 自动记账${card ? ` · ${card}` : ''}`,
       }),
     });
+
+    try {
+      const nextBalance = parseAmount(targetAccount.balance) - txAmount;
+      await requestSupabase(`accounts?id=eq.${encodeURIComponent(targetAccount.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ balance: formatAmount(nextBalance) }),
+      });
+    } catch (error) {
+      await requestSupabase(`transactions?id=eq.${encodeURIComponent(transaction.id)}`, {
+        method: 'DELETE',
+      });
+      throw error;
+    }
 
     json(res, 200, {
       success: true,
