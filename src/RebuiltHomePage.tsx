@@ -784,7 +784,7 @@ ${transcript}
 
   const handleSaveRecord = async () => {
     const amount = Number(inputValue || 0);
-    if (!amount) return;
+    if (!amount) { notify?.('请输入金额'); setShowInlineKeyboard(true); return; }
     const isIncome = recordActiveTab === '收入';
     const category = isIncome ? recordCategoryIncome : recordCategory;
     const account = recordAccount;
@@ -822,9 +822,13 @@ ${transcript}
 
   const handleSaveTransfer = async () => {
     const amount = Number(transferAmount || 0);
-    if (!amount) return;
+    if (!amount) { notify?.('请输入转账金额'); return; }
     const outAcc = transferOutAccount || accounts[0];
     const inAcc = transferInAccount || accounts[1] || accounts[0];
+    if (outAcc && inAcc && outAcc.id && outAcc.id === inAcc.id) {
+      notify?.('转出与转入账户不能相同');
+      return;
+    }
     const outName = outAcc ? outAcc.name : '转出账户';
     const inName = inAcc ? inAcc.name : '转入账户';
     const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';

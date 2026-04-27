@@ -1772,9 +1772,10 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   const [selectedRange, setSelectedRange] = useState('月');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(23);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().getDate());
   const [calendarView, setCalendarView] = useState('月');
-  const [selectedMonth, setSelectedMonth] = useState(4);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
 
   // Pull-to-refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1882,7 +1883,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     };
   }, [isRefreshing]);
 
-  const selectedMonthLabel = `2026年${selectedMonth}月`;
+  const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
   const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
   const handleSave = () => {
     if (!selectedTx) return;
@@ -1902,7 +1903,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
 
   const filteredData = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
-    const baseDate = new Date(2026, selectedMonth - 1, selectedDate);
+    const baseDate = new Date(selectedYear, selectedMonth - 1, selectedDate);
     const { start: weekStart, end: weekEnd } = getWeekRange(baseDate);
     const validTxs = transactions.filter(tx => {
       const txDate = parseTransactionDate(tx.fullDate);
@@ -1943,7 +1944,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         totalIncome: income.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})
       };
     });
-  }, [transactions, selectedFilter, selectedType, selectedRange, searchQuery, selectedMonth, selectedDate, exchangeRates]);
+  }, [transactions, selectedFilter, selectedType, selectedRange, searchQuery, selectedYear, selectedMonth, selectedDate, exchangeRates]);
 
   const filteredTransactions = useMemo(
     () => filteredData.flatMap((group) => group.transactions),
@@ -1959,7 +1960,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   );
 
   const previousPeriodStats = useMemo(() => {
-    const baseDate = new Date(2026, selectedMonth - 1, selectedDate);
+    const baseDate = new Date(selectedYear, selectedMonth - 1, selectedDate);
     const prevDate = new Date(baseDate);
     if (selectedRange === '月') prevDate.setMonth(prevDate.getMonth() - 1);
     else if (selectedRange === '周') prevDate.setDate(prevDate.getDate() - 7);
@@ -1981,7 +1982,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       else expense += Math.abs(amount);
     });
     return { income, expense };
-  }, [transactions, selectedMonth, selectedDate, selectedRange, exchangeRates]);
+  }, [transactions, selectedYear, selectedMonth, selectedDate, selectedRange, exchangeRates]);
 
   const formatDeltaPct = (current, prev) => {
     if (!prev) return current > 0 ? '+100.0%' : '0.0%';
@@ -2036,7 +2037,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
                       <button key={month} onClick={() => setSelectedMonth(month)} className={`h-[42px] rounded-[12px] text-[14px] transition-all ${selectedMonth === month ? 'bg-[#1677ff] text-white font-semibold shadow-[0_6px_16px_rgba(22,119,255,0.24)]' : 'bg-[#f7f8fa] text-[#3a3a3c] font-medium active:bg-[#eef2f7]'}`}>{month}月</button>
                     ))}
                 </div>
-                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => setSelectedMonth(4)} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">本月</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
+                <div className="flex items-center justify-between mt-[16px] px-[4px]"><button onClick={() => { const now = new Date(); setSelectedYear(now.getFullYear()); setSelectedMonth(now.getMonth() + 1); setSelectedDate(now.getDate()); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">本月</button><button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button></div>
               </div>
             </>
           )}
@@ -2184,13 +2185,25 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState<string>('cash');
 
-  const handleOpenAccountDetail = (accountData) => { setSelectedAccount(accountData); setAccountName(accountData.name || ''); setAccountBalance(accountData.balance.replace(/,/g, '')); setSelectedCurrency(accountData.currency || 'USDT'); setSelectedIcon(accountData.iconType || (typeof accountData.icon === 'string' ? accountData.icon : 'cash')); setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' }); setIsAccountDetailModalOpen(true); };
+  const handleOpenAccountDetail = (accountData) => {
+    if (!accountData) return;
+    setSelectedAccount(accountData);
+    setAccountName(accountData.name || '');
+    setAccountBalance(String(accountData.balance ?? '').replace(/,/g, ''));
+    setSelectedCurrency(accountData.currency || 'USDT');
+    const iconStr = typeof accountData.icon === 'string'
+      ? accountData.icon
+      : (typeof accountData.iconType === 'string' ? accountData.iconType : 'cash');
+    setSelectedIcon(iconStr || 'cash');
+    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' });
+    setIsAccountDetailModalOpen(true);
+  };
   const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
-  const handleOpenCustomAccount = (name, icon, currency = 'AED') => {
+  const handleOpenCustomAccount = (name, _iconNode, currency = 'AED') => {
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
     const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
     setIsAddAccountModalOpen(false);
-    setSelectedAccount({ name, sub: '新账户', balance: '0.00', currency, icon, type: inferredType, iconType: inferredIcon });
+    setSelectedAccount({ name, sub: '新账户', balance: '0.00', currency, icon: inferredIcon, type: inferredType, iconType: inferredIcon });
     setAccountName(name);
     setAccountBalance('0.00');
     setSelectedCurrency(currency);
@@ -2349,7 +2362,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             {chunks.map((chunk, chunkIdx) => (
               <div key={chunkIdx} className={`w-full flex-shrink-0 snap-center flex flex-col ${spaceY} ${chunkIdx > 0 ? 'pl-[8px]' : ''}`}>
                 {chunk.map(acc => (
-                  <AccountRow key={acc.id || acc.name} icon={getIconByString(acc.icon)} name={acc.name} balance={acc.balance} onClick={() => handleOpenAccountDetail({...acc, icon: getIconByString(acc.icon, 'large')})} />
+                  <AccountRow key={acc.id || acc.name} icon={getIconByString(acc.icon)} name={acc.name} balance={acc.balance} onClick={() => handleOpenAccountDetail(acc)} />
                 ))}
               </div>
             ))}
@@ -2395,7 +2408,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         </div>
 
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
-          <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => accounts[0] ? handleOpenAccountDetail({...accounts[0], icon: getIconByString(accounts[0].icon, 'large')}) : notify('暂无账户详情')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
+          <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => accounts[0] ? handleOpenAccountDetail(accounts[0]) : notify('暂无账户详情')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
           <div className="flex items-center justify-between">
             <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{formatDisplayMoney(totalAssets)}</span><span className="text-[9px] font-semibold text-[#8e8e93]">元</span></div></div>
             <div className="flex-1 ml-[16px] flex flex-col space-y-[8px]">
@@ -2419,7 +2432,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             {transactions.slice(0, 4).map((tx, idx, arr) => {
               const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
               return (
-                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail(relatedAcc); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                   <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
@@ -2640,7 +2653,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
               {transactions.map((tx, i, arr) => {
                 const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
                 return (
-                  <button key={tx.id || i} onClick={() => { if (relatedAcc) { setIsChangesModalOpen(false); handleOpenAccountDetail({...relatedAcc, icon: getIconByString(relatedAcc.icon, 'large')}); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                  <button key={tx.id || i} onClick={() => { if (relatedAcc) { setIsChangesModalOpen(false); handleOpenAccountDetail(relatedAcc); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                     <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                     <div className="flex-1 flex flex-col justify-center ml-[12px] py-[2px]">
                       <div className="flex justify-between items-center"><span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span><div className="grid grid-cols-[70px_40px_60px] gap-0 items-center shrink-0"><span className={`text-[14px] font-bold text-right tracking-tight ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93] text-center">{tx.currency}</span><span className="text-[11px] font-medium text-[#8e8e93] text-right">{tx.time}</span></div></div>
