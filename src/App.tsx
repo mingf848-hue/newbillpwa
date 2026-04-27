@@ -1831,7 +1831,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
       <div className="sticky top-0 z-[30] shrink-0 relative overflow-visible bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
-        <div className="absolute left-0 right-0 top-[-120px] bottom-[-8px] bg-[#f4f5f8] pointer-events-none"></div>
+        <div className="absolute left-0 right-0 top-[-120px] bottom-[-14px] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
         <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
           <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
           <div className="flex items-center space-x-[16px]">
@@ -1840,10 +1840,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
             <ProfileAvatarButton onClick={onOpenProfile} />
           </div>
         </div>
-      </div>
-      <div className="sticky top-[calc(env(safe-area-inset-top,52px)+54px)] z-[29] shrink-0 relative overflow-visible bg-[#f4f5f8] pt-[4px]" style={{ transform: 'translateZ(0)' }}>
-      <div className="absolute left-0 right-0 top-[-18px] bottom-[-12px] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
-      <div className="px-[16px] flex items-center justify-between space-x-[8px] relative z-30">
+      <div className="relative z-10 pt-[4px] pb-[10px]">
+      <div className="px-[16px] flex items-center justify-between space-x-[8px]">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
             <Calendar className={`w-[15px] h-[15px] ${isCalendarOpen ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={2} /><span className="text-[13px] font-medium">{selectedMonthLabel}</span><ChevronDown className={`w-[13px] h-[13px] ${isCalendarOpen ? 'text-[#1677ff]' : 'text-[#8e8e93]'}`} strokeWidth={2.5} />
@@ -1895,7 +1893,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         </div>
       </div>
 
-      <div className="px-[16px] mt-[12px] flex items-center justify-between relative z-10">
+      <div className="px-[16px] mt-[12px] flex items-center justify-between">
         <div className="flex space-x-[6px]">
           {['全部', '支出', '收入', '理财', '转账'].map((item) => (<button key={item} onClick={() => setSelectedType(item)} className={`whitespace-nowrap px-[12px] py-[5px] rounded-[8px] text-[13px] font-medium transition-all active:scale-95 ${selectedType === item ? 'bg-[#1677ff] text-white shadow-[0_2px_8px_rgba(22,119,255,0.2)]' : 'bg-white text-[#5c5c5e] shadow-[0_1px_4px_rgba(0,0,0,0.02)] hover:bg-gray-50'}`}>{item}</button>))}
         </div>
@@ -1906,6 +1904,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         </div>
       </div>
 
+      </div>
       </div>
 
       <div className="px-[16px] mt-[16px] relative z-10">
