@@ -290,40 +290,95 @@ function useSupabaseData() {
   const [exchangeRates, setExchangeRates] = useState(() => readCachedExchangeRates() || { ...FALLBACK_EXCHANGE_RATES });
   const [loading, setLoading] = useState(true);
 
+  const applyAccountBalanceDelta = (accountName, delta) => {
+    if (!accountName || !Number.isFinite(delta) || delta === 0) return;
+    setAccounts((prev) => prev.map((account) => {
+      if (account.name !== accountName) return account;
+      const nextBalance = parseMoneyNumber(account.balance) + delta;
+      return {
+        ...account,
+        balance: formatDisplayMoney(nextBalance),
+      };
+    }));
+  };
+
+  const syncAccountBalanceToDb = async (accountName, delta) => {
+    if (!accountName || !Number.isFinite(delta) || delta === 0) return;
+    const targetAccount = accounts.find((account) => account.name === accountName);
+    if (!targetAccount?.id) return;
+    const nextBalance = parseMoneyNumber(targetAccount.balance) + delta;
+    await fetchSupabase(`accounts?id=eq.${encodeURIComponent(targetAccount.id)}`, "PATCH", {
+      balance: formatDisplayMoney(nextBalance),
+    });
+  };
+
+  const getTransactionBalanceDelta = (txLike) => {
+    if (!txLike || isTransferTransaction(txLike) || isInternalAccountTransferTransaction(txLike)) return 0;
+    const amount = parseMoneyNumber(txLike.amount);
+    if (!amount) return 0;
+    return txLike.isIncome ? amount : -amount;
+  };
+
+  const reloadData = async ({ withLoading = false } = {}) => {
+    try {
+      if (withLoading) setLoading(true);
+      const [accs, txs] = await Promise.all([
+        fetchSupabase("accounts?select=*"),
+        fetchSupabase("transactions?select=*"),
+      ]);
+      setAccounts(Array.isArray(accs) ? accs : []);
+      setTransactions(Array.isArray(txs) ? txs : []);
+
+      try {
+        const settings = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+        if (settings && settings.length > 0) setBudget(Number(settings[0].value) || 20000);
+      } catch {}
+    } catch (e) {
+      console.error("Reload Error:", e);
+    } finally {
+      if (withLoading) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
 
-    const initData = async () => {
+    reloadData({ withLoading: true }).then(async () => {
       try {
-        setLoading(true);
-        let accs = [];
-        let txs = [];
-        try { accs = await fetchSupabase("accounts?select=*"); } catch (e) { console.warn("Accounts table missing or fetch failed"); }
-        try { txs = await fetchSupabase("transactions?select=*"); } catch (e) { console.warn("Transactions table missing or fetch failed"); }
-
-        // Load budget from settings table or localStorage fallback
-        try {
-          const settings = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
-          if (settings && settings.length > 0) setBudget(Number(settings[0].value) || 20000);
-          else {
-            const ls = localStorage.getItem('monthly_budget');
-            if (ls) setBudget(Number(ls) || 20000);
-          }
-        } catch (e) {
+        const settings = await fetchSupabase("settings?key=eq.monthly_budget&select=*");
+        if (settings && settings.length > 0) setBudget(Number(settings[0].value) || 20000);
+        else {
           const ls = localStorage.getItem('monthly_budget');
           if (ls) setBudget(Number(ls) || 20000);
         }
-
-        setAccounts(accs);
-        setTransactions(txs);
       } catch (e) {
-        console.error("Initialization Error:", e);
-      } finally {
-        setLoading(false);
+        const ls = localStorage.getItem('monthly_budget');
+        if (ls) setBudget(Number(ls) || 20000);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilitySync = () => {
+      if (document.visibilityState === 'visible') {
+        reloadData();
       }
     };
-    initData();
+    const handleFocusSync = () => reloadData();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        reloadData();
+      }
+    }, 20000);
+
+    window.addEventListener('focus', handleFocusSync);
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+    return () => {
+      window.removeEventListener('focus', handleFocusSync);
+      document.removeEventListener('visibilitychange', handleVisibilitySync);
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -361,9 +416,23 @@ function useSupabaseData() {
   }, [accounts, transactions]);
 
   const updateTransaction = async (id, updates) => {
+    const previousTransaction = transactions.find((tx) => tx.id === id);
+    const nextTransaction = previousTransaction ? { ...previousTransaction, ...updates } : null;
+    const previousDelta = getTransactionBalanceDelta(previousTransaction);
+    const nextDelta = getTransactionBalanceDelta(nextTransaction);
+    const balanceDelta = nextDelta - previousDelta;
+
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    if (previousTransaction?.paymentMethod && balanceDelta !== 0) {
+      applyAccountBalanceDelta(previousTransaction.paymentMethod, balanceDelta);
+    }
     if (id !== undefined && id !== null) {
-      try { await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "PATCH", updates); }
+      try {
+        await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "PATCH", updates);
+        if (previousTransaction?.paymentMethod && balanceDelta !== 0) {
+          await syncAccountBalanceToDb(previousTransaction.paymentMethod, balanceDelta);
+        }
+      }
       catch (e) { console.error("Update failed", e); }
     }
   };
@@ -371,14 +440,27 @@ function useSupabaseData() {
   const createTransaction = async (payload) => {
     const [created] = await fetchSupabase("transactions", "POST", payload);
     setTransactions(prev => [created, ...prev]);
+    const balanceDelta = getTransactionBalanceDelta(created);
+    if (created?.paymentMethod && balanceDelta !== 0) {
+      applyAccountBalanceDelta(created.paymentMethod, balanceDelta);
+      await syncAccountBalanceToDb(created.paymentMethod, balanceDelta);
+    }
     return created;
   };
 
   const deleteTransaction = async (id) => {
+    const transactionToDelete = transactions.find((tx) => tx.id === id);
+    const revertDelta = -getTransactionBalanceDelta(transactionToDelete);
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    if (transactionToDelete?.paymentMethod && revertDelta !== 0) {
+      applyAccountBalanceDelta(transactionToDelete.paymentMethod, revertDelta);
+    }
     if (id !== undefined && id !== null) {
       try {
         await fetchSupabase(`transactions?id=eq.${encodeURIComponent(id)}`, "DELETE");
+        if (transactionToDelete?.paymentMethod && revertDelta !== 0) {
+          await syncAccountBalanceToDb(transactionToDelete.paymentMethod, revertDelta);
+        }
       } catch (e) {
         console.error("Delete failed", e);
       }
