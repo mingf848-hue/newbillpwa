@@ -2174,6 +2174,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [exchangeAccountName, setExchangeAccountName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState<string>('cash');
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2182,8 +2184,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     { id: 'CNY', icon: <CNYIcon />, label: 'CNY' },
     { id: 'AED', icon: <AedIcon />, label: 'AED' },
   ];
-  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
-  const [selectedIcon, setSelectedIcon] = useState<string>('cash');
 
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
