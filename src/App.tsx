@@ -7,7 +7,8 @@ import {
   Home, FileText, PieChart, Wallet, PenLine, BarChart2, PieChart as PieChartIcon,
   ArrowRightLeft, AlertTriangle, ArrowDownRight, TrendingUp, X, ArrowUp, Info,
   Filter, Landmark, CreditCard, Tag as TagIcon, CalendarDays, Pen, Check,
-  ChevronLeft, Plus, Banknote, MoreHorizontal, User, Shield, Globe, HelpCircle
+  ChevronLeft, Plus, Banknote, MoreHorizontal, User, Shield, Globe, HelpCircle,
+  RotateCcw
 } from 'lucide-react';
 
 // ==========================================
@@ -619,6 +620,18 @@ const LogoIcon = () => (
 );
 
 // ==========================================
+// SCROLL LOCK UTILITY
+// ==========================================
+const useScrollLock = (locked: boolean) => {
+  useEffect(() => {
+    const el = document.querySelector('.scroll-area') as HTMLElement | null;
+    if (!el) return;
+    if (locked) el.style.overflow = 'hidden';
+    return () => { el.style.overflow = ''; };
+  }, [locked]);
+};
+
+// ==========================================
 // BRAND LOGO API CONFIGURATION
 // ==========================================
 const BRAND_LOGOS = {
@@ -647,20 +660,15 @@ const BRAND_LOGOS = {
 
 const BrandLogo = ({ type, size = 36 }) => {
   const [error, setError] = useState(false);
-  const config = BRAND_LOGOS[type];
+  const config = (type && BRAND_LOGOS[type]) ? BRAND_LOGOS[type] : BRAND_LOGOS.mastercard;
   const imgSize = Math.round(size * 0.6);
-  if (!config) return (
-    <div className="rounded-full flex items-center justify-center shrink-0 bg-[#8e8e93]" style={{ width: size, height: size }}>
-      <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
-    </div>
-  );
   return (
     <div className="rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size, backgroundColor: config.bg }}>
       {error
         ? config.fallbackText
           ? <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 800, color: config.textColor || '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>{config.fallbackText}</span>
-          : <Landmark style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
-        : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
+          : <CreditCard style={{ width: imgSize, height: imgSize }} className="text-[#eb001b]" strokeWidth={2} />
+        : <img src={config.url} alt={type || 'bank'} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
       }
     </div>
   );
@@ -885,7 +893,7 @@ const ProfileSheet = ({ isOpen, onClose }) => {
   ];
   return (
     <div className="fixed inset-0 z-[800] flex justify-center items-end">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[calc(24px+env(safe-area-inset-bottom))] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
         <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
         <div className="flex items-center space-x-[14px] mb-[20px] pb-[20px] border-b border-[#f4f5f8]">
@@ -917,7 +925,7 @@ const SearchModal = ({ isOpen, onClose, transactions }) => {
   ).slice(0, 30);
   return (
     <div className="fixed inset-0 z-[800] flex justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative w-full max-w-[430px] bg-[#f4f5f8] flex flex-col h-full animate-in fade-in duration-150">
         <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[12px] bg-white border-b border-[#f0f0f0]">
           <div className="flex items-center space-x-[10px]">
@@ -1040,7 +1048,7 @@ const MessageCenterModal = ({ isOpen, onClose, notify, exchangeRates, transactio
   };
   return (
     <div className="fixed inset-0 z-[600] flex justify-center">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] transition-opacity" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] transition-opacity" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative w-full max-w-[430px] h-full pointer-events-none">
           <div className="absolute top-[86px] right-[16px] w-[320px] bg-white rounded-[24px] shadow-[0_12px_40px_rgba(0,0,0,0.12)] p-[16px] pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="absolute -top-[6px] right-[58px] w-[14px] h-[14px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
@@ -1235,6 +1243,8 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   const [trendRange, setTrendRange] = useState({ start: 1, end: latestTxDate.getMonth() + 1 });
   const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
   const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
+
+  useScrollLock(isInsightModalOpen || isDetailModalOpen);
 
   useEffect(() => {
     setSelectedYear(latestTxDate.getFullYear());
@@ -1437,7 +1447,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
             </button>
             {isTrendRangeOpen && (
               <>
-                <div className="fixed inset-0 z-[40]" onClick={() => setIsTrendRangeOpen(false)}></div>
+                <div className="fixed inset-0 z-[40]" onClick={() => setIsTrendRangeOpen(false)} style={{ touchAction: 'none' }}></div>
                 <div className="absolute right-0 top-[34px] z-[50] w-[220px] rounded-[16px] bg-white p-[14px] shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
                   <div className="mb-[10px] text-[12px] font-semibold text-[#1c1c1e]">选择月份区间</div>
                   <div className="mb-[10px]">
@@ -1565,7 +1575,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
 
       {isInsightModalOpen && (
         <div className="fixed inset-0 z-[300] flex justify-center items-end px-[14px] pb-[92px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsInsightModalOpen(false)} style={{ touchAction: 'none' }}></div>
           <div className="relative w-full max-w-[410px] max-h-[62vh] overflow-y-auto bg-white rounded-[22px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[14px] flex flex-col hide-scrollbar">
             <div className="w-[34px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mt-[8px] mb-[10px]"></div>
             <div className="px-[18px] flex justify-between items-start">
@@ -1601,7 +1611,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
 
       {isDetailModalOpen && (
         <div className="fixed inset-0 z-[400] flex justify-center items-end px-[12px] pb-[20px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsDetailModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200" onClick={() => setIsDetailModalOpen(false)} style={{ touchAction: 'none' }}></div>
           <div className="relative w-full max-w-[430px] bg-white rounded-[24px] shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[max(24px,env(safe-area-inset-bottom))] pt-[12px] px-[20px] flex flex-col max-h-[92vh] overflow-y-auto hide-scrollbar">
             <div className="w-[36px] h-[4px] bg-[#e5e5ea] rounded-full mx-auto mb-[20px]"></div>
             <div className="relative">
@@ -1647,38 +1657,50 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   const [isRemoving, setIsRemoving] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
-  const isHorizontalSwipe = useRef(false);
+  const gestureDir = useRef<'none'|'h'|'v'>('none');
+  const swipeXRef = useRef(0);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const isDeleteRevealed = swipeX <= -40;
 
   useEffect(() => {
     setSwipeX(0);
+    swipeXRef.current = 0;
     setIsRemoving(false);
   }, [tx.id, tx.fullDate, tx.amount]);
+
+  // Non-passive touchmove to block vertical scroll when swiping horizontally
+  useEffect(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const onMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - touchStartX.current;
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (gestureDir.current === 'none') {
+        if (Math.abs(dx) > Math.abs(dy) + 5) gestureDir.current = 'h';
+        else if (Math.abs(dy) > 5) gestureDir.current = 'v';
+      }
+      if (gestureDir.current === 'h' && e.cancelable) {
+        e.preventDefault();
+        const newX = dx < 0 ? Math.max(dx, -80) : 0;
+        swipeXRef.current = newX;
+        setSwipeX(newX);
+      }
+    };
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onMove);
+  }, []);
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    isHorizontalSwipe.current = false;
-  };
-
-  const handleTouchMove = (e) => {
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const diff = currentX - touchStartX.current;
-    const diffY = currentY - touchStartY.current;
-    if (!isHorizontalSwipe.current && Math.abs(diff) > Math.abs(diffY) + 6) {
-      isHorizontalSwipe.current = true;
-    }
-    if (isHorizontalSwipe.current && e.cancelable) {
-      e.preventDefault();
-    }
-    if (diff < 0) setSwipeX(Math.max(diff, -80));
-    else setSwipeX(0);
+    gestureDir.current = 'none';
   };
 
   const handleTouchEnd = () => {
-    if (swipeX < -40) setSwipeX(-80);
-    else setSwipeX(0);
+    gestureDir.current = 'none';
+    const cur = swipeXRef.current;
+    if (cur < -40) { swipeXRef.current = -80; setSwipeX(-80); }
+    else { swipeXRef.current = 0; setSwipeX(0); }
   };
 
   const handleDeleteClick = () => {
@@ -1689,19 +1711,16 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
 
   const handleRowClick = () => {
     if (isRemoving) return;
-    if (swipeX !== 0) {
-      setSwipeX(0);
-      return;
-    }
+    if (swipeX !== 0) { setSwipeX(0); swipeXRef.current = 0; return; }
     onEdit(tx);
   };
 
   return (
     <div className={`relative overflow-hidden bg-white ${isRemoving ? 'bill-row-shatter' : ''}`}>
       <button
+        ref={btnRef}
         onClick={handleRowClick}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         className={`w-full grid grid-cols-[36px_1fr_40px_105px] gap-[10px] items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-all text-left ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''} ${isRemoving ? 'pointer-events-none' : ''}`}
         style={{ transform: `translateX(${swipeX}px)`, touchAction: 'pan-y' }}
@@ -1715,10 +1734,7 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
         </div>
       </button>
       <button
-        onClick={(e) => {
-          e.stopPropagation();
-          handleDeleteClick();
-        }}
+        onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
         className={`absolute right-0 top-0 h-full bg-[#ff3b30] text-white px-[20px] flex items-center justify-center font-medium text-[14px] active:bg-[#e32a1f] transition-colors ${tIdx !== isLast ? 'border-b border-[#f4f5f8]' : ''}`}
         style={{
           opacity: Math.min(1, Math.abs(swipeX) / 40),
@@ -1751,6 +1767,72 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   const [selectedDate, setSelectedDate] = useState(23);
   const [calendarView, setCalendarView] = useState('月');
   const [selectedMonth, setSelectedMonth] = useState(4);
+
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const billsContainerRef = useRef<HTMLDivElement>(null);
+  const pullStartYRef = useRef(0);
+  const isPullingRef = useRef(false);
+  const pullDistRef = useRef(0);
+  const PULL_THRESHOLD = 64;
+
+  // Lock scroll when bill detail is open
+  useScrollLock(!!selectedTx);
+
+  useEffect(() => {
+    const scrollEl = document.querySelector('.scroll-area') as HTMLElement | null;
+    if (!scrollEl) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (scrollEl.scrollTop <= 0) {
+        pullStartYRef.current = e.touches[0].clientY;
+        isPullingRef.current = true;
+      } else {
+        isPullingRef.current = false;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPullingRef.current) return;
+      const dy = e.touches[0].clientY - pullStartYRef.current;
+      if (dy > 0 && scrollEl.scrollTop <= 0) {
+        if (e.cancelable) e.preventDefault();
+        const dist = Math.min(dy * 0.55, PULL_THRESHOLD + 24);
+        pullDistRef.current = dist;
+        setPullDistance(dist);
+        setIsPulling(true);
+      } else if (dy <= 0) {
+        isPullingRef.current = false;
+        pullDistRef.current = 0;
+        setPullDistance(0);
+        setIsPulling(false);
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!isPullingRef.current) return;
+      const dist = pullDistRef.current;
+      isPullingRef.current = false;
+      pullDistRef.current = 0;
+      setIsPulling(false);
+      setPullDistance(0);
+      if (dist >= PULL_THRESHOLD) {
+        setIsRefreshing(true);
+        setTimeout(() => { setIsRefreshing(false); notify('数据已刷新'); }, 1500);
+      }
+    };
+
+    scrollEl.addEventListener('touchstart', onTouchStart, { passive: true });
+    scrollEl.addEventListener('touchmove', onTouchMove, { passive: false });
+    scrollEl.addEventListener('touchend', onTouchEnd);
+    return () => {
+      scrollEl.removeEventListener('touchstart', onTouchStart);
+      scrollEl.removeEventListener('touchmove', onTouchMove);
+      scrollEl.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
 
   const selectedMonthLabel = `2026年${selectedMonth}月`;
   const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
@@ -1828,8 +1910,29 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     [filteredTransactions, exchangeRates]
   );
 
+  const indicatorHeight = isRefreshing ? 56 : (isPulling ? pullDistance : 0);
+  const indicatorTransition = isPulling ? 'none' : 'height 0.3s ease-out';
+  const spinnerOpacity = isRefreshing ? 1 : Math.min(1, pullDistance / 32);
+  const spinnerRotate = isRefreshing ? undefined : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)`;
+
   return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
+    <div ref={billsContainerRef} className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
+
+      {/* Pull-to-refresh indicator */}
+      <div
+        className="flex items-center justify-center shrink-0 bg-[#f4f5f8] overflow-hidden"
+        style={{ height: indicatorHeight, transition: indicatorTransition }}
+      >
+        {(indicatorHeight > 4) && (
+          <div
+            className={`w-9 h-9 rounded-full bg-white shadow-[0_2px_12px_rgba(0,0,0,0.1)] flex items-center justify-center ${isRefreshing ? 'animate-spin' : ''}`}
+            style={{ opacity: spinnerOpacity, transform: spinnerRotate }}
+          >
+            <RotateCcw className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} />
+          </div>
+        )}
+      </div>
+
       <div className="sticky top-0 z-[30] shrink-0 relative overflow-visible bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
         <div className="absolute left-0 right-0 top-[-120px] bottom-[-14px] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
         <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
@@ -1848,7 +1951,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           </button>
           {isCalendarOpen && (
             <>
-              <div className="fixed inset-0 z-[40]" onClick={() => setIsCalendarOpen(false)}></div>
+              <div className="fixed inset-0 z-[40]" onClick={() => setIsCalendarOpen(false)} style={{ touchAction: 'none' }}></div>
               <div className="absolute top-[42px] left-0 w-[310px] bg-white rounded-[20px] p-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-left">
                 <div className="absolute -top-[5px] left-[45px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
                 <div className="flex items-center justify-between mb-[14px] px-[8px]"><button aria-label="上个月" onClick={() => changeCalendarMonth(-1)} className="p-1 active:opacity-50"><ChevronLeft className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button><span className="text-[15px] font-medium text-[#1c1c1e]">{selectedMonthLabel}</span><button aria-label="下个月" onClick={() => changeCalendarMonth(1)} className="p-1 active:opacity-50"><ChevronRight className="w-[18px] h-[18px] text-[#1677ff]" strokeWidth={2.5} /></button></div>
@@ -1873,7 +1976,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
           </button>
           {isFilterOpen && (
             <>
-              <div className="fixed inset-0 z-[40]" onClick={() => setIsFilterOpen(false)}></div>
+              <div className="fixed inset-0 z-[40]" onClick={() => setIsFilterOpen(false)} style={{ touchAction: 'none' }}></div>
               <div className="absolute top-[42px] right-0 w-[210px] bg-white rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                 <div className="absolute -top-[5px] right-[18px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
                 <div className="relative bg-white rounded-[16px] overflow-hidden py-[8px]">
@@ -1944,9 +2047,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       </div>
 
       {selectedTx && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[4px] transition-opacity">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[4px] transition-opacity" style={{ touchAction: 'none' }} onClick={() => setSelectedTx(null)}>
           <div className="w-full max-w-[430px] h-full relative flex items-center justify-center px-[24px]">
-             <div className="bg-white w-full rounded-[24px] px-[20px] pb-[20px] pt-[16px] shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+             <div className="bg-white w-full rounded-[24px] px-[20px] pb-[20px] pt-[16px] shadow-2xl relative animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                 <div className="absolute top-[10px] left-1/2 transform -translate-x-1/2 w-[36px] h-[4px] bg-[#e5e5ea] rounded-full"></div>
                 <h3 className="text-[16px] font-bold text-[#1c1c1e] mt-[4px]">账单详情</h3>
                 <button onClick={() => setSelectedTx(null)} className="absolute top-[18px] right-[16px] active:scale-90 transition-transform"><X className="w-[22px] h-[22px] text-[#3a3a3c]" strokeWidth={2} /></button>
@@ -1994,6 +2097,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [exchangeAccountName, setExchangeAccountName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
+
+  useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || Boolean(assetKeyboardField));
 
   const currenciesList = [
     { id: 'USDT', icon: <TetherIcon />, label: 'USDT' }, { id: 'BTC', icon: <BitcoinIcon />, label: 'BTC' },
@@ -2270,7 +2375,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isAddAccountModalOpen && (
         <div className="fixed inset-0 z-[120] flex justify-center items-center px-[20px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAddAccountModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => setIsAddAccountModalOpen(false)} style={{ touchAction: 'none' }}></div>
           <div className="relative w-full max-w-[390px] bg-white rounded-[24px] p-[20px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out max-h-[85vh] overflow-y-auto hide-scrollbar">
             <div className="flex justify-between items-center mb-[20px]"><h2 className="text-[18px] font-bold text-[#1c1c1e]">添加账户</h2><button onClick={() => setIsAddAccountModalOpen(false)} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
             <div className="mb-[24px]">
@@ -2301,7 +2406,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isAddExchangeModalOpen && (
         <div className="fixed inset-0 z-[130] flex justify-center items-center px-[20px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAddExchangeModalOpen(false); }}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAddExchangeModalOpen(false); }} style={{ touchAction: 'none' }}></div>
           <div className="relative w-full max-w-[390px] max-h-[90vh] bg-white rounded-[24px] flex flex-col shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out">
             <div className="px-[20px] pt-[20px] pb-[16px] flex justify-between items-center shrink-0 border-b border-transparent"><div className="w-[28px]"></div><h2 className="text-[17px] font-bold text-[#1c1c1e]">添加交易所账户</h2><button onClick={() => { closeAssetKeyboard(); setIsAddExchangeModalOpen(false); }} className="w-[28px] h-[28px] flex items-center justify-center rounded-full active:bg-[#f0f0f0] transition-colors"><X className="w-[20px] h-[20px] text-[#5c5c5e]" strokeWidth={2} /></button></div>
             <div className="px-[20px] overflow-y-auto hide-scrollbar flex-1 pb-[10px]">
@@ -2322,7 +2427,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                     {exchangeAccountName || '例如：OKX 现货账户'}
                   </button>
                 </div>
-                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
+                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
               <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
               <div className="mb-[24px]">
@@ -2345,7 +2450,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isAccountDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end px-[14px] pb-[88px]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} style={{ touchAction: 'none' }}></div>
           <div className="relative bg-white w-full max-w-[410px] rounded-[22px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out flex flex-col max-h-[76vh]">
             <div className="w-full flex justify-center pt-[6px] pb-[1px] shrink-0"><div className="w-[32px] h-[3px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-start justify-between px-[14px] pt-[4px] pb-[8px] shrink-0 border-b border-[#f4f5f8]">
@@ -2399,7 +2504,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       {isChangesModalOpen && (
         <div className="fixed inset-0 z-[100] flex justify-center items-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsChangesModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={() => setIsChangesModalOpen(false)} style={{ touchAction: 'none' }}></div>
           <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[32px] pt-[8px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out max-h-[80vh] flex flex-col">
             <div className="w-full flex justify-center mb-[4px] pt-[8px] px-[20px] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
             <div className="flex items-center justify-between px-[20px] py-[14px] shrink-0 border-b border-[#f4f5f8]">
@@ -2468,6 +2573,8 @@ export default function App() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMsg(''), 2200);
   };
+
+  useScrollLock(isProfileOpen || isSearchOpen || isMessageCenterOpen);
 
   useEffect(() => {
     const metas = [

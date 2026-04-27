@@ -57,8 +57,8 @@ export default function CustomInputKeyboard({
   };
 
   return (
-    <div className="fixed inset-0 z-[260] flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/25 backdrop-blur-[1px]" onClick={onClose}></div>
+    <div className="fixed inset-0 z-[260] flex items-end justify-center" style={{ touchAction: 'none' }}>
+      <div className="absolute inset-0 bg-black/25 backdrop-blur-[1px]" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative w-full max-w-[430px] rounded-t-[24px] bg-white px-[16px] pt-[10px] pb-[calc(env(safe-area-inset-bottom,0px)+16px)] shadow-2xl animate-in slide-in-from-bottom-6 duration-200 ease-out">
         <div className="mx-auto mb-[12px] h-[4px] w-[36px] rounded-full bg-[#e5e5ea]"></div>
         <div className="mb-[14px] flex items-start justify-between space-x-[12px]">
