@@ -68,6 +68,21 @@ const parseTransactionDate = (fullDate) => {
   return new Date(Number(year), Number(month) - 1, Number(day));
 };
 
+const parseTransactionDateTime = (fullDate) => {
+  const match = String(fullDate || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!match) return null;
+  const [, year, month, day, hours = '0', minutes = '0'] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    0,
+    0
+  );
+};
+
 const isSameDay = (a, b) => (
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -1704,6 +1719,10 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
       return paymentMatched && typeMatched && rangeMatched && queryMatched;
+    }).sort((a, b) => {
+      const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return String(b.id || '').localeCompare(String(a.id || ''));
     });
     const groupsMap = {};
     validTxs.forEach(tx => {
@@ -2361,7 +2380,12 @@ export default function App() {
   const activeTransactions = useMemo(
     () => transactions
       .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
-      .map((tx) => normalizeTransactionPresentation(tx)),
+      .map((tx) => normalizeTransactionPresentation(tx))
+      .sort((a, b) => {
+        const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b.id || '').localeCompare(String(a.id || ''));
+      }),
     [transactions]
   );
 
