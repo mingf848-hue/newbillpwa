@@ -2812,11 +2812,13 @@ export default function App() {
           from { transform: translate(0, 0) scale(1); opacity: 0.9; }
           to { transform: translate(20px, 18px) scale(0.2); opacity: 0; }
         }
-        .scroll-area { 
-          overflow-y: auto; overflow-x: hidden; touch-action: pan-y; -webkit-overflow-scrolling: touch; 
+        .scroll-area {
+          overflow-y: auto; overflow-x: hidden; touch-action: pan-y; -webkit-overflow-scrolling: touch;
           flex: 1 1 auto; min-height: 0; position: relative; z-index: 10;
           overscroll-behavior-y: none; overscroll-behavior-x: none;
+          scrollbar-width: none; -ms-overflow-style: none;
         }
+        .scroll-area::-webkit-scrollbar { display: none; }
         @media (min-width: 431px) {
           html, body, #root { background-color: #000; }
         }
