@@ -28,5 +28,48 @@ html, body, #root {
 }
 
 /* 隐藏特定容器滚动条的工具类 */
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; width: 0 !important; height: 0 !important; }
+.hide-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+
+/* 主滚动区域 — 强制隐藏滚动条（覆盖所有浏览器） */
+.scroll-area::-webkit-scrollbar,
+.scroll-area *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+.scroll-area,
+.scroll-area * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+/* PWA App 化：禁止长按复制 / 选中 / 拖拽 / 高亮 */
+html, body, #root {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-drag: none;
+}
+
+img, svg, a, button {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* 输入框 / 可编辑区域恢复选择能力 */
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable=""] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
