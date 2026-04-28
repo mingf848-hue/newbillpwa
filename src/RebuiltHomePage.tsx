@@ -346,6 +346,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [transferInAccount, setTransferInAccount] = useState(null);
   const [isTransferKeyboardOpen, setIsTransferKeyboardOpen] = useState(false);
   const [transferPickerOpen, setTransferPickerOpen] = useState(null);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [isSavingTransfer, setIsSavingTransfer] = useState(false);
 
   // Lock outer scroll while any home modal/keyboard is open
   useEffect(() => {
@@ -354,6 +356,20 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen;
     if (locked) el.style.overflow = 'hidden';
     return () => { el.style.overflow = ''; };
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen]);
+
+  const closeModalsRef = useRef<(() => void) | null>(null);
+
+  // ESC key closes any open modal/keyboard
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isBudgetKeyboardOpen) { setIsBudgetKeyboardOpen(false); return; }
+      if (isTransferKeyboardOpen) { setIsTransferKeyboardOpen(false); return; }
+      if (activeModal) closeModalsRef.current?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen]);
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
@@ -498,7 +514,11 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     const rawText = responseData?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
     const cleaned = String(rawText).replace(/```json/gi, '').replace(/```/g, '').trim();
     if (!cleaned) throw new Error('AI 未返回可解析内容');
-    return JSON.parse(cleaned);
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      throw new Error('AI 返回内容格式错误，请重试');
+    }
   };
 
   const createAiDraftFromItems = (items, source) => {
@@ -706,6 +726,7 @@ ${transcript}
     setTransferPickerOpen(null);
     setAiDraft(null);
   };
+  closeModalsRef.current = closeModals;
 
   const handleKeyboardPress = (key, type) => {
     const setVal = type === 'budget' ? setBudgetInput :
@@ -783,12 +804,15 @@ ${transcript}
   };
 
   const handleSaveRecord = async () => {
+    if (isSavingRecord) return;
     const amount = Number(inputValue || 0);
     if (!amount) { notify?.('请输入金额'); setShowInlineKeyboard(true); return; }
     const isIncome = recordActiveTab === '收入';
     const category = isIncome ? recordCategoryIncome : recordCategory;
     const account = recordAccount;
     const { dateLabel, fullDate, time } = formatTransactionDate(recordDate);
+    setIsSavingRecord(true);
+    try {
     await saveTransaction({
       dateLabel,
       iconBg: account ? `bg-[#1677ff]` : (isIncome ? 'bg-[#10b981]' : 'bg-[#1677ff]'),
@@ -805,10 +829,17 @@ ${transcript}
       paymentMethod: account ? account.name : '默认账户',
       note: recordNote
     });
+    notify?.('已保存');
+    } catch (e) {
+      notify?.('保存失败，请重试');
+    } finally {
+      setIsSavingRecord(false);
+    }
   };
 
   const handleSaveAiRecord = async () => {
-    if (!aiDraft?.items?.length) return;
+    if (!aiDraft?.items?.length || isSavingRecord) return;
+    setIsSavingRecord(true);
     try {
       for (const [index, item] of aiDraft.items.entries()) {
         await createTransaction(buildTransactionFromAiItem(item, index));
@@ -817,10 +848,13 @@ ${transcript}
       closeModals();
     } catch (error) {
       notify?.(error instanceof Error ? error.message : 'AI 记账保存失败');
+    } finally {
+      setIsSavingRecord(false);
     }
   };
 
   const handleSaveTransfer = async () => {
+    if (isSavingTransfer) return;
     const amount = Number(transferAmount || 0);
     if (!amount) { notify?.('请输入转账金额'); return; }
     const outAcc = transferOutAccount || accounts[0];
@@ -835,23 +869,31 @@ ${transcript}
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
 
-    await saveTransaction({
-      dateLabel,
-      iconBg: 'bg-[#8b5cf6]',
-      iconType: outIcon,
-      title: `${outName} 转入 ${inName}`,
-      subtitle: outName,
-      tag: '转账',
-      tagType: 'transfer',
-      amount: `-${formatMoney(amount)}`,
-      isIncome: false,
-      time,
-      fullDate,
-      currency: outAcc ? (outAcc.currency || 'CNY') : 'CNY',
-      paymentMethod: outName,
-      note: '账户转账'
-    });
-    setTransferAmount('');
+    setIsSavingTransfer(true);
+    try {
+      await saveTransaction({
+        dateLabel,
+        iconBg: 'bg-[#8b5cf6]',
+        iconType: outIcon,
+        title: `${outName} 转入 ${inName}`,
+        subtitle: outName,
+        tag: '转账',
+        tagType: 'transfer',
+        amount: `-${formatMoney(amount)}`,
+        isIncome: false,
+        time,
+        fullDate,
+        currency: outAcc ? (outAcc.currency || 'CNY') : 'CNY',
+        paymentMethod: outName,
+        note: '账户转账'
+      });
+      setTransferAmount('');
+      notify?.('转账已保存');
+    } catch (e) {
+      notify?.('转账保存失败，请重试');
+    } finally {
+      setIsSavingTransfer(false);
+    }
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
@@ -1294,7 +1336,7 @@ ${transcript}
               <AiConfirmRow iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" IconElement={<Mic className="w-[12px] h-[12px] text-[#fa8c16]"/>} label="语音内容" value={aiDraft.transcript} border={false} />
             ) : null}
           </div>
-          <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-[#e5e5ea] font-medium text-[15px] active:bg-gray-50 transition-colors">取消</button><button onClick={handleSaveAiRecord} className="flex-1 h-[44px] rounded-[10px] bg-[#1677ff] text-white font-medium text-[15px] shadow-lg shadow-blue-200 active:bg-blue-700 transition-colors">确认记账</button></div>
+          <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-[#e5e5ea] font-medium text-[15px] active:bg-gray-50 transition-colors">取消</button><button disabled={isSavingRecord} onClick={handleSaveAiRecord} className="flex-1 h-[44px] rounded-[10px] bg-[#1677ff] text-white font-medium text-[15px] shadow-lg shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '确认记账'}</button></div>
         </div>
       </div>
 
@@ -1343,7 +1385,7 @@ ${transcript}
             </div>
             <div className="px-[24px] pb-[10px] flex space-x-[12px]">
               <button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button>
-              <button onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors">保存</button>
+              <button disabled={isSavingRecord} onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '保存'}</button>
             </div>
           </div>
 
@@ -1410,7 +1452,7 @@ ${transcript}
             {renderTransferAccountPicker('in')}
             <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} />
           </div>
-          <button onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg">保存转账</button>
+          <button disabled={isSavingTransfer} onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg disabled:opacity-60">{isSavingTransfer ? '保存中…' : '保存转账'}</button>
         </div>
       </div>
 

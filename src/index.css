@@ -62,6 +62,10 @@ body::-webkit-scrollbar,
   height: 0 !important;
 }
 
+/* PWA App 化：移除非键盘聚焦时的浏览器默认蓝色焦点框 */
+:focus { outline: none !important; }
+:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
+
 /* PWA App 化：禁止长按复制 / 选中 / 拖拽 / 高亮 */
 html, body, #root {
   -webkit-touch-callout: none;

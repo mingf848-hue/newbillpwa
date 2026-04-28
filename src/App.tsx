@@ -2198,6 +2198,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState<string>('cash');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2269,6 +2271,11 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const saveAccountDetail = async () => {
     if (!selectedAccount) return;
+    if (!accountName.trim()) {
+      notify?.('请输入账户名称');
+      return;
+    }
+    if (isSavingAccount) return;
     const nextName = accountName.trim() || selectedAccount.name;
     const nextBalanceNumber = Number(accountBalance || 0);
     const previousBalanceNumber = parseMoneyNumber(selectedAccount.balance);
@@ -2282,6 +2289,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0'
     };
+    setIsSavingAccount(true);
+    try {
     if (selectedAccount.id) {
       if (isAdjustOnly || balanceDelta === 0) {
         await updateAccount(selectedAccount.id, payload);
@@ -2329,6 +2338,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     }
     closeAssetKeyboard();
     setIsAccountDetailModalOpen(false);
+    notify?.('账户已保存');
+    } catch (e) {
+      notify?.('保存失败，请重试');
+    } finally {
+      setIsSavingAccount(false);
+    }
   };
 
   const saveExchangeAccount = async () => {
@@ -2629,11 +2644,11 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             </div>
             <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] space-y-[8px]">
                <div className="flex space-x-[10px]">
-                 <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-                 <button onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
+                 <button disabled={isSavingAccount} onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors disabled:opacity-50">取消</button>
+                 <button disabled={isSavingAccount} onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)] disabled:opacity-60">{isSavingAccount ? '保存中…' : '保存'}</button>
                </div>
                {selectedAccount?.id && (
-                 <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); deleteAccount?.(selectedAccount.id); notify('账户已删除'); }} className="w-full py-[9px] rounded-[10px] text-[13px] font-bold text-[#ff3b30] bg-[#fff0ee] active:bg-[#ffe0dd] transition-colors">删除账户</button>
+                 <button disabled={isSavingAccount} onClick={() => setIsDeleteConfirmOpen(true)} className="w-full py-[9px] rounded-[10px] text-[13px] font-bold text-[#ff3b30] bg-[#fff0ee] active:bg-[#ffe0dd] transition-colors disabled:opacity-50">删除账户</button>
                )}
             </div>
           </div>
@@ -2662,6 +2677,23 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 })}
               </div>
               <div className="text-[11px] text-[#8e8e93] text-center mt-[14px]">头像图标由 Simple Icons / Clearbit API 提供</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDeleteConfirmOpen && selectedAccount && (
+        <div className="fixed inset-0 z-[150] flex justify-center items-center px-[24px]">
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" onClick={() => setIsDeleteConfirmOpen(false)} style={{ touchAction: 'none' }}></div>
+          <div className="relative w-full max-w-[320px] bg-white rounded-[18px] shadow-2xl animate-in zoom-in-95 fade-in duration-200 ease-out overflow-hidden">
+            <div className="px-[20px] pt-[20px] pb-[12px] text-center">
+              <div className="w-[44px] h-[44px] rounded-full bg-[#fff0ee] flex items-center justify-center mx-auto mb-[10px]"><AlertTriangle className="w-[22px] h-[22px] text-[#ff3b30]" strokeWidth={2.5} /></div>
+              <div className="text-[16px] font-bold text-[#1c1c1e] mb-[6px]">确认删除该账户？</div>
+              <div className="text-[12px] text-[#8e8e93] leading-[1.5]">"{selectedAccount.name}" 删除后不可恢复，相关交易记录会保留但失去账户关联。</div>
+            </div>
+            <div className="grid grid-cols-2 border-t border-[#f0f0f0]">
+              <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-[12px] text-[14px] font-medium text-[#5c5c5e] active:bg-[#f9f9f9] transition-colors border-r border-[#f0f0f0]">取消</button>
+              <button onClick={() => { const id = selectedAccount.id; setIsDeleteConfirmOpen(false); closeAssetKeyboard(); setIsAccountDetailModalOpen(false); if (id) { deleteAccount?.(id); notify('账户已删除'); } }} className="py-[12px] text-[14px] font-bold text-[#ff3b30] active:bg-[#fff5f4] transition-colors">删除</button>
             </div>
           </div>
         </div>
