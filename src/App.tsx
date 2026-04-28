@@ -589,6 +589,16 @@ function useSupabaseData() {
     }
   };
 
+  const deleteAccount = async (id) => {
+    setAccounts(prev => prev.filter(account => account.id !== id));
+    try {
+      await fetchSupabase(`accounts?id=eq.${encodeURIComponent(id)}`, "DELETE");
+    } catch (e) {
+      console.error("Delete account failed", e);
+      await reloadData();
+    }
+  };
+
   const updateBudget = async (newBudget) => {
     setBudget(newBudget);
     localStorage.setItem('monthly_budget', String(newBudget));
@@ -604,7 +614,7 @@ function useSupabaseData() {
     }
   };
 
-  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget };
+  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget };
 }
 
 // ==========================================
@@ -1077,15 +1087,26 @@ const MessageCenterModal = ({ isOpen, onClose, notify, exchangeRates, transactio
                      </div>
                      <div className="w-[6px] h-[6px] rounded-full bg-[#f59e0b] absolute top-[26px] right-[14px]"></div>
                   </button>
+                  {budgetUsage >= 80 ? (
                   <button onClick={handleBudgetNoticeClick} className="w-full text-left flex items-start bg-white border border-[#f4f5f8] rounded-[16px] p-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] relative cursor-pointer active:bg-gray-50 transition-colors">
-                     <div className="w-[36px] h-[36px] rounded-full bg-[#fef2f2] flex items-center justify-center shrink-0 mr-[12px]"><AlertTriangle className="text-[#ff3b30] w-[18px] h-[18px]" strokeWidth={2.5} /></div>
+                     <div className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 mr-[12px] ${budgetUsage >= 100 ? 'bg-[#fef2f2]' : 'bg-[#fffbeb]'}`}><AlertTriangle className={`w-[18px] h-[18px] ${budgetUsage >= 100 ? 'text-[#ff3b30]' : 'text-[#f59e0b]'}`} strokeWidth={2.5} /></div>
                      <div className="flex-1 pr-[16px]">
                         <div className="text-[13px] font-bold text-[#1c1c1e]">预算预警通知</div>
-                        <div className="text-[14px] text-[#ff3b30] font-medium mt-[2px] mb-[2px]">本月预算已使用 {budgetUsage}%</div>
+                        <div className={`text-[14px] font-medium mt-[2px] mb-[2px] ${budgetUsage >= 100 ? 'text-[#ff3b30]' : 'text-[#f59e0b]'}`}>本月预算已使用 {budgetUsage}%</div>
                         <div className="text-[11px] text-[#8e8e93]">剩余额度 {formatDisplayMoney(budgetRemaining)} 元</div>
                      </div>
-                     <div className="w-[6px] h-[6px] rounded-full bg-[#ff3b30] absolute top-[26px] right-[14px]"></div>
+                     <div className={`w-[6px] h-[6px] rounded-full absolute top-[26px] right-[14px] ${budgetUsage >= 100 ? 'bg-[#ff3b30]' : 'bg-[#f59e0b]'}`}></div>
                   </button>
+                  ) : budget > 0 ? (
+                  <div className="w-full text-left flex items-start bg-white border border-[#f4f5f8] rounded-[16px] p-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] relative">
+                     <div className="w-[36px] h-[36px] rounded-full bg-[#f0fdf4] flex items-center justify-center shrink-0 mr-[12px]"><AlertTriangle className="text-[#10b981] w-[18px] h-[18px]" strokeWidth={2.5} /></div>
+                     <div className="flex-1 pr-[16px]">
+                        <div className="text-[13px] font-bold text-[#1c1c1e]">预算状态</div>
+                        <div className="text-[14px] text-[#10b981] font-medium mt-[2px] mb-[2px]">本月预算已使用 {budgetUsage}%</div>
+                        <div className="text-[11px] text-[#8e8e93]">剩余额度 {formatDisplayMoney(budgetRemaining)} 元，状态良好</div>
+                     </div>
+                  </div>
+                  ) : null}
               </div>
               <div className="mt-[16px] flex items-center justify-center pb-[4px]">
                   <button onClick={() => handleNoticeClick('已查看全部通知')} className="flex items-center text-[13px] font-medium text-[#1677ff] active:opacity-60 transition-opacity">查看全部通知 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button>
@@ -1924,7 +1945,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       const queryMatched = !keyword || [tx.title, tx.subtitle, tx.tag, tx.paymentMethod, tx.note]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
-      return paymentMatched && typeMatched && rangeMatched && queryMatched;
+      // Hide tiny investment payouts (< 0.1 in original currency) when not explicitly searching
+      const isSmallPayout = !keyword && tx.isIncome && (tx.tagType === 'investment' || tx.tag === '理财') && Math.abs(parseMoneyNumber(tx.amount)) < 0.1;
+      return paymentMatched && typeMatched && rangeMatched && queryMatched && !isSmallPayout;
     }).sort((a, b) => {
       const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
       if (timeDiff !== 0) return timeDiff;
@@ -2010,9 +2033,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         </div>
       </div>
 
-      <div className="sticky top-0 z-[30] shrink-0 relative overflow-visible bg-[#f4f5f8]" style={{ transform: 'translateZ(0)' }}>
-        <div className="absolute left-0 right-0 top-[-120px] bottom-[-14px] bg-[#f4f5f8] shadow-[0_8px_20px_rgba(244,245,248,0.96)] pointer-events-none"></div>
-        <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between relative z-10 shadow-[0_1px_0_rgba(228,232,238,0.96)]">
+      <div className="sticky top-0 z-[30] shrink-0 bg-[#f4f5f8]/96 backdrop-blur-sm border-b border-[#e8eaed]">
+        <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between">
           <div className="flex items-center space-x-[6px]"><LogoIcon /><span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span></div>
           <div className="flex items-center space-x-[16px]">
             <button aria-label="搜索" onClick={() => searchInputRef.current?.focus()} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
@@ -2020,7 +2042,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
             <ProfileAvatarButton onClick={onOpenProfile} />
           </div>
         </div>
-      <div className="relative z-10 pt-[4px] pb-[10px]">
+      <div className="pt-[4px] pb-[10px]">
       <div className="px-[16px] flex items-center justify-between space-x-[8px]">
         <div className="relative">
           <button onClick={() => setIsCalendarOpen(!isCalendarOpen)} className={`flex items-center space-x-[4px] h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-all ${isCalendarOpen ? 'bg-[#f4f8ff] border border-[#1677ff] text-[#1677ff]' : 'bg-white border border-transparent text-[#1c1c1e]'}`}>
@@ -2154,7 +2176,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   );
 };
 
-const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], exchangeRates, notify, createAccount, updateAccount, createTransaction, onOpenProfile, onOpenSearch }) => {
+const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], exchangeRates, notify, createAccount, updateAccount, deleteAccount, createTransaction, onOpenProfile, onOpenSearch }) => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isAddExchangeModalOpen, setIsAddExchangeModalOpen] = useState(false);
   const [isAccountDetailModalOpen, setIsAccountDetailModalOpen] = useState(false);
@@ -2605,9 +2627,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
               </div>
             </div>
-            <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] flex space-x-[10px]">
-               <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
-               <button onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
+            <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] space-y-[8px]">
+               <div className="flex space-x-[10px]">
+                 <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); }} className="w-[96px] py-[9px] border border-[#e5e5ea] rounded-[10px] text-[13px] font-bold text-[#5c5c5e] bg-white active:bg-gray-50 transition-colors">取消</button>
+                 <button onClick={saveAccountDetail} className="flex-1 py-[9px] rounded-[10px] text-[13px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
+               </div>
+               {selectedAccount?.id && (
+                 <button onClick={() => { closeAssetKeyboard(); setIsAccountDetailModalOpen(false); deleteAccount?.(selectedAccount.id); notify('账户已删除'); }} className="w-full py-[9px] rounded-[10px] text-[13px] font-bold text-[#ff3b30] bg-[#fff0ee] active:bg-[#ffe0dd] transition-colors">删除账户</button>
+               )}
             </div>
           </div>
         </div>
@@ -2693,7 +2720,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
-  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, updateBudget } = useSupabaseData();
+  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget } = useSupabaseData();
   const activeTransactions = useMemo(
     () => transactions
       .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
@@ -2810,7 +2837,7 @@ export default function App() {
                 {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
-                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}
         </div>
