@@ -488,7 +488,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const previousBalance = previousMonthStats.income - previousMonthStats.expense;
 
   const recentTransactions = useMemo(
-    () => [...transactions].sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime()).slice(0, 5),
+    () => [...transactions]
+      .filter((tx) => !(tx.isIncome && (tx.tagType === 'investment' || tx.tag === '理财') && Math.abs(parseMoneyNumber(tx.amount)) < 0.1))
+      .sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime())
+      .slice(0, 5),
     [transactions]
   );
 

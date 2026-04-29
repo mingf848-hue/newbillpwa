@@ -1260,11 +1260,19 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isTrendRangeOpen, setIsTrendRangeOpen] = useState(false);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(latestTxDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(latestTxDate.getMonth() + 1);
   const [trendRange, setTrendRange] = useState({ start: 1, end: latestTxDate.getMonth() + 1 });
   const monthRangeOptions = Array.from({ length: 12 }, (_, index) => index + 1);
   const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
+  const availableYears = useMemo(() => {
+    const years = new Set(transactions.map((tx) => parseTransactionDate(tx.fullDate)?.getFullYear()).filter(Boolean));
+    if (!years.size) years.add(new Date().getFullYear());
+    return Array.from(years).sort((a, b) => b - a);
+  }, [transactions]);
+
+  const switchStatsTab = (tab: string) => setActiveTab(tab);
 
   useScrollLock(isInsightModalOpen || isDetailModalOpen);
 
@@ -1426,9 +1434,32 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
       </div>
 
       <div className="px-[16px] mt-[8px] flex items-center justify-between">
-        <button className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
-          <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">{monthLabel}</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
-        </button>
+        <div className="relative">
+          <button onClick={() => setIsMonthPickerOpen((prev) => !prev)} className="flex items-center space-x-[6px] bg-white border border-[#f0f0f0] h-[36px] px-[12px] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.02)] active:scale-95 transition-all">
+            <Calendar className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#1c1c1e]">{monthLabel}</span><ChevronDown className="w-[14px] h-[14px] text-[#8e8e93]" strokeWidth={2.5} />
+          </button>
+          {isMonthPickerOpen && (
+            <>
+              <div className="fixed inset-0 z-[40]" onClick={() => setIsMonthPickerOpen(false)} style={{ touchAction: 'none' }}></div>
+              <div className="absolute left-0 top-[42px] z-[50] w-[240px] rounded-[16px] bg-white p-[14px] shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+                <div className="flex items-center justify-between mb-[10px]">
+                  <button onClick={() => setSelectedYear((y) => y - 1)} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] bg-[#f7f8fa] text-[#5c5c5e] active:bg-[#e5e7eb]"><ChevronLeft className="w-[14px] h-[14px]" strokeWidth={2.5} /></button>
+                  <span className="text-[14px] font-bold text-[#1c1c1e]">{selectedYear}年</span>
+                  <button onClick={() => setSelectedYear((y) => y + 1)} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] bg-[#f7f8fa] text-[#5c5c5e] active:bg-[#e5e7eb]"><ChevronRight className="w-[14px] h-[14px]" strokeWidth={2.5} /></button>
+                </div>
+                <div className="grid grid-cols-4 gap-[6px]">
+                  {monthRangeOptions.map((month) => (
+                    <button key={month} onClick={() => { setSelectedMonth(month); setIsMonthPickerOpen(false); }} className={`h-[36px] rounded-[10px] text-[12px] font-medium transition-all ${selectedMonth === month ? 'bg-[#1677ff] text-white font-semibold shadow-[0_4px_12px_rgba(22,119,255,0.2)]' : 'bg-[#f7f8fa] text-[#3a3a3c] active:bg-[#eef2f7]'}`}>{month}月</button>
+                  ))}
+                </div>
+                <div className="mt-[10px] flex justify-between items-center">
+                  <button onClick={() => { const now = new Date(); setSelectedYear(now.getFullYear()); setSelectedMonth(now.getMonth() + 1); setIsMonthPickerOpen(false); }} className="text-[12px] font-medium text-[#1677ff] px-[4px]">本月</button>
+                  <button onClick={() => setIsMonthPickerOpen(false)} className="bg-[#1677ff] text-white px-[14px] py-[6px] rounded-[8px] text-[12px] font-semibold">完成</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         <div className="flex bg-[#f4f5f8] rounded-[10px] p-[3px]">
           {['月', '年', '自定义'].map((tab) => (
             <button key={tab} onClick={() => switchStatsTab(tab)} className={`px-[16px] py-[5px] text-[13px] rounded-[8px] transition-all ${activeTab === tab ? 'bg-white text-[#1677ff] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.04)] border border-[#e5e5ea]' : 'text-[#8e8e93] font-medium active:bg-gray-200'}`}>{tab}</button>
