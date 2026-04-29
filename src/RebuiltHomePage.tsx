@@ -81,10 +81,10 @@ const DonutChart = () => (
 );
 
 // --- 首页极其紧凑的交易项 ---
-const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time, amount, amountType }) => {
+const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time, amount, amountType, onClick }) => {
   const isIncome = amountType === 'income';
   return (
-    <div className="flex items-center justify-between py-[10px]">
+    <button type="button" onClick={onClick} className="w-full flex items-center justify-between py-[10px] active:bg-[#f9f9f9] transition-colors text-left">
       <div className="flex items-center space-x-[10px] flex-1 min-w-0">
         <div className="w-[28px] h-[28px] flex items-center justify-center shrink-0">{Icon}</div>
         <div className="flex flex-col justify-center min-w-0">
@@ -99,7 +99,7 @@ const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time
         <span className="text-[11px] text-[#8e8e93]">{time}</span>
         <span className={`text-[14px] font-bold tracking-tight text-right min-w-[50px] ${isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{amount}</span>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -1286,6 +1286,7 @@ ${transcript}
                 time={tx.time}
                 amount={tx.amount}
                 amountType={tx.isIncome ? 'income' : 'expense'}
+                onClick={() => onOpenBills?.()}
               />
             ))}
           </div>

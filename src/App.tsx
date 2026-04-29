@@ -1122,133 +1122,6 @@ const MessageCenterModal = ({ isOpen, onClose, notify, exchangeRates, transactio
 // 4. EXACT PAGE COMPONENTS WITH DYNAMIC DB
 // ==========================================
 
-const HomePage = ({ setIsMessageCenterOpen, transactions, setActiveTab, notify }) => {
-  const [homePeriod, setHomePeriod] = useState('月');
-  const switchHomePeriod = (period) => {
-    setHomePeriod(period);
-    notify(`首页已切换为${period}视图`);
-  };
-  const openBills = (message = '已进入账单页') => {
-    setActiveTab('bills');
-    notify(message);
-  };
-
-  return (
-    <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
-      <div className="px-[16px] pt-[env(safe-area-inset-top,52px)] pb-[10px] flex items-center justify-between sticky top-0 z-[15] bg-[#f4f5f8]/95 backdrop-blur-sm">
-        <div className="flex items-center space-x-[6px]">
-          <LogoIcon />
-          <span className="text-[20px] font-bold text-[#1c1c1e] italic tracking-tight" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>BitLedger <span className="text-[#1677ff]">Pro</span></span>
-        </div>
-        <div className="flex items-center space-x-[16px]">
-          <button aria-label="搜索" onClick={() => notify('已打开搜索入口')} className="active:opacity-60 transition-opacity"><Search className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} /></button>
-          <button aria-label="消息中心" onClick={() => setIsMessageCenterOpen(true)} className="relative active:opacity-60 transition-opacity">
-            <Bell className="w-[20px] h-[20px] text-[#1c1c1e]" strokeWidth={2} />
-            <div className="absolute -top-[1px] right-[1px] w-[7px] h-[7px] bg-[#ff3b30] rounded-full border-[1.5px] border-[#f4f5f8]"></div>
-          </button>
-          <ProfileAvatarButton onClick={() => notify('已打开个人中心')} />
-        </div>
-      </div>
-
-      <div className="px-[16px] space-y-[14px]">
-        {/* Date & Filter */}
-        <div className="flex items-center justify-between pt-1">
-          <button onClick={() => notify('已选择 2026年4月')} className="flex items-center space-x-[4px] bg-white h-[34px] px-[10px] rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] whitespace-nowrap active:scale-95 transition-transform">
-            <Calendar className="w-[15px] h-[15px] text-[#8e8e93]" strokeWidth={2} />
-            <span className="text-[13px] font-medium text-[#1c1c1e]">2026年4月</span>
-            <ChevronDown className="w-[13px] h-[13px] text-[#8e8e93]" strokeWidth={2.5} />
-          </button>
-          <div className="flex bg-white rounded-[8px] p-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.02)] shrink-0">
-            {['月', '年', '自定义'].map((period) => (
-              <button key={period} onClick={() => switchHomePeriod(period)} className={`${period === '自定义' ? 'w-[46px]' : 'w-[36px]'} py-[4px] text-[12px] rounded-[6px] transition-all ${homePeriod === period ? 'font-semibold text-[#1677ff] bg-[#f0f5ff]' : 'font-medium text-[#8e8e93] active:opacity-60'}`}>{period}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Balance Card */}
-        <div className="bg-white rounded-[24px] p-[20px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] relative overflow-hidden">
-          <div className="flex items-center space-x-[6px] text-[#8e8e93] mb-[8px]"><span className="text-[13px]">本月结余 (CNY)</span><Eye className="w-[16px] h-[16px]" strokeWidth={2} /></div>
-          <div className="text-[40px] font-bold text-[#1677ff] tracking-tight leading-none mb-[12px]" style={{fontFamily: 'Helvetica Neue, Arial, sans-serif'}}>40,446.45</div>
-          <div className="flex items-center text-[12px]"><span className="text-[#8e8e93] mr-[8px]">较上月</span><span className="text-[#1677ff] flex items-center font-medium"><ArrowUpRight className="w-[12px] h-[12px] mr-[2px]" strokeWidth={2.5} /> 20.1%</span></div>
-          <div className="absolute bottom-0 right-0 w-[65%] h-[90px] pointer-events-none">
-            <div className="absolute top-[4px] right-[18%] bg-white shadow-[0_2px_10px_rgba(0,0,0,0.08)] text-[#1677ff] font-semibold px-[8px] py-[3px] rounded-[6px] z-10 flex flex-col items-center">
-              <div className="text-[#8e8e93] text-[9px] mb-[1px] font-normal scale-90">4月30日</div><div className="text-[11px] leading-none">40,446.45</div>
-            </div>
-            <svg viewBox="0 0 200 80" className="w-full h-full" preserveAspectRatio="none">
-              <defs><linearGradient id="homeBlueGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1677ff" stopOpacity="0.2" /><stop offset="100%" stopColor="#1677ff" stopOpacity="0" /></linearGradient></defs>
-              <path d="M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10" fill="none" stroke="#1677ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10 L210,80 L-10,80 Z" fill="url(#homeBlueGrad)" />
-              <circle cx="160" cy="25" r="3.5" fill="#1677ff" stroke="white" strokeWidth="2" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Income / Expense Cards */}
-        <div className="grid grid-cols-2 gap-[14px]">
-          <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] relative">
-            <div className="text-[12px] text-[#8e8e93] mb-[6px]">本月收入 (CNY)</div><div className="text-[22px] font-bold text-[#10b981] mb-[8px] leading-none">47,556.16</div>
-            <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#10b981] flex items-center font-medium"><ArrowUpRight className="w-[10px] h-[10px] mr-[2px]" strokeWidth={3} /> 18.7%</span></div>
-            <div className="absolute bottom-[14px] right-[14px] w-[28px] h-[28px] bg-[#ecfdf5] rounded-[8px] flex items-center justify-center"><ArrowUpRight className="w-[18px] h-[18px] text-[#10b981]" strokeWidth={2.5} /></div>
-          </div>
-          <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] relative">
-            <div className="text-[12px] text-[#8e8e93] mb-[6px]">本月支出 (CNY)</div><div className="text-[22px] font-bold text-[#ff3b30] mb-[8px] leading-none">7,109.71</div>
-            <div className="flex items-center text-[11px]"><span className="text-[#8e8e93] mr-[6px]">较上月</span><span className="text-[#ff3b30] flex items-center font-medium"><ArrowUpRight className="w-[10px] h-[10px] mr-[2px]" strokeWidth={3} /> 13.2%</span></div>
-            <div className="absolute bottom-[14px] right-[14px] w-[28px] h-[28px] bg-[#fff0f0] rounded-[8px] flex items-center justify-center"><ArrowUpRight className="w-[18px] h-[18px] text-[#ff3b30] transform rotate-90" strokeWidth={2.5} /></div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="flex justify-between items-center px-[16px] py-[8px]">
-          <button onClick={() => openBills('已进入账单页，可点任意账单编辑备注')} className="flex flex-col items-center space-y-[8px] active:scale-95 transition-transform"><div className="w-[46px] h-[46px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(22,119,255,0.25)]"><PenLine className="w-[20px] h-[20px] text-white" strokeWidth={2} /></div><span className="text-[12px] font-medium text-[#1c1c1e]">记一笔</span></button>
-          <button onClick={() => notify('已定位到预算进度')} className="flex flex-col items-center space-y-[8px] active:scale-95 transition-transform"><div className="w-[46px] h-[46px] bg-[#10b981] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(16,185,129,0.25)]"><PieChartIcon className="w-[20px] h-[20px] text-white" fill="currentColor" strokeWidth={1} /></div><span className="text-[12px] font-medium text-[#1c1c1e]">预算</span></button>
-          <button onClick={() => openBills('已进入账单页并查看转账记录')} className="flex flex-col items-center space-y-[8px] active:scale-95 transition-transform"><div className="w-[46px] h-[46px] bg-[#8b5cf6] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(139,92,246,0.25)]"><ArrowRightLeft className="w-[20px] h-[20px] text-white" strokeWidth={2} /></div><span className="text-[12px] font-medium text-[#1c1c1e]">转账</span></button>
-          <button onClick={() => { setActiveTab('stats'); notify('已打开统计报表'); }} className="flex flex-col items-center space-y-[8px] active:scale-95 transition-transform"><div className="w-[46px] h-[46px] bg-[#f59e0b] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(245,158,11,0.25)]"><BarChart2 className="w-[20px] h-[20px] text-white" strokeWidth={2.5} /></div><span className="text-[12px] font-medium text-[#1c1c1e]">报表</span></button>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 gap-[14px]">
-          <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex flex-col h-[150px]">
-            <div className="flex justify-between items-center mb-[8px]"><span className="text-[14px] font-semibold text-[#1c1c1e]">预算进度</span><div className="flex items-center text-[11px] text-[#8e8e93]">本月 <ChevronDown className="w-[12px] h-[12px] ml-[2px]" /></div></div>
-            <div className="text-[11px] text-[#8e8e93] mb-[12px]">总预算 <span className="font-semibold text-[#1c1c1e]">20,000.00</span> CNY</div>
-            <div className="flex items-center space-x-[10px] mb-auto"><div className="flex-1 h-[6px] bg-[#f0f0f0] rounded-full overflow-hidden"><div className="h-full bg-[#1677ff] rounded-full" style={{ width: '53%' }}></div></div><span className="text-[13px] font-bold text-[#1677ff]">53%</span></div>
-            <div className="space-y-[6px]">
-              <div className="flex justify-between items-center text-[11px]"><div className="flex items-center text-[#3a3a3c]"><div className="w-[5px] h-[5px] rounded-full bg-[#1677ff] mr-[6px]"></div>已支出</div><span className="font-semibold text-[#1c1c1e]">10,653.28</span></div>
-              <div className="flex justify-between items-center text-[11px]"><div className="flex items-center text-[#8e8e93]"><div className="w-[5px] h-[5px] rounded-full bg-[#e5e5ea] mr-[6px]"></div>剩余额度</div><span className="font-semibold text-[#3a3a3c]">9,346.72</span></div>
-            </div>
-          </div>
-          <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] flex flex-col h-[150px]">
-             <div className="flex justify-between items-center mb-[4px]"><span className="text-[14px] font-semibold text-[#1c1c1e]">支出分类概览</span><div className="flex items-center text-[11px] text-[#8e8e93]">本月 <ChevronDown className="w-[12px] h-[12px] ml-[2px]" /></div></div>
-            <div className="flex items-center justify-between flex-1">
-              <div className="w-[72px] h-[72px] relative ml-[-4px]"><HomeDonutChart /></div>
-              <div className="flex flex-col justify-center space-y-[4px] w-[55%]">
-                {[{ label: '餐饮', value: '31.8%', color: 'bg-[#1677ff]' },{ label: '交通', value: '20.4%', color: 'bg-[#8b5cf6]' },{ label: '购物', value: '16.7%', color: 'bg-[#10b981]' },{ label: '娱乐', value: '13.5%', color: 'bg-[#fbbf24]' },{ label: '理财', value: '9.6%', color: 'bg-[#f59e0b]' },{ label: '其他', value: '8.0%', color: 'bg-[#e5e7eb]' }].map((item, i) => (
-                  <div key={i} className="flex justify-between items-center text-[10px] leading-tight"><div className="flex items-center text-[#3a3a3c]"><div className={`w-[5px] h-[5px] rounded-full mr-[6px] ${item.color}`}></div>{item.label}</div><span className="text-[#8e8e93]">{item.value}</span></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Recent Transactions from Supabase */}
-        <div className="bg-white rounded-[24px] shadow-[0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
-          <div className="flex justify-between items-baseline p-[20px] pb-[8px]"><h3 className="text-[15px] font-bold text-[#1c1c1e]">最近交易</h3><button onClick={() => openBills('已查看全部交易')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
-          <div className="flex flex-col">
-            {transactions.slice(0, 4).map((tx, idx) => (
-              <button key={tx.id || idx} onClick={() => openBills(`已打开 ${tx.title}`)} className="w-full flex items-center px-[20px] py-[14px] border-b border-[#f4f5f8] active:bg-[#f9f9f9] transition-colors text-left">
-                <div className="w-[38px] h-[38px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
-                <div className="flex-1 ml-[12px] flex justify-between items-center">
-                   <div className="flex flex-col justify-center space-y-[2px]"><span className="text-[14px] font-bold text-[#1c1c1e]">{tx.title}</span><div className="flex items-center space-x-[6px]"><span className={`text-[10px] px-[4px] py-[1px] rounded-[4px] ${tx.isIncome ? 'bg-[#ecfdf5] text-[#10b981]' : 'bg-[#e6f4ff] text-[#1677ff]'}`}>{tx.isIncome ? '收入' : '支出'}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.tag}</span></div></div>
-                   <div className="flex flex-col items-end justify-center space-y-[2px]"><span className={`text-[15px] font-bold ${tx.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{tx.amount}</span><span className="text-[11px] font-medium text-[#8e8e93]">{tx.time}</span></div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, notify, onOpenProfile, onOpenSearch }) => {
   const latestTxDate = useMemo(() => {
     const dates = transactions.map((tx) => parseTransactionDate(tx.fullDate)).filter(Boolean);
@@ -1644,7 +1517,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
                     <button key={tab} onClick={() => setInsightTab(tab)} className={`text-[12px] px-[10px] py-[5px] rounded-[8px] whitespace-nowrap shrink-0 transition-all ${insightTab === tab ? 'font-semibold text-[#1677ff] bg-white border border-[#e5e5ea] shadow-[0_1px_4px_rgba(0,0,0,0.04)]' : 'font-medium text-[#8e8e93] active:bg-gray-200'}`}>{tab}</button>
                   ))}
                </div>
-               <button className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0 active:scale-95 transition-transform"><span className="text-[12px] font-medium text-[#1c1c1e] whitespace-nowrap">{monthLabel}</span><ChevronDown className="w-[12px] h-[12px] text-[#8e8e93] ml-[4px]" strokeWidth={2.5} /></button>
+               <div className="flex items-center bg-[#f4f5f8] border border-[#e5e5ea] px-[10px] py-[5px] rounded-[8px] shrink-0"><Calendar className="w-[11px] h-[11px] text-[#8e8e93] mr-[4px]" strokeWidth={2.5} /><span className="text-[12px] font-medium text-[#1c1c1e] whitespace-nowrap">{monthLabel}</span></div>
             </div>
             <div className="flex justify-between items-center px-[18px] mb-[10px]"><span className="text-[13px] font-bold text-[#1c1c1e]">支出增长 Top 5</span><span className="text-[11px] text-[#8e8e93]">较上月</span></div>
             <div className="flex flex-col space-y-[10px] overflow-y-auto hide-scrollbar">
@@ -2476,7 +2349,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         </div>
 
         <div className="bg-white rounded-[20px] p-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
-          <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => accounts[0] ? handleOpenAccountDetail(accounts[0]) : notify('暂无账户详情')} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
+          <div className="flex justify-between items-center mb-[16px]"><span className="text-[14px] font-bold text-[#1c1c1e]">资产分布 <span className="text-[11px] font-normal text-[#8e8e93]">(占比)</span></span><button onClick={() => { const el = document.getElementById('asset-accounts-grid'); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看详情 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5}/></button></div>
           <div className="flex items-center justify-between">
             <div className="w-[110px] h-[110px] relative shrink-0"><AssetsDonutChart percentages={assetDistribution} /><div className="absolute inset-0 flex flex-col items-center justify-center pt-[2px]"><span className="text-[11px] font-bold text-[#1c1c1e] tracking-tight">{formatDisplayMoney(totalAssets)}</span><span className="text-[9px] font-semibold text-[#8e8e93]">元</span></div></div>
             <div className="flex-1 ml-[16px] flex flex-col space-y-[8px]">
@@ -2487,7 +2360,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-[12px]">
+        <div id="asset-accounts-grid" className="grid grid-cols-2 gap-[12px] scroll-mt-[80px]">
           {renderAccountSection('银行账户', <Landmark className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={2.5} />, 'bank', 2, 'space-y-[14px]')}
           {renderAccountSection('电子钱包', <Wallet className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={2.5} />, 'wallet', 2, 'space-y-[14px]')}
           {renderAccountSection('交易所资产', <ArrowRightLeft className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={2.5} />, 'exchange', 3, 'space-y-[10px]')}
@@ -2500,7 +2373,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             {transactions.slice(0, 4).map((tx, idx, arr) => {
               const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
               return (
-                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail(relatedAcc); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
+                <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail(relatedAcc); else setIsChangesModalOpen(true); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                   <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-[14px] font-bold text-[#1c1c1e] truncate">{tx.title}</span>
