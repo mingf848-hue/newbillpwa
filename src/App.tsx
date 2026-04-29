@@ -399,7 +399,7 @@ function useSupabaseData() {
 
   const getTransactionBalanceDelta = (txLike) => {
     if (!txLike || isTransferTransaction(txLike) || isInternalAccountTransferTransaction(txLike)) return 0;
-    const amount = parseMoneyNumber(txLike.amount);
+    const amount = Math.abs(parseMoneyNumber(txLike.amount));
     if (!amount) return 0;
     return txLike.isIncome ? amount : -amount;
   };
