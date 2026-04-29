@@ -280,6 +280,82 @@ const INCOME_CATEGORIES = [
 
 const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
 
+const normalizeMoneyExpression = (value) => String(value || '')
+  .replace(/,/g, '')
+  .replace(/[×xX]/g, '*')
+  .replace(/[÷／/]/g, '/')
+  .replace(/[－–—]/g, '-')
+  .replace(/[＋]/g, '+')
+  .replace(/\s+/g, '');
+
+const evaluateMoneyExpression = (value) => {
+  const expression = normalizeMoneyExpression(value);
+  if (!expression) return null;
+  if (!/^[\d.+\-*/()]+$/.test(expression)) return null;
+  if (/[+\-*/.]$/.test(expression)) return null;
+
+  const tokens = expression.match(/\d*\.?\d+|[+\-*/()]/g);
+  if (!tokens || tokens.join('') !== expression) return null;
+
+  let index = 0;
+  const peek = () => tokens[index];
+  const consume = () => tokens[index++];
+
+  const parseFactor = () => {
+    const token = peek();
+    if (token === '+' || token === '-') {
+      consume();
+      const value = parseFactor();
+      return value === null ? null : (token === '-' ? -value : value);
+    }
+    if (token === '(') {
+      consume();
+      const value = parseExpression();
+      if (peek() !== ')') return null;
+      consume();
+      return value;
+    }
+    if (!/^\d*\.?\d+$/.test(token || '')) return null;
+    consume();
+    return Number(token);
+  };
+
+  const parseTerm = () => {
+    let value = parseFactor();
+    if (value === null) return null;
+    while (peek() === '*' || peek() === '/') {
+      const operator = consume();
+      const right = parseFactor();
+      if (right === null) return null;
+      if (operator === '/' && right === 0) return null;
+      value = operator === '*' ? value * right : value / right;
+    }
+    return value;
+  };
+
+  function parseExpression() {
+    let value = parseTerm();
+    if (value === null) return null;
+    while (peek() === '+' || peek() === '-') {
+      const operator = consume();
+      const right = parseTerm();
+      if (right === null) return null;
+      value = operator === '+' ? value + right : value - right;
+    }
+    return value;
+  }
+
+  const result = parseExpression();
+  if (index !== tokens.length || result === null || !Number.isFinite(result)) return null;
+  return Math.abs(result);
+};
+
+const formatExpressionResult = (value) => {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+};
+
 const normalizeAiCategory = (value, isIncome = false) => {
   const source = String(value || '').trim();
   if (!source) return isIncome ? '工资' : '其他';
@@ -737,6 +813,21 @@ ${transcript}
 
     if (key === 'delete') {
       setVal((prev) => String(prev || '').slice(0, -1));
+    } else if (type === 'record' && ['+', '-', '×', '÷'].includes(key)) {
+      setVal((prev) => {
+        const current = String(prev || '');
+        if (!current && key !== '-') return current;
+        if (/[+\-×÷]$/.test(current)) return `${current.slice(0, -1)}${key}`;
+        return `${current}${key}`;
+      });
+    } else if (key === '.') {
+      setVal((prev) => {
+        const current = String(prev || '');
+        const parts = current.split(/[+\-×÷]/);
+        const lastPart = parts[parts.length - 1] || '';
+        if (lastPart.includes('.')) return current;
+        return current ? `${current}.` : '0.';
+      });
     } else {
       setVal((prev) => `${prev || ''}${key}`);
     }
@@ -760,8 +851,9 @@ ${transcript}
 
   const addQuickAmount = (amount) => {
     setInputValue((prev) => {
-      const next = (parseFloat(String(prev || '0')) || 0) + amount;
-      return Number.isInteger(next) ? String(next) : next.toFixed(2);
+      const current = evaluateMoneyExpression(prev) ?? 0;
+      const next = current + amount;
+      return formatExpressionResult(next);
     });
   };
 
@@ -808,8 +900,9 @@ ${transcript}
 
   const handleSaveRecord = async () => {
     if (isSavingRecord) return;
-    const amount = Number(inputValue || 0);
-    if (!amount) { notify?.('请输入金额'); setShowInlineKeyboard(true); return; }
+    const amount = evaluateMoneyExpression(inputValue);
+    if (!amount) { notify?.('请输入有效金额'); setShowInlineKeyboard(true); return; }
+    setInputValue(formatExpressionResult(amount));
     const isIncome = recordActiveTab === '收入';
     const category = isIncome ? recordCategoryIncome : recordCategory;
     const account = recordAccount;
@@ -1404,7 +1497,7 @@ ${transcript}
               </div>
             </div>
             <div className="px-[16px] grid grid-cols-4 gap-[6px]">
-              {['1','2','3','+','4','5','6','-','7','8','9','×','.','0','delete'].map((key) => (
+              {['1','2','3','+','4','5','6','-','7','8','9','×','.','0','÷','delete'].map((key) => (
                 <button key={key} onClick={() => handleKeyboardPress(key, 'record')} className="bg-white h-[42px] rounded-[8px] flex flex-col items-center justify-center shadow-sm active:bg-gray-100">
                   {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','×','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
                 </button>

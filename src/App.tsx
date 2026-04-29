@@ -893,34 +893,128 @@ const getActionText = (element) => {
   return (label || '').replace(/\s+/g, ' ').trim();
 };
 
-const ProfileSheet = ({ isOpen, onClose }) => {
+const PROFILE_SETTINGS_KEY = 'bitledger_profile_settings';
+
+const readProfileSettings = () => {
+  try {
+    const saved = localStorage.getItem(PROFILE_SETTINGS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return {
+    name: 'Felix',
+    avatarSeed: 'Felix',
+    billReminder: true,
+    profitNotice: true,
+    privacyMode: false,
+    appLock: false,
+    language: '中文',
+    currency: 'CNY',
+  };
+};
+
+const ProfileToggle = ({ checked, onChange }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!checked)}
+    className={`relative h-[28px] w-[48px] rounded-full transition-colors ${checked ? 'bg-[#1677ff]' : 'bg-[#d1d5db]'}`}
+    aria-pressed={checked}
+  >
+    <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-[23px]' : 'translate-x-[3px]'}`} />
+  </button>
+);
+
+const ProfileSheet = ({ isOpen, onClose, notify }) => {
+  const [settings, setSettings] = useState(() => readProfileSettings());
+  const [activePanel, setActivePanel] = useState('menu');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSettings(readProfileSettings());
+    setActivePanel('menu');
+  }, [isOpen]);
+
+  const updateSettings = (updates) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...updates };
+      localStorage.setItem(PROFILE_SETTINGS_KEY, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('bitledger-profile-settings', { detail: next }));
+      return next;
+    });
+  };
+
   if (!isOpen) return null;
   const menuItems = [
-    { icon: <User className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2} />, label: '账户信息', sub: '管理个人信息与头像' },
-    { icon: <Bell className="w-[16px] h-[16px] text-[#ff9500]" strokeWidth={2} />, label: '通知设置', sub: '账单提醒、收益通知' },
-    { icon: <Shield className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2} />, label: '安全与隐私', sub: '密码、生物识别解锁' },
-    { icon: <Globe className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2} />, label: '语言与货币', sub: '中文 · AED / CNY' },
-    { icon: <HelpCircle className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} />, label: '帮助与反馈', sub: '使用说明、联系我们' },
+    { id: 'account', icon: <User className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2} />, label: '账户信息', sub: '管理昵称与头像' },
+    { id: 'notifications', icon: <Bell className="w-[16px] h-[16px] text-[#ff9500]" strokeWidth={2} />, label: '通知设置', sub: `${settings.billReminder ? '账单提醒开' : '账单提醒关'} · ${settings.profitNotice ? '收益通知开' : '收益通知关'}` },
+    { id: 'privacy', icon: <Shield className="w-[16px] h-[16px] text-[#10b981]" strokeWidth={2} />, label: '安全与隐私', sub: `${settings.privacyMode ? '隐私模式开' : '隐私模式关'} · ${settings.appLock ? 'App 锁开' : 'App 锁关'}` },
+    { id: 'locale', icon: <Globe className="w-[16px] h-[16px] text-[#8b5cf6]" strokeWidth={2} />, label: '语言与货币', sub: `${settings.language} · ${settings.currency}` },
+    { id: 'help', icon: <HelpCircle className="w-[16px] h-[16px] text-[#8e8e93]" strokeWidth={2} />, label: '帮助与反馈', sub: '查看使用说明与反馈方式' },
   ];
+
+  const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(settings.avatarSeed || settings.name || 'Felix')}`;
+  const panelTitle = menuItems.find((item) => item.id === activePanel)?.label || '个人中心';
+
   return (
     <div className="fixed inset-0 z-[800] flex justify-center items-end">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative bg-white w-full max-w-[430px] rounded-t-[24px] pb-[calc(24px+env(safe-area-inset-bottom))] pt-[8px] px-[20px] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-out">
         <div className="w-full flex justify-center mb-[16px]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full"></div></div>
         <div className="flex items-center space-x-[14px] mb-[20px] pb-[20px] border-b border-[#f4f5f8]">
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-[54px] h-[54px] rounded-full object-cover bg-blue-100 shrink-0" />
-          <div className="flex-1"><div className="text-[17px] font-bold text-[#1c1c1e]">Felix</div><div className="text-[13px] text-[#8e8e93]">BitLedger Pro 用户</div></div>
+          {activePanel !== 'menu' ? (
+            <button onClick={() => setActivePanel('menu')} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center shrink-0 active:scale-95 transition-transform"><ChevronLeft className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
+          ) : (
+            <img src={avatarUrl} alt="User" className="w-[54px] h-[54px] rounded-full object-cover bg-blue-100 shrink-0" />
+          )}
+          <div className="flex-1"><div className="text-[17px] font-bold text-[#1c1c1e]">{activePanel === 'menu' ? settings.name : panelTitle}</div><div className="text-[13px] text-[#8e8e93]">BitLedger Pro 用户</div></div>
           <button onClick={onClose} className="w-[30px] h-[30px] bg-[#f4f5f8] rounded-full flex items-center justify-center shrink-0 active:scale-95 transition-transform"><X className="w-[16px] h-[16px] text-[#5c5c5e]" strokeWidth={2.5} /></button>
         </div>
-        <div className="space-y-[2px]">
-          {menuItems.map((item, i) => (
-            <button key={i} onClick={onClose} className="w-full flex items-center px-[4px] py-[10px] rounded-[12px] active:bg-[#f4f5f8] transition-colors text-left">
-              <div className="w-[34px] h-[34px] rounded-[10px] bg-[#f4f5f8] flex items-center justify-center mr-[12px] shrink-0">{item.icon}</div>
-              <div className="flex-1"><div className="text-[14px] font-semibold text-[#1c1c1e]">{item.label}</div><div className="text-[12px] text-[#8e8e93]">{item.sub}</div></div>
-              <ChevronRight className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2.5} />
-            </button>
-          ))}
-        </div>
+        {activePanel === 'menu' && (
+          <div className="space-y-[2px]">
+            {menuItems.map((item) => (
+              <button key={item.id} onClick={() => setActivePanel(item.id)} className="w-full flex items-center px-[4px] py-[10px] rounded-[12px] active:bg-[#f4f5f8] transition-colors text-left">
+                <div className="w-[34px] h-[34px] rounded-[10px] bg-[#f4f5f8] flex items-center justify-center mr-[12px] shrink-0">{item.icon}</div>
+                <div className="flex-1"><div className="text-[14px] font-semibold text-[#1c1c1e]">{item.label}</div><div className="text-[12px] text-[#8e8e93]">{item.sub}</div></div>
+                <ChevronRight className="w-[16px] h-[16px] text-[#c7c7cc]" strokeWidth={2.5} />
+              </button>
+            ))}
+          </div>
+        )}
+        {activePanel === 'account' && (
+          <div className="space-y-[12px]">
+            <div className="flex items-center space-x-[12px] rounded-[16px] bg-[#f7f8fa] p-[12px]">
+              <img src={avatarUrl} alt="User" className="w-[50px] h-[50px] rounded-full bg-blue-100" />
+              <div className="flex-1">
+                <div className="text-[12px] text-[#8e8e93] mb-[4px]">昵称</div>
+                <input value={settings.name} onChange={(e) => updateSettings({ name: e.target.value || 'Felix' })} className="w-full bg-white rounded-[10px] px-[10px] py-[8px] text-[14px] font-semibold outline-none" />
+              </div>
+            </div>
+            <button onClick={() => { updateSettings({ avatarSeed: `${settings.name || 'Felix'}-${Date.now()}` }); notify?.('头像已刷新'); }} className="w-full h-[42px] rounded-[12px] bg-[#1677ff] text-white text-[14px] font-semibold active:bg-blue-700 transition-colors">换一个头像</button>
+          </div>
+        )}
+        {activePanel === 'notifications' && (
+          <div className="rounded-[16px] bg-[#f7f8fa] px-[14px]">
+            <div className="flex items-center justify-between py-[14px] border-b border-white"><div><div className="text-[14px] font-semibold">账单提醒</div><div className="text-[12px] text-[#8e8e93] mt-[2px]">保存本地开关状态</div></div><ProfileToggle checked={settings.billReminder} onChange={(billReminder) => updateSettings({ billReminder })} /></div>
+            <div className="flex items-center justify-between py-[14px]"><div><div className="text-[14px] font-semibold">收益通知</div><div className="text-[12px] text-[#8e8e93] mt-[2px]">理财收益消息提醒</div></div><ProfileToggle checked={settings.profitNotice} onChange={(profitNotice) => updateSettings({ profitNotice })} /></div>
+          </div>
+        )}
+        {activePanel === 'privacy' && (
+          <div className="rounded-[16px] bg-[#f7f8fa] px-[14px]">
+            <div className="flex items-center justify-between py-[14px] border-b border-white"><div><div className="text-[14px] font-semibold">隐私模式</div><div className="text-[12px] text-[#8e8e93] mt-[2px]">本机显示偏好</div></div><ProfileToggle checked={settings.privacyMode} onChange={(privacyMode) => updateSettings({ privacyMode })} /></div>
+            <div className="flex items-center justify-between py-[14px]"><div><div className="text-[14px] font-semibold">App 锁</div><div className="text-[12px] text-[#8e8e93] mt-[2px]">记录本机解锁偏好</div></div><ProfileToggle checked={settings.appLock} onChange={(appLock) => updateSettings({ appLock })} /></div>
+          </div>
+        )}
+        {activePanel === 'locale' && (
+          <div className="space-y-[12px]">
+            <div className="grid grid-cols-2 gap-[8px]">{['中文', 'English'].map((language) => <button key={language} onClick={() => updateSettings({ language })} className={`h-[42px] rounded-[12px] text-[14px] font-semibold ${settings.language === language ? 'bg-[#1677ff] text-white' : 'bg-[#f4f5f8] text-[#1c1c1e]'}`}>{language}</button>)}</div>
+            <div className="grid grid-cols-4 gap-[8px]">{['CNY', 'AED', 'USDT', 'USD'].map((currency) => <button key={currency} onClick={() => updateSettings({ currency })} className={`h-[42px] rounded-[12px] text-[13px] font-semibold ${settings.currency === currency ? 'bg-[#10b981] text-white' : 'bg-[#f4f5f8] text-[#1c1c1e]'}`}>{currency}</button>)}</div>
+          </div>
+        )}
+        {activePanel === 'help' && (
+          <div className="space-y-[10px] text-[13px] text-[#5c5c5e]">
+            <div className="rounded-[16px] bg-[#f7f8fa] p-[14px] leading-[1.7]">记一笔支持直接输入算式，例如 12.8+6×2；账单、统计、资产页可点击条目查看或编辑详情。</div>
+            <button onClick={() => { navigator.clipboard?.writeText('support@bitledger.local'); notify?.('反馈邮箱已复制'); }} className="w-full h-[42px] rounded-[12px] bg-[#1677ff] text-white text-[14px] font-semibold active:bg-blue-700 transition-colors">复制反馈邮箱</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2654,6 +2748,7 @@ export default function App() {
   const [isMessageCenterOpen, setIsMessageCenterOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [profileSettings, setProfileSettings] = useState(() => readProfileSettings());
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
   const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget } = useSupabaseData();
@@ -2694,6 +2789,14 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const handleProfileSettings = (event) => {
+      setProfileSettings(event.detail || readProfileSettings());
+    };
+    window.addEventListener('bitledger-profile-settings', handleProfileSettings);
+    return () => window.removeEventListener('bitledger-profile-settings', handleProfileSettings);
+  }, []);
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
@@ -2708,6 +2811,53 @@ export default function App() {
           width: 100%; max-width: 430px; height: 100dvh; min-height: 100dvh; min-height: -webkit-fill-available; max-height: 100%; margin: 0 auto;
           position: relative; overflow: hidden; display: flex; flex-direction: column;
           overscroll-behavior: none;
+        }
+        .app-container::before {
+          content: "";
+          position: absolute;
+          inset: -30%;
+          background:
+            radial-gradient(circle at 18% 22%, rgba(22, 119, 255, 0.18), transparent 24%),
+            radial-gradient(circle at 82% 14%, rgba(16, 185, 129, 0.15), transparent 22%),
+            radial-gradient(circle at 68% 86%, rgba(245, 158, 11, 0.13), transparent 24%);
+          animation: ambient-drift 12s ease-in-out infinite alternate;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .app-container::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: linear-gradient(115deg, transparent 0%, transparent 42%, rgba(255,255,255,0.32) 50%, transparent 58%, transparent 100%);
+          transform: translateX(-120%);
+          animation: global-sheen 7s ease-in-out infinite;
+          pointer-events: none;
+          z-index: 1;
+        }
+        .privacy-soften .scroll-area {
+          filter: saturate(0.92);
+        }
+        button {
+          transition-property: transform, opacity, background-color, color, border-color, box-shadow, filter;
+          transition-duration: 160ms;
+        }
+        button:active {
+          filter: brightness(0.98);
+        }
+        @keyframes ambient-drift {
+          from { transform: translate3d(-2%, -1%, 0) scale(1); }
+          to { transform: translate3d(2%, 1.5%, 0) scale(1.04); }
+        }
+        @keyframes global-sheen {
+          0%, 58% { transform: translateX(-120%); opacity: 0; }
+          70% { opacity: 1; }
+          100% { transform: translateX(120%); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .app-container::before,
+          .app-container::after {
+            animation: none;
+          }
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -2766,7 +2916,7 @@ export default function App() {
         }
       `}} />
 
-      <div className="app-container shadow-2xl">
+      <div className={`app-container shadow-2xl ${profileSettings.privacyMode ? 'privacy-soften' : ''}`}>
         <div className="scroll-area hide-scrollbar">
             {loading ? (
               <div className="flex w-full h-full items-center justify-center text-[#8e8e93] text-[14px]">正在同步数据...</div>
@@ -2790,7 +2940,7 @@ export default function App() {
           onBudgetClick={() => setActiveTab('home')}
         />
         <GlobalTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+        <ProfileSheet isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} notify={notify} />
         <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} transactions={activeTransactions} />
         <ActionToast message={toastMsg} />
       </div>
