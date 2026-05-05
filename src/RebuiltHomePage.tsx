@@ -1046,9 +1046,6 @@ ${transcript}
         currency: outCurrency,
         paymentMethod: outName,
         note: noteParts.join(' · '),
-        target_currency: inCurrency,
-        target_amount: formatMoney(targetAmount),
-        exchange_rate: isCrossCurrency ? String(rate) : null,
       });
       setTransferAmount('');
       setTransferRate('');

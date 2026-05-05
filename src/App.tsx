@@ -374,14 +374,22 @@ function useSupabaseData() {
     await syncAccountBalanceToDb(targetAccount, delta);
   };
 
+  const parseTransferTargetAmount = (txLike) => {
+    const note = String(txLike?.note || '');
+    const match = note.match(/收到\s+([\d,]+(?:\.\d+)?)\s+([A-Za-z]{2,5})/);
+    if (!match) return 0;
+    const value = parseMoneyNumber(match[1]);
+    return Number.isFinite(value) ? value : 0;
+  };
+
   const syncTransferAccountDelta = async (txLike, direction = 1) => {
     const transferAccounts = getTransferAccounts(txLike);
     const amount = parseMoneyNumber(txLike?.amount);
     if (!transferAccounts || !amount || !Number.isFinite(direction)) return;
     const { outAccount, inAccount } = transferAccounts;
     const outDelta = Math.abs(amount) * direction;
-    const targetAmountRaw = parseMoneyNumber(txLike?.target_amount);
-    const inDelta = (targetAmountRaw && Number.isFinite(targetAmountRaw) ? targetAmountRaw : Math.abs(amount)) * direction;
+    const targetAmountRaw = parseTransferTargetAmount(txLike);
+    const inDelta = (targetAmountRaw > 0 ? targetAmountRaw : Math.abs(amount)) * direction;
     const originalOutBalance = parseMoneyNumber(outAccount.balance);
     const originalInBalance = parseMoneyNumber(inAccount.balance);
     applyAccountBalanceDelta(outAccount.name, -outDelta);
