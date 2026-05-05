@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+
 type KeyboardMode = 'number' | 'text';
 
 type CustomInputKeyboardProps = {
@@ -56,7 +58,7 @@ export default function CustomInputKeyboard({
     onChange(`${currentValue}${key}`);
   };
 
-  return (
+  const overlay = (
     <div className="fixed inset-0 z-[260] flex items-end justify-center" style={{ touchAction: 'none' }}>
       <div className="absolute inset-0 bg-black/25 backdrop-blur-[1px]" onClick={onClose} style={{ touchAction: 'none' }}></div>
       <div className="relative w-full max-w-[430px] rounded-t-[24px] bg-white px-[16px] pt-[10px] pb-[calc(env(safe-area-inset-bottom,0px)+16px)] shadow-2xl animate-in slide-in-from-bottom-6 duration-200 ease-out">
@@ -167,4 +169,7 @@ export default function CustomInputKeyboard({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return overlay;
+  return createPortal(overlay, document.body);
 }

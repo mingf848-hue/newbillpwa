@@ -471,6 +471,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [transferPickerOpen, setTransferPickerOpen] = useState(null);
   const [transferRate, setTransferRate] = useState('');
   const [isTransferRateKeyboardOpen, setIsTransferRateKeyboardOpen] = useState(false);
+  const [transferFee, setTransferFee] = useState('');
+  const [isTransferFeeKeyboardOpen, setIsTransferFeeKeyboardOpen] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
 
@@ -478,10 +480,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   useEffect(() => {
     const el = document.querySelector('.scroll-area') as HTMLElement | null;
     if (!el) return;
-    const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen || isTransferRateKeyboardOpen;
+    const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen || isTransferRateKeyboardOpen || isTransferFeeKeyboardOpen;
     if (locked) el.style.overflow = 'hidden';
     return () => { el.style.overflow = ''; };
-  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen]);
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen, isTransferFeeKeyboardOpen]);
 
   const closeModalsRef = useRef<(() => void) | null>(null);
 
@@ -489,6 +491,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (isTransferFeeKeyboardOpen) { setIsTransferFeeKeyboardOpen(false); return; }
       if (isTransferRateKeyboardOpen) { setIsTransferRateKeyboardOpen(false); return; }
       if (isBudgetKeyboardOpen) { setIsBudgetKeyboardOpen(false); return; }
       if (isTransferKeyboardOpen) { setIsTransferKeyboardOpen(false); return; }
@@ -496,7 +499,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen]);
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen, isTransferFeeKeyboardOpen]);
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
@@ -1013,19 +1016,28 @@ ${transcript}
     const inCurrency = inAcc ? (inAcc.currency || 'CNY') : 'CNY';
     const isCrossCurrency = outCurrency !== inCurrency;
     const rate = Number(transferRate || 0);
+    const fee = Math.max(0, Number(transferFee || 0));
     if (isCrossCurrency && (!rate || rate <= 0)) {
       notify?.('请输入有效的兑换汇率');
       return;
     }
-    const targetAmount = isCrossCurrency ? amount * rate : amount;
+    if (fee >= amount) {
+      notify?.('手续费不能大于等于转出金额');
+      return;
+    }
+    const netAmount = amount - fee;
+    const targetAmount = isCrossCurrency ? netAmount * rate : netAmount;
     const outName = outAcc ? outAcc.name : '转出账户';
     const inName = inAcc ? inAcc.name : '转入账户';
     const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
     const noteParts = ['账户转账'];
+    if (fee > 0) noteParts.push(`手续费 ${formatMoney(fee)} ${outCurrency}`);
     if (isCrossCurrency) {
       noteParts.push(`汇率 1 ${outCurrency} = ${rate} ${inCurrency}`);
+      noteParts.push(`收到 ${formatMoney(targetAmount)} ${inCurrency}`);
+    } else if (fee > 0) {
       noteParts.push(`收到 ${formatMoney(targetAmount)} ${inCurrency}`);
     }
 
@@ -1049,6 +1061,7 @@ ${transcript}
       });
       setTransferAmount('');
       setTransferRate('');
+      setTransferFee('');
       notify?.(isCrossCurrency ? `已转账并兑换为 ${formatMoney(targetAmount)} ${inCurrency}` : '转账已保存');
     } catch (e) {
       notify?.('转账保存失败，请重试');
@@ -1612,13 +1625,14 @@ ${transcript}
             {renderTransferAccountPicker('out')}
             <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={transferInAccount ? <HomeBrandLogo type={transferInAccount.icon || 'landmark'} size={22} /> : <CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} />
             {renderTransferAccountPicker('in')}
-            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY')} />
+            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} />
+            <TransferRow onClick={()=>setIsTransferFeeKeyboardOpen(true)} label="手续费" value={transferFee ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferFee}` : '可选'} valueColor={transferFee ? 'text-[#ff9500] font-bold' : 'text-gray-300'} showChevron={false} border={transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY')} />
             {transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY') && (
               <>
                 <TransferRow onClick={()=>setIsTransferRateKeyboardOpen(true)} label="兑换汇率" value={transferRate ? `1 ${transferOutAccount.currency} = ${transferRate} ${transferInAccount.currency}` : '请输入汇率'} valueColor={transferRate ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} />
                 <div className="flex items-center justify-between py-[10px] text-[12px] text-[#8e8e93]">
                   <span className="shrink-0 w-[70px]">实际入账</span>
-                  <span className="text-[13px] font-bold text-[#10b981]">{transferAmount && transferRate ? `${getCurrencySymbol(transferInAccount.currency)} ${formatMoney(Number(transferAmount) * Number(transferRate))}` : '—'}</span>
+                  <span className="text-[13px] font-bold text-[#10b981]">{transferAmount && transferRate ? `${getCurrencySymbol(transferInAccount.currency)} ${formatMoney(Math.max(0, (Number(transferAmount) - Number(transferFee || 0))) * Number(transferRate))}` : '—'}</span>
                 </div>
               </>
             )}
@@ -1665,6 +1679,33 @@ ${transcript}
             if (k === 'save') return <button key={k} onClick={() => setIsTransferRateKeyboardOpen(false)} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">确定</button>;
             if (k === '0') return <button key={k} onClick={() => applyRateKey('0')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
             return <button key={k} onClick={() => applyRateKey(k)} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
+          })}
+        </div>
+      </div>
+
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isTransferFeeKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsTransferFeeKeyboardOpen(false)} style={{ touchAction: isTransferFeeKeyboardOpen ? 'none' : 'auto' }} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isTransferFeeKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsTransferFeeKeyboardOpen(false)}>取消</span><span className="font-bold">手续费</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>setIsTransferFeeKeyboardOpen(false)}>确定</span></div></div>
+        <div className="p-[20px] bg-white flex flex-col items-center justify-center border-b border-gray-50">
+          <div className="text-[11px] text-[#8e8e93] mb-[6px]">从转出金额中扣除（{transferOutAccount?.currency || ''}）</div>
+          <div className="flex items-center space-x-[6px] text-[28px] font-bold"><span>{getCurrencySymbol(transferOutAccount?.currency || 'CNY')}</span><span>{transferFee || '0'}</span><div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse"></div></div>
+        </div>
+        <div className="p-[16px] grid grid-cols-4 gap-[6px]">
+          {['1','2','3','delete','4','5','6','clear','7','8','9','save','.','0'].map(k => {
+            const applyFeeKey = (key) => {
+              setTransferFee((prev) => {
+                const cur = String(prev || '');
+                if (key === 'delete') return cur.slice(0, -1);
+                if (key === '.') return cur.includes('.') ? cur : (cur ? `${cur}.` : '0.');
+                if (cur === '0' && !cur.includes('.')) return key;
+                return `${cur}${key}`;
+              });
+            };
+            if (k === 'delete') return <button key={k} onClick={() => applyFeeKey('delete')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><Delete className="w-[18px] h-[18px]" /></button>;
+            if (k === 'clear') return <button key={k} onClick={() => setTransferFee('')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 text-[14px]">清空</button>;
+            if (k === 'save') return <button key={k} onClick={() => setIsTransferFeeKeyboardOpen(false)} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">确定</button>;
+            if (k === '0') return <button key={k} onClick={() => applyFeeKey('0')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
+            return <button key={k} onClick={() => applyFeeKey(k)} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
           })}
         </div>
       </div>
