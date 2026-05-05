@@ -625,7 +625,27 @@ function useSupabaseData() {
     }
   };
 
-  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget };
+  const adjustTransferReceived = async (txLike, deltaAmount, nextNote) => {
+    if (!txLike?.id || !deltaAmount) return;
+    const transferAccounts = getTransferAccounts(txLike);
+    if (!transferAccounts) {
+      await updateTransaction(txLike.id, { note: nextNote });
+      return;
+    }
+    const { inAccount } = transferAccounts;
+    const originalInBalance = parseMoneyNumber(inAccount.balance);
+    applyAccountBalanceDelta(inAccount.name, deltaAmount);
+    try {
+      await syncAccountBalanceToDb(inAccount, deltaAmount);
+      await updateTransaction(txLike.id, { note: nextNote });
+    } catch (error) {
+      try { await setAccountBalanceInDb(inAccount, originalInBalance); } catch {}
+      await reloadData();
+      throw error;
+    }
+  };
+
+  return { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget, adjustTransferReceived };
 }
 
 // ==========================================
@@ -1809,7 +1829,7 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   );
 };
 
-const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, updateTransaction, deleteTransaction, notify, onOpenProfile }) => {
+const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, updateTransaction, deleteTransaction, adjustTransferReceived, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -1930,10 +1950,43 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   }, [isRefreshing]);
 
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
-  const handleOpenModal = (tx) => { setSelectedTx(tx); setTempNote(tx.note || tx.title); };
-  const handleSave = () => {
+  const parseReceivedFromNote = (note) => {
+    const match = String(note || '').match(/收到\s+([\d,]+(?:\.\d+)?)\s+([A-Za-z]{2,5})/);
+    if (!match) return null;
+    return { amount: parseMoneyNumber(match[1]), currency: match[2] };
+  };
+  const isTransferTx = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+  const [tempReceived, setTempReceived] = useState('');
+  const handleOpenModal = (tx) => {
+    setSelectedTx(tx);
+    setTempNote(tx.note || tx.title);
+    const r = parseReceivedFromNote(tx.note);
+    setTempReceived(r ? String(r.amount) : '');
+  };
+  const handleSave = async () => {
     if (!selectedTx) return;
-    updateTransaction(selectedTx.id, { title: tempNote || selectedTx.title, note: tempNote });
+    let nextNote = tempNote;
+    let receivedDelta = 0;
+    if (isTransferTx(selectedTx)) {
+      const original = parseReceivedFromNote(selectedTx.note);
+      const newAmount = Number(tempReceived || 0);
+      if (original && newAmount > 0 && newAmount !== original.amount) {
+        receivedDelta = newAmount - original.amount;
+        nextNote = String(tempNote).replace(/收到\s+[\d,]+(?:\.\d+)?\s+([A-Za-z]{2,5})/, `收到 ${formatDisplayMoney(newAmount)} $1`);
+      }
+    }
+    if (receivedDelta !== 0 && adjustTransferReceived) {
+      try {
+        await adjustTransferReceived(selectedTx, receivedDelta, nextNote);
+        setSelectedTx(null);
+        notify('已更新实际入账，账户余额已同步');
+        return;
+      } catch (e) {
+        notify('更新失败，请重试');
+        return;
+      }
+    }
+    updateTransaction(selectedTx.id, { title: nextNote || selectedTx.title, note: nextNote });
     setSelectedTx(null);
     notify('账单备注已保存');
   };
@@ -2183,6 +2236,16 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><TagIcon className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">分类</span></div><Tag type={selectedTx.tagType} text={selectedTx.tag} /></div>
                    <div className="flex justify-between items-center py-[14px] border-b border-[#f4f5f8] border-dashed"><div className="flex items-center text-[#8e8e93]"><CalendarDays className="w-[18px] h-[18px] mr-[8px]" strokeWidth={2} /><span className="text-[14px] font-medium text-[#5c5c5e]">时间</span></div><span className="text-[13px] font-medium text-[#1c1c1e]">{selectedTx.fullDate}</span></div>
                 </div>
+                {isTransferTx(selectedTx) && parseReceivedFromNote(selectedTx.note) && (
+                  <div className="mt-[20px]">
+                    <div className="text-[14px] font-bold text-[#1c1c1e] mb-[10px]">实际入账金额 <span className="text-[11px] font-medium text-[#8e8e93]">({parseReceivedFromNote(selectedTx.note)?.currency})</span></div>
+                    <div className="border-[1.5px] border-[#10b981] rounded-[10px] px-[12px] py-[10px] flex items-center bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]">
+                      <input type="number" inputMode="decimal" step="0.01" value={tempReceived} onChange={(e) => setTempReceived(e.target.value)} className="flex-1 text-[14px] font-medium text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="实际收到的金额"/>
+                      <span className="text-[12px] font-medium text-[#8e8e93] shrink-0 ml-[8px]">{parseReceivedFromNote(selectedTx.note)?.currency}</span>
+                    </div>
+                    <div className="text-[11px] text-[#8e8e93] mt-[6px] leading-[1.5]">修改后会同步更新转入账户余额（差额 = 新金额 − 原金额）</div>
+                  </div>
+                )}
                 <div className="mt-[20px]">
                    <div className="text-[14px] font-bold text-[#1c1c1e] mb-[10px]">备注</div>
                    <div className="border-[1.5px] border-[#1677ff] rounded-[10px] px-[12px] py-[10px] flex items-center bg-white shadow-[0_0_0_4px_rgba(22,119,255,0.1)] transition-shadow">
@@ -2788,7 +2851,7 @@ export default function App() {
   const [profileSettings, setProfileSettings] = useState(() => readProfileSettings());
   const [toastMsg, setToastMsg] = useState('');
   const toastTimerRef = useRef(null);
-  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget } = useSupabaseData();
+  const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget, adjustTransferReceived } = useSupabaseData();
   const activeTransactions = useMemo(
     () => transactions
       .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
@@ -2960,7 +3023,7 @@ export default function App() {
             ) : (
               <>
                 {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
-                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
+                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} adjustTransferReceived={adjustTransferReceived} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
                 {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
