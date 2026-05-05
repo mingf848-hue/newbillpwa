@@ -2,9 +2,9 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Search, Bell, Calendar as CalendarIcon, ChevronDown, Eye, ArrowUpRight,
-  PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home, FileText,
+  PenLine, PieChart as PieChartIcon, ArrowRightLeft, Mic, Home as HomeIcon, FileText,
   PieChart, Wallet, ChevronRight, X, Camera, Utensils, Clock, Tag,
-  XCircle, Delete, Briefcase, CreditCard, Info, Check, Sparkles, ShoppingBag, Gamepad2, MoreHorizontal, ChevronLeft, TrendingUp, GraduationCap, Heart, Car
+  XCircle, Delete, Briefcase, CreditCard, Info, Check, Sparkles, ShoppingBag, Gamepad2, MoreHorizontal, ChevronLeft, TrendingUp, GraduationCap, Heart, Car, Banknote, Landmark
 } from 'lucide-react';
 
 // ==========================================
@@ -20,22 +20,50 @@ const LogoIcon = () => (
 );
 
 const HOME_BRAND_LOGOS = {
-  apple:   { url: 'https://cdn.simpleicons.org/apple/ffffff',     bg: '#000000' },
-  openai:  { url: 'https://cdn.simpleicons.org/openai/ffffff',    bg: '#10a37f' },
-  alipay:  { url: 'https://cdn.simpleicons.org/alipay/ffffff',    bg: '#1677ff' },
-  okx:     { url: 'https://cdn.simpleicons.org/okx/ffffff',       bg: '#000000' },
-  bitget:  { url: 'https://cdn.simpleicons.org/bitget/000000',    bg: '#00e5c0', fallbackText: 'BG', textColor: '#000' },
-  huobi:   { url: 'https://cdn.simpleicons.org/huobi/ffffff',     bg: '#1853db', fallbackText: 'HTX' },
-  usdt:    { url: 'https://cdn.simpleicons.org/tether/ffffff',    bg: '#26A17B' },
+  apple:      { url: 'https://cdn.simpleicons.org/apple/ffffff',       bg: '#000000' },
+  openai:     { url: 'https://cdn.simpleicons.org/openai/ffffff',      bg: '#10a37f' },
+  alipay:     { url: 'https://cdn.simpleicons.org/alipay/ffffff',      bg: '#1677ff' },
+  wechat:     { url: 'https://cdn.simpleicons.org/wechat/ffffff',      bg: '#07c160' },
+  okx:        { url: 'https://cdn.simpleicons.org/okx/ffffff',         bg: '#000000' },
+  binance:    { url: 'https://cdn.simpleicons.org/binance/1e2329',     bg: '#fcd535' },
+  bitget:     { url: 'https://cdn.simpleicons.org/bitget/000000',      bg: '#00e5c0', fallbackText: 'BG', textColor: '#000' },
+  huobi:      { url: 'https://cdn.simpleicons.org/huobi/ffffff',       bg: '#1853db', fallbackText: 'HTX' },
+  gateio:     { url: 'https://logo.clearbit.com/gate.io',              bg: '#0d6efd' },
+  kucoin:     { url: 'https://logo.clearbit.com/kucoin.com',           bg: '#24ae8f' },
+  mexc:       { url: 'https://logo.clearbit.com/mexc.com',             bg: '#2152f3' },
+  bybit:      { url: 'https://logo.clearbit.com/bybit.com',            bg: '#121214' },
+  mashreq:    { url: 'https://logo.clearbit.com/mashreq.com',          bg: '#f37021' },
+  adcb:       { url: 'https://logo.clearbit.com/adcb.com',             bg: '#ffffff' },
+  ccb:        { url: 'https://logo.clearbit.com/ccb.com',              bg: '#003B90' },
+  usdt:       { url: 'https://cdn.simpleicons.org/tether/ffffff',      bg: '#26A17B' },
+  bitcoin:    { url: 'https://cdn.simpleicons.org/bitcoin/ffffff',     bg: '#F7931A' },
+  ethereum:   { url: 'https://cdn.simpleicons.org/ethereum/ffffff',    bg: '#627EEA' },
+  amazon:     { url: 'https://cdn.simpleicons.org/amazon/ff9900',      bg: '#232f3e' },
+  mastercard: { url: 'https://logo.clearbit.com/mastercard.com',       bg: '#ffffff' },
+  noon:       { url: 'https://logo.clearbit.com/noon.com',             bg: '#fee000' },
 };
 
 const HomeBrandLogo = ({ type, size = 28 }) => {
   const [error, setError] = useState(false);
-  const config = HOME_BRAND_LOGOS[type];
   const imgSize = Math.round(size * 0.6);
+  if (type === 'cash') {
+    return (
+      <div className="rounded-full flex items-center justify-center shrink-0 bg-[#e6f4ff] border-2 border-[#52c41a]" style={{ width: size, height: size }}>
+        <Banknote style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5) }} className="text-[#52c41a]" />
+      </div>
+    );
+  }
+  if (type === 'landmark') {
+    return (
+      <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: size, height: size }}>
+        <Landmark style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5) }} className="text-white" strokeWidth={2.5} />
+      </div>
+    );
+  }
+  const config = HOME_BRAND_LOGOS[type];
   if (!config) return (
     <div className="rounded-full flex items-center justify-center shrink-0 bg-[#5c8af0]" style={{ width: size, height: size }}>
-      <ArrowRightLeft style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
+      <CreditCard style={{ width: imgSize, height: imgSize }} className="text-white" strokeWidth={2.5} />
     </div>
   );
   return (
@@ -43,17 +71,34 @@ const HomeBrandLogo = ({ type, size = 28 }) => {
       {error
         ? config.fallbackText
           ? <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 800, color: config.textColor || '#ffffff', letterSpacing: '-0.5px', lineHeight: 1 }}>{config.fallbackText}</span>
-          : <ShoppingBag style={{ width: imgSize, height: imgSize }} className="text-white" />
+          : <CreditCard style={{ width: imgSize, height: imgSize }} className="text-white" />
         : <img src={config.url} alt={type} style={{ width: imgSize, height: imgSize, objectFit: 'contain' }} onError={() => setError(true)} />
       }
     </div>
   );
 };
-const ProfileAvatarButton = ({ onClick }: { onClick?: () => void }) => (
-  <button onClick={onClick} aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
-  </button>
-);
+const PROFILE_SETTINGS_KEY = 'bitledger_profile_settings';
+const ProfileAvatarButton = ({ onClick }: { onClick?: () => void }) => {
+  const [seed, setSeed] = useState<string>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROFILE_SETTINGS_KEY) || 'null');
+      return saved?.avatarSeed || saved?.name || 'Felix';
+    } catch { return 'Felix'; }
+  });
+  useEffect(() => {
+    const onProfileChange = (e: any) => {
+      const next = e?.detail || {};
+      setSeed(next.avatarSeed || next.name || 'Felix');
+    };
+    window.addEventListener('bitledger-profile-settings', onProfileChange);
+    return () => window.removeEventListener('bitledger-profile-settings', onProfileChange);
+  }, []);
+  return (
+    <button onClick={onClick} aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`} alt="User" className="w-full h-full object-cover" />
+    </button>
+  );
+};
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 
@@ -104,7 +149,7 @@ const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time
 };
 
 // --- 表单行组件 ---
-const FormRow = ({ iconBg, iconColor, iconShape = 'rounded-full', Icon: IconComp, label, value, valueColor = 'text-[#1c1c1e]', showChevron = true, extra, border = true, onClick }) => (
+const FormRow = ({ iconBg, iconColor, iconShape = 'rounded-full', Icon: IconComp, label, value, valueColor = 'text-[#1c1c1e]', valueIcon, showChevron = true, extra, border = true, onClick }) => (
   <div onClick={onClick} className={`flex items-center justify-between py-[12px] ${border ? 'border-b border-[#f0f0f0]' : ''} active:bg-gray-50 transition-colors cursor-pointer`}>
     <div className="flex items-center space-x-[12px]">
       <div className={`w-[24px] h-[24px] flex items-center justify-center ${iconShape} ${iconBg}`}>
@@ -112,7 +157,8 @@ const FormRow = ({ iconBg, iconColor, iconShape = 'rounded-full', Icon: IconComp
       </div>
       <span className="text-[13px] text-[#1c1c1e]">{label}</span>
     </div>
-    <div className="flex items-center space-x-[4px]">
+    <div className="flex items-center space-x-[6px]">
+      {valueIcon}
       <span className={`text-[13px] ${valueColor}`}>{value}</span>
       {extra && <span className="text-[11px] text-[#c7c7cc] ml-[4px]">{extra}</span>}
       {showChevron && <ChevronDown className="w-[14px] h-[14px] text-[#c7c7cc] ml-[2px]" strokeWidth={2} />}
@@ -262,6 +308,7 @@ const EXPENSE_CATEGORIES = [
   { name: '购物', icon: ShoppingBag, color: '#fbbf24' },
   { name: '娱乐', icon: Gamepad2, color: '#a78bfa' },
   { name: '住房', icon: Briefcase, color: '#10b981' },
+  { name: '家庭', icon: HomeIcon, color: '#ec4899' },
   { name: '医疗', icon: Heart, color: '#f97316' },
   { name: '教育', icon: GraduationCap, color: '#06b6d4' },
   { name: '理财', icon: TrendingUp, color: '#8b5cf6' },
@@ -278,7 +325,7 @@ const INCOME_CATEGORIES = [
   { name: '其他', icon: MoreHorizontal, color: '#8e8e93' },
 ];
 
-const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
+const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '家庭': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
 
 const normalizeMoneyExpression = (value) => String(value || '')
   .replace(/,/g, '')
@@ -384,8 +431,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [inputValue, setInputValue] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState('月');
-  const [selectedMonth, setSelectedMonth] = useState(4);
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const pressTimer = useRef(null);
   const speechRecognitionRef = useRef(null);
   const speechTranscriptRef = useRef('');
@@ -422,6 +469,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [transferInAccount, setTransferInAccount] = useState(null);
   const [isTransferKeyboardOpen, setIsTransferKeyboardOpen] = useState(false);
   const [transferPickerOpen, setTransferPickerOpen] = useState(null);
+  const [transferRate, setTransferRate] = useState('');
+  const [isTransferRateKeyboardOpen, setIsTransferRateKeyboardOpen] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
 
@@ -429,10 +478,10 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   useEffect(() => {
     const el = document.querySelector('.scroll-area') as HTMLElement | null;
     if (!el) return;
-    const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen;
+    const locked = Boolean(activeModal) || isBudgetKeyboardOpen || isTransferKeyboardOpen || isTransferRateKeyboardOpen;
     if (locked) el.style.overflow = 'hidden';
     return () => { el.style.overflow = ''; };
-  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen]);
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen]);
 
   const closeModalsRef = useRef<(() => void) | null>(null);
 
@@ -440,13 +489,14 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (isTransferRateKeyboardOpen) { setIsTransferRateKeyboardOpen(false); return; }
       if (isBudgetKeyboardOpen) { setIsBudgetKeyboardOpen(false); return; }
       if (isTransferKeyboardOpen) { setIsTransferKeyboardOpen(false); return; }
       if (activeModal) closeModalsRef.current?.();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen]);
+  }, [activeModal, isBudgetKeyboardOpen, isTransferKeyboardOpen, isTransferRateKeyboardOpen]);
 
   const yearOptions = useMemo(() => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index), [selectedYear]);
   const selectedMonthLabel = `${selectedYear}年${selectedMonth}月`;
@@ -692,7 +742,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 1. 只返回一个 JSON 对象。
 2. 字段固定为：amount, type, category, merchant, note, currency, accountHint。
 3. type 只能是 expense 或 income。
-4. category 只能从这些中文分类中选择：餐饮、交通、购物、娱乐、住房、医疗、教育、理财、工资、奖金、兼职、其他、转账。
+4. category 只能从这些中文分类中选择：餐饮、交通、购物、娱乐、住房、家庭、医疗、教育、理财、工资、奖金、兼职、其他、转账。
 5. currency 尽量返回 CNY、AED、USDT、BTC、ETH 之一；无法判断默认 CNY。
 6. accountHint 尽量提取 支付宝、微信、Apple Pay、银行卡、现金、OKX、Bitget、火币、HTX、币安、Bybit 等；不确定就返回空字符串。
 
@@ -959,11 +1009,25 @@ ${transcript}
       notify?.('转出与转入账户不能相同');
       return;
     }
+    const outCurrency = outAcc ? (outAcc.currency || 'CNY') : 'CNY';
+    const inCurrency = inAcc ? (inAcc.currency || 'CNY') : 'CNY';
+    const isCrossCurrency = outCurrency !== inCurrency;
+    const rate = Number(transferRate || 0);
+    if (isCrossCurrency && (!rate || rate <= 0)) {
+      notify?.('请输入有效的兑换汇率');
+      return;
+    }
+    const targetAmount = isCrossCurrency ? amount * rate : amount;
     const outName = outAcc ? outAcc.name : '转出账户';
     const inName = inAcc ? inAcc.name : '转入账户';
     const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';
     const now = new Date();
     const { dateLabel, fullDate, time } = formatTransactionDate(now);
+    const noteParts = ['账户转账'];
+    if (isCrossCurrency) {
+      noteParts.push(`汇率 1 ${outCurrency} = ${rate} ${inCurrency}`);
+      noteParts.push(`收到 ${formatMoney(targetAmount)} ${inCurrency}`);
+    }
 
     setIsSavingTransfer(true);
     try {
@@ -979,12 +1043,16 @@ ${transcript}
         isIncome: false,
         time,
         fullDate,
-        currency: outAcc ? (outAcc.currency || 'CNY') : 'CNY',
+        currency: outCurrency,
         paymentMethod: outName,
-        note: '账户转账'
+        note: noteParts.join(' · '),
+        target_currency: inCurrency,
+        target_amount: formatMoney(targetAmount),
+        exchange_rate: isCrossCurrency ? String(rate) : null,
       });
       setTransferAmount('');
-      notify?.('转账已保存');
+      setTransferRate('');
+      notify?.(isCrossCurrency ? `已转账并兑换为 ${formatMoney(targetAmount)} ${inCurrency}` : '转账已保存');
     } catch (e) {
       notify?.('转账保存失败，请重试');
     } finally {
@@ -1005,7 +1073,7 @@ ${transcript}
         <>
           <FormRow Icon={Utensils} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="分类" value={recordCategory} onClick={() => toggleRecordPicker('category')} />
           {renderRecordPickerPanel('category')}
-          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value={accLabel} onClick={() => toggleRecordPicker('account')} />
+          <FormRow Icon={Wallet} iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" label="账户" value={accLabel} valueIcon={recordAccount ? <HomeBrandLogo type={recordAccount.icon || 'landmark'} size={20} /> : null} onClick={() => toggleRecordPicker('account')} />
           {renderRecordPickerPanel('account')}
           <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => toggleRecordPicker('datetime')} />
           {renderRecordPickerPanel('datetime')}
@@ -1020,7 +1088,7 @@ ${transcript}
         <>
           <FormRow Icon={Briefcase} iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" label="分类" value={recordCategoryIncome} onClick={() => toggleRecordPicker('category')} />
           {renderRecordPickerPanel('category')}
-          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} onClick={() => toggleRecordPicker('account')} />
+          <FormRow Icon={CreditCard} iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" label="账户" value={accLabel} valueIcon={recordAccount ? <HomeBrandLogo type={recordAccount.icon || 'landmark'} size={20} /> : null} onClick={() => toggleRecordPicker('account')} />
           {renderRecordPickerPanel('account')}
           <FormRow Icon={Clock} iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" label="时间" value={dateLabel} onClick={() => toggleRecordPicker('datetime')} />
           {renderRecordPickerPanel('datetime')}
@@ -1497,9 +1565,9 @@ ${transcript}
               </div>
             </div>
             <div className="px-[16px] grid grid-cols-4 gap-[6px]">
-              {['1','2','3','+','4','5','6','-','7','8','9','×','.','0','÷','delete'].map((key) => (
+              {['1','2','3','+','4','5','6','-','7','8','9','÷','.','0','delete'].map((key) => (
                 <button key={key} onClick={() => handleKeyboardPress(key, 'record')} className="bg-white h-[42px] rounded-[8px] flex flex-col items-center justify-center shadow-sm active:bg-gray-100">
-                  {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','×','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
+                  {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','÷','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
                 </button>
               ))}
               <button onClick={() => setShowInlineKeyboard(false)} className="bg-[#1677ff] h-[42px] rounded-[8px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors">
@@ -1543,11 +1611,20 @@ ${transcript}
         <div className="p-[16px] space-y-[12px]">
           <div className="flex items-center justify-center space-x-[4px] text-[#1677ff] py-[4px]"><Info className="w-[12px] h-[12px]" /><span className="text-[11px]">记录资金从一个账户转移到另一个账户</span></div>
           <div className="bg-white rounded-[16px] px-[16px]">
-            <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={<Wallet className="w-[14px] h-[14px] text-[#10b981]" />} />
+            <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'out' ? null : 'out')} label="转出账户" value={transferOutAccount ? transferOutAccount.name : '选择账户'} IconElement={transferOutAccount ? <HomeBrandLogo type={transferOutAccount.icon || 'landmark'} size={22} /> : <Wallet className="w-[14px] h-[14px] text-[#10b981]" />} />
             {renderTransferAccountPicker('out')}
-            <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={<CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} />
+            <TransferRow onClick={()=>setTransferPickerOpen(transferPickerOpen === 'in' ? null : 'in')} label="转入账户" value={transferInAccount ? transferInAccount.name : '选择账户'} IconElement={transferInAccount ? <HomeBrandLogo type={transferInAccount.icon || 'landmark'} size={22} /> : <CreditCard className="w-[14px] h-[14px] text-[#8b5cf6]" />} />
             {renderTransferAccountPicker('in')}
-            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={false} />
+            <TransferRow onClick={()=>setIsTransferKeyboardOpen(true)} label="转账金额" value={transferAmount ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferAmount}` : '请输入金额'} valueColor={transferAmount ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} border={transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY')} />
+            {transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY') && (
+              <>
+                <TransferRow onClick={()=>setIsTransferRateKeyboardOpen(true)} label="兑换汇率" value={transferRate ? `1 ${transferOutAccount.currency} = ${transferRate} ${transferInAccount.currency}` : '请输入汇率'} valueColor={transferRate ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} />
+                <div className="flex items-center justify-between py-[10px] text-[12px] text-[#8e8e93]">
+                  <span className="shrink-0 w-[70px]">实际入账</span>
+                  <span className="text-[13px] font-bold text-[#10b981]">{transferAmount && transferRate ? `${getCurrencySymbol(transferInAccount.currency)} ${formatMoney(Number(transferAmount) * Number(transferRate))}` : '—'}</span>
+                </div>
+              </>
+            )}
           </div>
           <button disabled={isSavingTransfer} onClick={handleSaveTransfer} className="w-full h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors shadow-lg disabled:opacity-60">{isSavingTransfer ? '保存中…' : '保存转账'}</button>
         </div>
@@ -1564,6 +1641,33 @@ ${transcript}
             if (k === 'save') return <button key={k} onClick={()=>setIsTransferKeyboardOpen(false)} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">确定</button>;
             if (k === '0') return <button key={k} onClick={()=>handleKeyboardPress('0', 'transfer')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
             return <button key={k} onClick={()=>handleKeyboardPress(k, 'transfer')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
+          })}
+        </div>
+      </div>
+
+      <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${isTransferRateKeyboardOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsTransferRateKeyboardOpen(false)} style={{ touchAction: isTransferRateKeyboardOpen ? 'none' : 'auto' }} />
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isTransferRateKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsTransferRateKeyboardOpen(false)}>取消</span><span className="font-bold">兑换汇率</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>setIsTransferRateKeyboardOpen(false)}>确定</span></div></div>
+        <div className="p-[20px] bg-white flex flex-col items-center justify-center border-b border-gray-50">
+          <div className="text-[11px] text-[#8e8e93] mb-[6px]">1 {transferOutAccount?.currency || ''} = ? {transferInAccount?.currency || ''}</div>
+          <div className="flex items-center space-x-[6px] text-[28px] font-bold"><span>{transferRate || '0'}</span><div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse"></div></div>
+        </div>
+        <div className="p-[16px] grid grid-cols-4 gap-[6px]">
+          {['1','2','3','delete','4','5','6','clear','7','8','9','save','.','0'].map(k => {
+            const applyRateKey = (key) => {
+              setTransferRate((prev) => {
+                const cur = String(prev || '');
+                if (key === 'delete') return cur.slice(0, -1);
+                if (key === '.') return cur.includes('.') ? cur : (cur ? `${cur}.` : '0.');
+                if (cur === '0' && !cur.includes('.')) return key;
+                return `${cur}${key}`;
+              });
+            };
+            if (k === 'delete') return <button key={k} onClick={() => applyRateKey('delete')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100"><Delete className="w-[18px] h-[18px]" /></button>;
+            if (k === 'clear') return <button key={k} onClick={() => setTransferRate('')} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 text-[14px]">清空</button>;
+            if (k === 'save') return <button key={k} onClick={() => setIsTransferRateKeyboardOpen(false)} className="row-span-2 bg-[#1677ff] text-white h-[94px] rounded-[8px] flex items-center justify-center font-bold text-[16px] shadow-md shadow-blue-200 active:bg-blue-700">确定</button>;
+            if (k === '0') return <button key={k} onClick={() => applyRateKey('0')} className="col-span-2 bg-white h-[44px] rounded-[8px] flex items-center justify-center shadow-sm active:bg-gray-100 font-medium text-[18px]">0</button>;
+            return <button key={k} onClick={() => applyRateKey(k)} className="bg-white h-[44px] rounded-[8px] flex items-center justify-center font-medium text-[18px] shadow-sm active:bg-gray-100">{k}</button>;
           })}
         </div>
       </div>

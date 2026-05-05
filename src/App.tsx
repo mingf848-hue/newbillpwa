@@ -266,6 +266,7 @@ const getCategoryVisual = (category) => {
     转账: { icon: <TransferIcon />, badgeBg: 'bg-[#fef3c7]', badgeText: 'text-[#d97706]', iconColor: 'text-[#3a3a3c]', color: '#f5ad41' },
     理财: { icon: <TrendIcon />, badgeBg: 'bg-[#ede9fe]', badgeText: 'text-[#7c3aed]', iconColor: 'text-[#3a3a3c]', color: '#ffd24d' },
     教育: { icon: <CapIcon />, badgeBg: 'bg-[#e0f2fe]', badgeText: 'text-[#0284c7]', iconColor: 'text-[#3a3a3c]', color: '#38bdf8' },
+    家庭: { icon: <Home className="w-[14px] h-[14px] text-[#ec4899]" strokeWidth={2.5} />, badgeBg: 'bg-[#fce7f3]', badgeText: 'text-[#be185d]', iconColor: 'text-[#3a3a3c]', color: '#ec4899' },
   };
   return mapping[category] || { icon: <EllipsisIcon />, badgeBg: 'bg-[#f4f5f8]', badgeText: 'text-[#8c8c8c]', iconColor: 'text-[#3a3a3c]', color: '#c5cbe1' };
 };
@@ -378,14 +379,16 @@ function useSupabaseData() {
     const amount = parseMoneyNumber(txLike?.amount);
     if (!transferAccounts || !amount || !Number.isFinite(direction)) return;
     const { outAccount, inAccount } = transferAccounts;
-    const signedAmount = Math.abs(amount) * direction;
+    const outDelta = Math.abs(amount) * direction;
+    const targetAmountRaw = parseMoneyNumber(txLike?.target_amount);
+    const inDelta = (targetAmountRaw && Number.isFinite(targetAmountRaw) ? targetAmountRaw : Math.abs(amount)) * direction;
     const originalOutBalance = parseMoneyNumber(outAccount.balance);
     const originalInBalance = parseMoneyNumber(inAccount.balance);
-    applyAccountBalanceDelta(outAccount.name, -signedAmount);
-    applyAccountBalanceDelta(inAccount.name, signedAmount);
+    applyAccountBalanceDelta(outAccount.name, -outDelta);
+    applyAccountBalanceDelta(inAccount.name, inDelta);
     try {
-      await syncAccountBalanceToDb(outAccount, -signedAmount);
-      await syncAccountBalanceToDb(inAccount, signedAmount);
+      await syncAccountBalanceToDb(outAccount, -outDelta);
+      await syncAccountBalanceToDb(inAccount, inDelta);
     } catch (error) {
       try {
         await setAccountBalanceInDb(outAccount, originalOutBalance);
@@ -872,11 +875,27 @@ const QuickAddRow = ({ icon, name, type, onClick }) => (
   </button>
 );
 
-const ProfileAvatarButton = ({ onClick }) => (
-  <button onClick={onClick} aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
-  </button>
-);
+const ProfileAvatarButton = ({ onClick }) => {
+  const [seed, setSeed] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROFILE_SETTINGS_KEY) || 'null');
+      return saved?.avatarSeed || saved?.name || 'Felix';
+    } catch { return 'Felix'; }
+  });
+  useEffect(() => {
+    const onProfileChange = (e) => {
+      const next = e?.detail || {};
+      setSeed(next.avatarSeed || next.name || 'Felix');
+    };
+    window.addEventListener('bitledger-profile-settings', onProfileChange);
+    return () => window.removeEventListener('bitledger-profile-settings', onProfileChange);
+  }, []);
+  return (
+    <button onClick={onClick} aria-label="个人中心" className="w-[28px] h-[28px] rounded-full bg-blue-100 overflow-hidden flex items-center justify-center active:scale-95 transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`} alt="User" className="w-full h-full object-cover" />
+    </button>
+  );
+};
 
 const ActionToast = ({ message }) => {
   if (!message) return null;
@@ -2014,7 +2033,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   const incomeDeltaPct = formatDeltaPct(currentIncomeCny, previousPeriodStats.income);
 
   return (
-    <div ref={billsContainerRef} className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300 h-full flex flex-col isolate">
+    <div ref={billsContainerRef} className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
 
       {/* Pull-to-refresh indicator (driven via direct DOM mutation for smoothness) */}
       <div
@@ -2190,7 +2209,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [exchangeSelected, setExchangeSelected] = useState('OKX');
   const [apiConnected, setApiConnected] = useState(false);
   const [aprConfigEnabled, setAprConfigEnabled] = useState(true);
-  const [aprValues, setAprValues] = useState({ limit: '0', baseRate: '0', overflowRate: '0' });
+  const [aprValues, setAprValues] = useState({ limit: '0', baseRate: '0', overflowRate: '0', compound: false });
   const [exchangeAccountName, setExchangeAccountName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
@@ -2217,10 +2236,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       ? accountData.icon
       : (typeof accountData.iconType === 'string' ? accountData.iconType : 'cash');
     setSelectedIcon(iconStr || 'cash');
-    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0' });
+    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0', compound: !!accountData.apy_compound });
     setIsAccountDetailModalOpen(true);
   };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, _iconNode, currency = 'AED') => {
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
     const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
@@ -2230,7 +2249,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAccountBalance('0.00');
     setSelectedCurrency(currency);
     setSelectedIcon(inferredIcon);
-    setAprValues({ limit: '0', baseRate: '0', overflowRate: '0' });
+    setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false });
     setIsAccountDetailModalOpen(true);
   };
 
@@ -2285,7 +2304,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       icon: selectedIcon || selectedAccount.iconType || 'cash',
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
-      apy_overflow_rate: aprValues.overflowRate || '0'
+      apy_overflow_rate: aprValues.overflowRate || '0',
+      apy_compound: !!aprValues.compound,
     };
     setIsSavingAccount(true);
     try {
@@ -2300,6 +2320,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           apy_limit: payload.apy_limit,
           apy_base_rate: payload.apy_base_rate,
           apy_overflow_rate: payload.apy_overflow_rate,
+          apy_compound: payload.apy_compound,
         });
         if (createTransaction) {
           const now = new Date();
@@ -2354,7 +2375,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       icon: exchangeSelected.toLowerCase(),
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
-      apy_overflow_rate: aprValues.overflowRate || '0'
+      apy_overflow_rate: aprValues.overflowRate || '0',
+      apy_compound: !!aprValues.compound,
     });
     closeAssetKeyboard();
     setIsAddExchangeModalOpen(false);
@@ -2638,6 +2660,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                     <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
                  </div>
                  <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
+                 <div className="flex items-center justify-between mt-[8px] px-[2px]">
+                   <div className="flex flex-col">
+                     <span className="text-[12px] font-medium text-[#1c1c1e]">复利计息</span>
+                     <span className="text-[10px] text-[#8e8e93] mt-[1px]">{aprValues.compound ? '利息再投资，按复利结算' : '利息单利结算'}</span>
+                   </div>
+                   <ToggleSwitch checked={!!aprValues.compound} onChange={() => setAprValues((prev) => ({ ...prev, compound: !prev.compound }))} />
+                 </div>
               </div>
             </div>
             <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] space-y-[8px]">

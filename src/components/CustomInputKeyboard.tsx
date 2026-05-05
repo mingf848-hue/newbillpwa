@@ -105,14 +105,8 @@ export default function CustomInputKeyboard({
                 </button>
               ))}
               <button
-                onClick={() => onChange('')}
-                className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[15px] font-semibold text-[#8e8e93] active:bg-[#e6edf9] transition-colors"
-              >
-                清空
-              </button>
-              <button
                 onClick={() => applyNumberKey('delete')}
-                className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[15px] font-semibold text-[#1c1c1e] active:bg-[#e6edf9] transition-colors"
+                className="h-[52px] rounded-[14px] bg-[#f4f5f8] text-[15px] font-semibold text-[#1c1c1e] active:bg-[#e6edf9] transition-colors flex items-center justify-center"
               >
                 删除
               </button>
