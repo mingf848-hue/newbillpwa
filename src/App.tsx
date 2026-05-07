@@ -2297,6 +2297,19 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     { id: 'AED', icon: <AedIcon />, label: 'AED' },
   ];
 
+  const COMPOUND_KEY = 'bitledger_account_compound';
+  const readCompoundMap = () => {
+    try { return JSON.parse(localStorage.getItem(COMPOUND_KEY) || '{}') || {}; } catch { return {}; }
+  };
+  const writeCompoundFlag = (accountId, value) => {
+    if (!accountId) return;
+    try {
+      const map = readCompoundMap();
+      if (value) map[accountId] = true; else delete map[accountId];
+      localStorage.setItem(COMPOUND_KEY, JSON.stringify(map));
+    } catch {}
+  };
+
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
     setSelectedAccount(accountData);
@@ -2307,7 +2320,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       ? accountData.icon
       : (typeof accountData.iconType === 'string' ? accountData.iconType : 'cash');
     setSelectedIcon(iconStr || 'cash');
-    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0', compound: !!accountData.apy_compound });
+    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0', compound: !!readCompoundMap()[accountData.id] });
     setIsAccountDetailModalOpen(true);
   };
   const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
@@ -2376,7 +2389,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0',
-      apy_compound: !!aprValues.compound,
     };
     setIsSavingAccount(true);
     try {
@@ -2391,7 +2403,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           apy_limit: payload.apy_limit,
           apy_base_rate: payload.apy_base_rate,
           apy_overflow_rate: payload.apy_overflow_rate,
-          apy_compound: payload.apy_compound,
         });
         if (createTransaction) {
           const now = new Date();
@@ -2419,13 +2430,15 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         }
       }
     } else {
-      await createAccount({
+      const created = await createAccount({
         name: nextName,
         sub: selectedAccount.sub,
         type: selectedAccount.type || 'other',
         ...payload
       });
+      if (created?.id) writeCompoundFlag(created.id, !!aprValues.compound);
     }
+    if (selectedAccount.id) writeCompoundFlag(selectedAccount.id, !!aprValues.compound);
     closeAssetKeyboard();
     setIsAccountDetailModalOpen(false);
     notify?.('账户已保存');
@@ -2437,7 +2450,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const saveExchangeAccount = async () => {
-    await createAccount({
+    const created = await createAccount({
       name: exchangeAccountName.trim() || `${exchangeSelected} 现货账户`,
       sub: "交易所账户",
       type: "exchange",
@@ -2447,8 +2460,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0',
-      apy_compound: !!aprValues.compound,
     });
+    if (created?.id) writeCompoundFlag(created.id, !!aprValues.compound);
     closeAssetKeyboard();
     setIsAddExchangeModalOpen(false);
   };
