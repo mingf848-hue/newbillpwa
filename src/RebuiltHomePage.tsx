@@ -475,6 +475,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [isTransferFeeKeyboardOpen, setIsTransferFeeKeyboardOpen] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
+  const [aiOpenPicker, setAiOpenPicker] = useState<{ index: number; field: 'category' | 'account' } | null>(null);
 
   // Lock outer scroll while any home modal/keyboard is open
   useEffect(() => {
@@ -857,6 +858,7 @@ ${transcript}
     setActivePicker(null);
     setTransferPickerOpen(null);
     setAiDraft(null);
+    setAiOpenPicker(null);
   };
   closeModalsRef.current = closeModals;
 
@@ -986,8 +988,28 @@ ${transcript}
     }
   };
 
+  const updateAiDraftItem = (index, patch) => {
+    setAiDraft((prev) => {
+      if (!prev?.items?.length) return prev;
+      const nextItems = prev.items.map((item, i) => {
+        if (i !== index) return item;
+        const next = { ...item, ...patch };
+        if (patch && Object.prototype.hasOwnProperty.call(patch, 'account')) {
+          if (patch.account) next.currency = patch.account.currency || next.currency;
+        }
+        return next;
+      });
+      return { ...prev, items: nextItems, primary: nextItems[0] };
+    });
+  };
+
   const handleSaveAiRecord = async () => {
     if (!aiDraft?.items?.length || isSavingRecord) return;
+    const invalid = aiDraft.items.findIndex((item) => !(Number(item.amount) > 0));
+    if (invalid !== -1) {
+      notify?.(`第 ${invalid + 1} 笔金额无效，请修改后保存`);
+      return;
+    }
     setIsSavingRecord(true);
     try {
       for (const [index, item] of aiDraft.items.entries()) {
@@ -1376,7 +1398,7 @@ ${transcript}
         </div>
 
         <div className="flex justify-between items-center px-[12px] py-[6px]">
-          <div onClick={() => { setRecordDate(new Date()); setInputValue(''); setRecordNote(''); setRecordTag(''); setActivePicker(null); setActiveModal('record'); setShowInlineKeyboard(true); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
+          <div onClick={() => { setRecordDate(new Date()); setInputValue(''); setRecordNote(''); setRecordTag(''); setActivePicker(null); setActiveModal('record'); setShowInlineKeyboard(false); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
           <div onClick={() => setActiveModal('budget')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#10b981] rounded-full flex items-center justify-center shadow-md shadow-green-100/50"><PieChartIcon className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">预算</span></div>
           <div onClick={() => setActiveModal('transfer')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#8b5cf6] rounded-full flex items-center justify-center shadow-md shadow-purple-100/50"><ArrowRightLeft className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">转账</span></div>
           <div onPointerDown={handleAiStart} onPointerUp={handleAiEnd} onPointerCancel={handleAiEnd} className="flex flex-col items-center space-y-[6px] relative active:scale-95 transition-transform cursor-pointer touch-none"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><Mic className="w-[20px] h-[20px] text-white" strokeWidth={2} /><div className="absolute -top-[2px] -right-[4px] bg-gradient-to-r from-[#ff6b8b] to-[#ff8787] text-white text-[7px] font-extrabold px-[3px] py-[1.5px] rounded-full border border-white leading-none">AI</div></div><span className="text-[11px] font-medium text-[#1c1c1e]">智记</span></div>
@@ -1495,24 +1517,81 @@ ${transcript}
         </div>
       </div>
 
-      {/* AI 识别确认页 */}
+      {/* AI 识别确认页（可编辑） */}
       <div className={`absolute inset-0 bg-black/40 z-[110] transition-opacity duration-300 ${activeModal === 'ai' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={closeModals} style={{ touchAction: activeModal === 'ai' ? 'none' : 'auto' }} />
-      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${activeModal === 'ai' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
-        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold text-[#1c1c1e]">确认记账</span></div>
-        <div className="p-[16px] space-y-[12px]">
-          <div className="flex items-center justify-center space-x-[6px] py-[4px] text-[#1677ff]"><Sparkles className="w-[14px] h-[14px]" /><span className="text-[12px] text-[#8e8e93]">AI 已识别{aiDraft?.items?.length > 1 ? ` ${aiDraft.items.length} 笔` : ''}，以下是为你生成的记账信息</span></div>
-          <div className="bg-white rounded-[16px] px-[16px] shadow-sm">
-            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<Utensils className="w-[12px] h-[12px] text-[#ff3b30]"/>} label="分类" value={aiDraft?.primary?.category || '其他'} />
-            <AiConfirmRow iconBg="bg-[#fff0f0]" iconColor="text-[#ff3b30]" IconElement={<span className="text-[12px] font-bold text-[#ff3b30]">¥</span>} label="金额" value={formatMoney(aiDraft?.primary?.amount || 0)} extra={aiDraft?.primary?.currency || 'CNY'} />
-            <AiConfirmRow iconBg="bg-[#f0f5ff]" iconColor="text-[#1677ff]" IconElement={<FileText className="w-[12px] h-[12px] text-[#1677ff]"/>} label="备注" value={aiDraft?.primary?.note || aiDraft?.primary?.merchant || '无备注'} />
-            <AiConfirmRow iconBg="bg-[#ecfdf5]" iconColor="text-[#10b981]" IconElement={<CalendarIcon className="w-[12px] h-[12px] text-[#10b981]"/>} label="来源" value={aiDraft?.source === 'voice' ? 'AI 语音识别' : 'AI 截图识别'} />
-            <AiConfirmRow iconBg="bg-[#f5f3ff]" iconColor="text-[#8b5cf6]" IconElement={<Wallet className="w-[12px] h-[12px] text-[#8b5cf6]"/>} label="账户" value={aiDraft?.primary?.account?.name || aiDraft?.primary?.accountHint || '默认账户'} border={!(aiDraft?.source === 'voice' && aiDraft?.transcript)} />
-            {aiDraft?.source === 'voice' && aiDraft?.transcript ? (
-              <AiConfirmRow iconBg="bg-[#fff7e6]" iconColor="text-[#fa8c16]" IconElement={<Mic className="w-[12px] h-[12px] text-[#fa8c16]"/>} label="语音内容" value={aiDraft.transcript} border={false} />
-            ) : null}
-          </div>
-          <div className="flex space-x-[12px] pt-[8px]"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-[#e5e5ea] font-medium text-[15px] active:bg-gray-50 transition-colors">取消</button><button disabled={isSavingRecord} onClick={handleSaveAiRecord} className="flex-1 h-[44px] rounded-[10px] bg-[#1677ff] text-white font-medium text-[15px] shadow-lg shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '确认记账'}</button></div>
+      <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] max-h-[88vh] ${activeModal === 'ai' ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
+        <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0] shrink-0"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[8px]"></div><span className="text-[15px] font-bold text-[#1c1c1e]">确认记账</span></div>
+        <div className="p-[16px] space-y-[12px] overflow-y-auto hide-scrollbar flex-1 min-h-0">
+          <div className="flex items-center justify-center space-x-[6px] py-[2px] text-[#1677ff]"><Sparkles className="w-[14px] h-[14px]" /><span className="text-[12px] text-[#8e8e93]">AI 已识别{aiDraft?.items?.length > 1 ? ` ${aiDraft.items.length} 笔` : ''}，可直接修改后保存</span></div>
+          {aiDraft?.source === 'voice' && aiDraft?.transcript ? (
+            <div className="bg-[#fff7e6] rounded-[12px] px-[12px] py-[8px] flex items-start space-x-[8px]"><Mic className="w-[12px] h-[12px] text-[#fa8c16] mt-[3px] shrink-0" /><div className="text-[11px] text-[#5c5c5e] leading-[1.5]">{aiDraft.transcript}</div></div>
+          ) : null}
+          {(aiDraft?.items || []).map((item, index) => {
+            const categoryList = item.isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+            const isCategoryOpen = aiOpenPicker?.index === index && aiOpenPicker?.field === 'category';
+            const isAccountOpen = aiOpenPicker?.index === index && aiOpenPicker?.field === 'account';
+            return (
+              <div key={index} className="bg-white rounded-[16px] shadow-sm overflow-hidden">
+                {aiDraft.items.length > 1 && (
+                  <div className="flex justify-between items-center px-[14px] py-[8px] bg-[#f7f8fa] text-[11px] text-[#8e8e93] border-b border-[#f0f0f0]"><span>第 {index + 1} 笔</span></div>
+                )}
+                <div className="px-[14px] py-[10px] border-b border-[#f4f5f8] flex items-center justify-between">
+                  <span className="text-[13px] text-[#1c1c1e]">收支</span>
+                  <div className="flex bg-[#f4f5f8] rounded-[8px] p-[2px]">
+                    <button onClick={() => updateAiDraftItem(index, { isIncome: false, category: normalizeAiCategory(item.category, false) })} className={`px-[12px] py-[4px] text-[12px] rounded-[6px] transition-all ${!item.isIncome ? 'bg-white text-[#ff3b30] font-semibold' : 'text-[#8e8e93]'}`}>支出</button>
+                    <button onClick={() => updateAiDraftItem(index, { isIncome: true, category: normalizeAiCategory(item.category, true) })} className={`px-[12px] py-[4px] text-[12px] rounded-[6px] transition-all ${item.isIncome ? 'bg-white text-[#10b981] font-semibold' : 'text-[#8e8e93]'}`}>收入</button>
+                  </div>
+                </div>
+                <div className="px-[14px] py-[10px] border-b border-[#f4f5f8] flex items-center justify-between">
+                  <span className="text-[13px] text-[#1c1c1e]">金额</span>
+                  <div className="flex items-center space-x-[4px]">
+                    <input type="number" inputMode="decimal" step="0.01" value={item.amount || ''} onChange={(e) => updateAiDraftItem(index, { amount: Math.abs(Number(e.target.value) || 0) })} className={`w-[120px] text-right text-[15px] font-bold outline-none bg-transparent ${item.isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`} placeholder="0.00" />
+                    <span className="text-[11px] font-medium text-[#8e8e93]">{item.currency || 'CNY'}</span>
+                  </div>
+                </div>
+                <div className="px-[14px] py-[10px] border-b border-[#f4f5f8]">
+                  <button onClick={() => setAiOpenPicker(isCategoryOpen ? null : { index, field: 'category' })} className="w-full flex items-center justify-between"><span className="text-[13px] text-[#1c1c1e]">分类</span><div className="flex items-center space-x-[4px]"><span className="text-[13px] text-[#1c1c1e] font-medium">{item.category || '其他'}</span><ChevronDown className={`w-[14px] h-[14px] text-[#c7c7cc] transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} /></div></button>
+                  {isCategoryOpen && (
+                    <div className="grid grid-cols-4 gap-[6px] mt-[10px]">
+                      {categoryList.map((cat) => (
+                        <button key={cat.name} onClick={() => { updateAiDraftItem(index, { category: cat.name }); setAiOpenPicker(null); }} className={`h-[52px] rounded-[10px] flex flex-col items-center justify-center space-y-[4px] transition-colors ${item.category === cat.name ? 'bg-[#f0f5ff] ring-2 ring-[#1677ff]/60' : 'bg-[#f7f8fa] active:bg-[#eef2f7]'}`}>
+                          <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center" style={{ backgroundColor: `${cat.color}22` }}><cat.icon className="w-[12px] h-[12px]" style={{ color: cat.color }} strokeWidth={2.5} /></div>
+                          <span className="text-[10px] font-medium text-[#3a3a3c]">{cat.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="px-[14px] py-[10px] border-b border-[#f4f5f8]">
+                  <button onClick={() => setAiOpenPicker(isAccountOpen ? null : { index, field: 'account' })} className="w-full flex items-center justify-between"><span className="text-[13px] text-[#1c1c1e]">账户</span><div className="flex items-center space-x-[6px]">{item.account ? <HomeBrandLogo type={item.account.icon || 'landmark'} size={20} /> : null}<span className="text-[13px] text-[#1c1c1e] font-medium">{item.account?.name || item.accountHint || '选择账户'}</span><ChevronDown className={`w-[14px] h-[14px] text-[#c7c7cc] transition-transform ${isAccountOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} /></div></button>
+                  {isAccountOpen && (
+                    <div className="mt-[10px] space-y-[6px]">
+                      {accounts.map((acc) => {
+                        const selected = item.account?.id === acc.id;
+                        return (
+                          <button key={acc.id} onClick={() => { updateAiDraftItem(index, { account: acc, currency: acc.currency || item.currency }); setAiOpenPicker(null); }} className={`w-full h-[42px] rounded-[10px] px-[10px] flex items-center justify-between bg-[#f7f8fa] active:bg-gray-100 ${selected ? 'ring-2 ring-[#1677ff]/60' : ''}`}>
+                            <div className="flex items-center space-x-[8px]"><HomeBrandLogo type={acc.icon || 'landmark'} size={22} /><span className="text-[13px] font-medium text-[#1c1c1e]">{acc.name}</span><span className="text-[11px] text-[#8e8e93]">{acc.currency || 'CNY'}</span></div>
+                            {selected && <Check className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={3} />}
+                          </button>
+                        );
+                      })}
+                      {accounts.length === 0 && <div className="text-[12px] text-[#8e8e93] text-center py-[8px]">暂无账户，请先在资产页添加</div>}
+                    </div>
+                  )}
+                </div>
+                <div className="px-[14px] py-[10px] border-b border-[#f4f5f8] flex items-center justify-between">
+                  <span className="text-[13px] text-[#1c1c1e] shrink-0">商家</span>
+                  <input type="text" value={item.merchant || ''} onChange={(e) => updateAiDraftItem(index, { merchant: e.target.value })} className="flex-1 ml-[12px] text-right text-[13px] text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder={item.category || '商家或对象'} />
+                </div>
+                <div className="px-[14px] py-[10px] flex items-center justify-between">
+                  <span className="text-[13px] text-[#1c1c1e] shrink-0">备注</span>
+                  <input type="text" value={item.note || ''} onChange={(e) => updateAiDraftItem(index, { note: e.target.value })} className="flex-1 ml-[12px] text-right text-[13px] text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="可选" />
+                </div>
+              </div>
+            );
+          })}
         </div>
+        <div className="px-[16px] pt-[8px] flex space-x-[12px] shrink-0"><button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-[#e5e5ea] bg-white font-medium text-[15px] active:bg-gray-50 transition-colors">取消</button><button disabled={isSavingRecord} onClick={handleSaveAiRecord} className="flex-1 h-[44px] rounded-[10px] bg-[#1677ff] text-white font-medium text-[15px] shadow-lg shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '确认记账'}</button></div>
       </div>
 
       {/* 记一笔面板 */}
