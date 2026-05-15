@@ -112,6 +112,24 @@ const CURRENCY_SYMBOLS = {
 };
 const getCurrencySymbol = (currency) => CURRENCY_SYMBOLS[String(currency || 'CNY').toUpperCase()] || String(currency || '¥');
 
+// Cross-currency transfers always quote the rate as "1 crypto = X fiat".
+const CRYPTO_CURRENCIES = ['USDT', 'BTC', 'ETH'];
+const getRatePair = (outCurrency, inCurrency) => {
+  const out = String(outCurrency || 'CNY').toUpperCase();
+  const inc = String(inCurrency || 'CNY').toUpperCase();
+  let base = out;
+  if (CRYPTO_CURRENCIES.includes(out)) base = out;
+  else if (CRYPTO_CURRENCIES.includes(inc)) base = inc;
+  const quote = base === out ? inc : out;
+  return { base, quote, outIsBase: base === out };
+};
+// rate = "1 base = rate quote"; returns the amount credited to the in-account.
+const convertByRate = (netOutAmount, rate, outCurrency, inCurrency) => {
+  if (!rate || rate <= 0) return netOutAmount;
+  const { outIsBase } = getRatePair(outCurrency, inCurrency);
+  return outIsBase ? netOutAmount * rate : netOutAmount / rate;
+};
+
 // --- 支出概览环形图 ---
 const DonutChart = () => (
   <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
@@ -1048,7 +1066,8 @@ ${transcript}
       return;
     }
     const netAmount = amount - fee;
-    const targetAmount = isCrossCurrency ? netAmount * rate : netAmount;
+    const targetAmount = isCrossCurrency ? convertByRate(netAmount, rate, outCurrency, inCurrency) : netAmount;
+    const ratePair = getRatePair(outCurrency, inCurrency);
     const outName = outAcc ? outAcc.name : '转出账户';
     const inName = inAcc ? inAcc.name : '转入账户';
     const outIcon = outAcc ? (outAcc.icon || 'landmark') : 'landmark';
@@ -1057,7 +1076,7 @@ ${transcript}
     const noteParts = ['账户转账'];
     if (fee > 0) noteParts.push(`手续费 ${formatMoney(fee)} ${outCurrency}`);
     if (isCrossCurrency) {
-      noteParts.push(`汇率 1 ${outCurrency} = ${rate} ${inCurrency}`);
+      noteParts.push(`汇率 1 ${ratePair.base} = ${rate} ${ratePair.quote}`);
       noteParts.push(`收到 ${formatMoney(targetAmount)} ${inCurrency}`);
     } else if (fee > 0) {
       noteParts.push(`收到 ${formatMoney(targetAmount)} ${inCurrency}`);
@@ -1708,10 +1727,10 @@ ${transcript}
             <TransferRow onClick={()=>setIsTransferFeeKeyboardOpen(true)} label="手续费" value={transferFee ? `${getCurrencySymbol(transferOutAccount?.currency || 'CNY')} ${transferFee}` : '可选'} valueColor={transferFee ? 'text-[#ff9500] font-bold' : 'text-gray-300'} showChevron={false} border={transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY')} />
             {transferOutAccount && transferInAccount && (transferOutAccount.currency || 'CNY') !== (transferInAccount.currency || 'CNY') && (
               <>
-                <TransferRow onClick={()=>setIsTransferRateKeyboardOpen(true)} label="兑换汇率" value={transferRate ? `1 ${transferOutAccount.currency} = ${transferRate} ${transferInAccount.currency}` : '请输入汇率'} valueColor={transferRate ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} />
+                <TransferRow onClick={()=>setIsTransferRateKeyboardOpen(true)} label="兑换汇率" value={transferRate ? `1 ${getRatePair(transferOutAccount.currency, transferInAccount.currency).base} = ${transferRate} ${getRatePair(transferOutAccount.currency, transferInAccount.currency).quote}` : '请输入汇率'} valueColor={transferRate ? 'text-[#1c1c1e] font-bold' : 'text-gray-300'} showChevron={false} />
                 <div className="flex items-center justify-between py-[10px] text-[12px] text-[#8e8e93]">
                   <span className="shrink-0 w-[70px]">实际入账</span>
-                  <span className="text-[13px] font-bold text-[#10b981]">{transferAmount && transferRate ? `${getCurrencySymbol(transferInAccount.currency)} ${formatMoney(Math.max(0, (Number(transferAmount) - Number(transferFee || 0))) * Number(transferRate))}` : '—'}</span>
+                  <span className="text-[13px] font-bold text-[#10b981]">{transferAmount && transferRate ? `${getCurrencySymbol(transferInAccount.currency)} ${formatMoney(convertByRate(Math.max(0, Number(transferAmount) - Number(transferFee || 0)), Number(transferRate), transferOutAccount.currency, transferInAccount.currency))}` : '—'}</span>
                 </div>
               </>
             )}
@@ -1739,7 +1758,7 @@ ${transcript}
       <div className={`absolute bottom-0 left-0 right-0 bg-[#f4f5f8] rounded-t-[24px] z-[120] transition-transform duration-300 ease-out shadow-2xl flex flex-col pb-[24px] ${isTransferRateKeyboardOpen ? 'translate-y-0' : 'translate-y-full opacity-0'}`}>
         <div className="bg-white rounded-t-[24px] flex flex-col items-center pt-[10px] pb-[10px] border-b border-[#f0f0f0]"><div className="w-[32px] h-[4px] bg-[#e5e5ea] rounded-full mb-[10px]"></div><div className="w-full px-[16px] flex justify-between items-center"><span className="text-gray-400 cursor-pointer" onClick={()=>setIsTransferRateKeyboardOpen(false)}>取消</span><span className="font-bold">兑换汇率</span><span className="text-[#1677ff] font-bold cursor-pointer" onClick={()=>setIsTransferRateKeyboardOpen(false)}>确定</span></div></div>
         <div className="p-[20px] bg-white flex flex-col items-center justify-center border-b border-gray-50">
-          <div className="text-[11px] text-[#8e8e93] mb-[6px]">1 {transferOutAccount?.currency || ''} = ? {transferInAccount?.currency || ''}</div>
+          <div className="text-[11px] text-[#8e8e93] mb-[6px]">1 {getRatePair(transferOutAccount?.currency, transferInAccount?.currency).base} = ? {getRatePair(transferOutAccount?.currency, transferInAccount?.currency).quote}</div>
           <div className="flex items-center space-x-[6px] text-[28px] font-bold"><span>{transferRate || '0'}</span><div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse"></div></div>
         </div>
         <div className="p-[16px] grid grid-cols-4 gap-[6px]">
