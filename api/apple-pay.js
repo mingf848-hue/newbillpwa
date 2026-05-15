@@ -35,23 +35,34 @@ export default async function handler(req, res) {
     }
 
     const { dateLabel, fullDate, time } = formatTransactionDate(date);
+
+    // Careem / taxi rides are treated as a work commute: the title records
+    // 打车上班 / 打车下班 based on the local hour, tagged 交通, and marked
+    // [报销] so it affects balance but is excluded from monthly expense stats.
+    const isTaxi = /careem|uber|taxi|出租|打车|cars taxi/i.test(String(merchant || ''));
+    const rideHour = (date ? new Date(date) : new Date()).getHours();
+    const isCommuteRide = isTaxi && Number.isFinite(rideHour);
+    const rideTitle = isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : merchant;
+    const baseNote = note || `自动记账${card ? ` · ${card}` : ''}`;
+    const finalNote = isCommuteRide ? `${baseNote} [报销]` : baseNote;
+
     const [transaction] = await requestSupabase('transactions', {
       method: 'POST',
       body: JSON.stringify({
         dateLabel,
         iconBg: 'bg-black',
         iconType: 'apple',
-        title: merchant,
+        title: rideTitle,
         subtitle: targetAccount.name,
-        tag: '其他',
-        tagType: 'shopping',
+        tag: isCommuteRide ? '交通' : '其他',
+        tagType: isCommuteRide ? 'transport' : 'shopping',
         amount: `-${formatAmount(txAmount)}`,
         isIncome: false,
         time,
         fullDate,
         currency: currency || targetAccount.currency || 'CNY',
         paymentMethod: 'Apple Pay',
-        note: note || `Apple Pay 自动记账${card ? ` · ${card}` : ''}`,
+        note: finalNote,
       }),
     });
 

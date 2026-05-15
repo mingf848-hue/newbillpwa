@@ -245,11 +245,21 @@ const isManualBalanceAdjustmentTransaction = (tx) => {
     note === '余额人工修正 (不计入统计)';
 };
 
+// Reimbursable items (commute taxi, 报销 income) affect balance but are
+// excluded from monthly income/expense statistics.
+const isReimbursableTransaction = (tx) => {
+  const tag = String(tx?.tag || '');
+  const note = String(tx?.note || '');
+  const title = String(tx?.title || '');
+  return tag === '报销' || note.includes('[报销]') || title.includes('打车上班') || title.includes('打车下班');
+};
+
 const shouldCountInCashflow = (tx) => (
   !isTransferTransaction(tx) &&
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
-  !isManualBalanceAdjustmentTransaction(tx)
+  !isManualBalanceAdjustmentTransaction(tx) &&
+  !isReimbursableTransaction(tx)
 );
 
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
@@ -267,6 +277,7 @@ const getCategoryVisual = (category) => {
     理财: { icon: <TrendIcon />, badgeBg: 'bg-[#ede9fe]', badgeText: 'text-[#7c3aed]', iconColor: 'text-[#3a3a3c]', color: '#ffd24d' },
     教育: { icon: <CapIcon />, badgeBg: 'bg-[#e0f2fe]', badgeText: 'text-[#0284c7]', iconColor: 'text-[#3a3a3c]', color: '#38bdf8' },
     家庭: { icon: <Home className="w-[14px] h-[14px] text-[#ec4899]" strokeWidth={2.5} />, badgeBg: 'bg-[#fce7f3]', badgeText: 'text-[#be185d]', iconColor: 'text-[#3a3a3c]', color: '#ec4899' },
+    报销: { icon: <ArrowUpRight className="w-[14px] h-[14px] text-[#0891b2]" strokeWidth={2.5} />, badgeBg: 'bg-[#cffafe]', badgeText: 'text-[#0891b2]', iconColor: 'text-[#3a3a3c]', color: '#06b6d4' },
   };
   return mapping[category] || { icon: <EllipsisIcon />, badgeBg: 'bg-[#f4f5f8]', badgeText: 'text-[#8c8c8c]', iconColor: 'text-[#3a3a3c]', color: '#c5cbe1' };
 };
