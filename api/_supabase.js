@@ -34,17 +34,41 @@ export const formatAmount = (value) => value.toLocaleString('en-US', {
   maximumFractionDigits: 2,
 });
 
-export const formatTransactionDate = (dateInput) => {
-  const date = dateInput ? new Date(dateInput) : new Date();
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hours = `${date.getHours()}`.padStart(2, '0');
-  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+// Extract the wall-clock components the caller actually sent. An ISO string
+// like "2026-09-09T09:41:00+04:00" is read as 09:41 regardless of the
+// timezone offset, so the recorded time matches the user's local clock even
+// though the server runs in UTC.
+export const parseWallClock = (input) => {
+  if (typeof input === 'string') {
+    const m = input.match(/(\d{4})-(\d{1,2})-(\d{1,2})[T\s](\d{1,2}):(\d{2})/);
+    if (m) {
+      return { year: +m[1], month: +m[2], day: +m[3], hours: +m[4], minutes: +m[5] };
+    }
+  }
+  const d = input ? new Date(input) : new Date();
+  const safe = Number.isNaN(d.getTime()) ? new Date() : d;
   return {
+    year: safe.getFullYear(),
+    month: safe.getMonth() + 1,
+    day: safe.getDate(),
+    hours: safe.getHours(),
+    minutes: safe.getMinutes(),
+  };
+};
+
+export const formatTransactionDate = (dateInput) => {
+  const { year, month, day, hours, minutes } = parseWallClock(dateInput);
+  const hh = `${hours}`.padStart(2, '0');
+  const mm = `${minutes}`.padStart(2, '0');
+  return {
+    year,
+    month,
+    day,
+    hours,
+    minutes,
     dateLabel: `今天 ${month}月${day}日`,
-    fullDate: `${year}年${month}月${day}日 ${hours}:${minutes}`,
-    time: `${hours}:${minutes}`,
+    fullDate: `${year}年${month}月${day}日 ${hh}:${mm}`,
+    time: `${hh}:${mm}`,
   };
 };
 

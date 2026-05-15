@@ -20,7 +20,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { amount, merchant, account, card, currency, date, note } = req.body || {};
+    const { amount, merchant, account, card, currency, date, time: bodyTime, note } = req.body || {};
+    const whenInput = date || bodyTime;
     const txAmount = Math.abs(parseAmount(amount));
     if (!merchant || !txAmount) {
       json(res, 400, { error: 'Missing merchant or amount' });
@@ -34,13 +35,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { dateLabel, fullDate, time } = formatTransactionDate(date);
+    const { dateLabel, fullDate, time, hours: rideHour } = formatTransactionDate(whenInput);
 
     // Careem / taxi rides are treated as a work commute: the title records
     // 打车上班 / 打车下班 based on the local hour, tagged 交通, and marked
     // [报销] so it affects balance but is excluded from monthly expense stats.
     const isTaxi = /careem|uber|taxi|出租|打车|cars taxi/i.test(String(merchant || ''));
-    const rideHour = (date ? new Date(date) : new Date()).getHours();
     const isCommuteRide = isTaxi && Number.isFinite(rideHour);
     const rideTitle = isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : merchant;
     const baseNote = note || `自动记账${card ? ` · ${card}` : ''}`;
