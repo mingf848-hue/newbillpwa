@@ -260,8 +260,11 @@ const isTransferTransaction = (tx) => {
   const title = String(tx?.title || '');
   const tag = String(tx?.tag || '');
   if (tag === '调整' || title.includes('调整记录')) return false;
-  return tx?.tagType === 'transfer' || tag === '转账';
+  return tx?.tagType === 'transfer' || tag === '转账' || tag === '转帐';
 };
+
+const CASHFLOW_EXCLUDE_MARKER = '[不计收支]';
+const isManuallyExcludedFromCashflow = (tx) => String(tx?.note || '').includes(CASHFLOW_EXCLUDE_MARKER);
 
 const isAdjustmentTransaction = (tx) => {
   const title = String(tx?.title || '');
@@ -301,7 +304,8 @@ const shouldCountInCashflow = (tx) => (
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
   !isManualBalanceAdjustmentTransaction(tx) &&
-  !isReimbursableTransaction(tx)
+  !isReimbursableTransaction(tx) &&
+  !isManuallyExcludedFromCashflow(tx)
 );
 
 const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));

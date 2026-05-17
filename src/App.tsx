@@ -216,7 +216,7 @@ const isTransferTransaction = (tx) => {
   const title = String(tx?.title || '');
   const tag = String(tx?.tag || '');
   if (tag === '调整' || title.includes('调整记录')) return false;
-  return tx?.tagType === 'transfer' || tag === '转账';
+  return tx?.tagType === 'transfer' || tag === '转账' || tag === '转帐';
 };
 
 const isAdjustmentTransaction = (tx) => {
@@ -237,6 +237,11 @@ const isInternalAccountTransferTransaction = (tx) => {
     tag.includes('划转')
   );
 };
+
+// User-set marker: any transaction whose note contains [不计收支] is kept out
+// of income/expense statistics (used to fix mis-tagged historical transfers).
+const CASHFLOW_EXCLUDE_MARKER = '[不计收支]';
+const isManuallyExcludedFromCashflow = (tx) => String(tx?.note || '').includes(CASHFLOW_EXCLUDE_MARKER);
 
 const isManualBalanceAdjustmentTransaction = (tx) => {
   const note = String(tx?.note || '').trim();
@@ -259,7 +264,8 @@ const shouldCountInCashflow = (tx) => (
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
   !isManualBalanceAdjustmentTransaction(tx) &&
-  !isReimbursableTransaction(tx)
+  !isReimbursableTransaction(tx) &&
+  !isManuallyExcludedFromCashflow(tx)
 );
 
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
@@ -1966,29 +1972,34 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     if (!match) return null;
     return { amount: parseMoneyNumber(match[1]), currency: match[2] };
   };
-  const isTransferTx = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账';
+  const isTransferTx = (tx) => tx?.tagType === 'transfer' || tx?.tag === '转账' || tx?.tag === '转帐';
+  const stripExcludeMarker = (note) => String(note || '').replace(/\s*\[不计收支\]\s*/g, ' ').trim();
   const [tempReceived, setTempReceived] = useState('');
+  const [tempExcluded, setTempExcluded] = useState(false);
   const handleOpenModal = (tx) => {
     setSelectedTx(tx);
-    setTempNote(tx.note || tx.title);
+    setTempNote(stripExcludeMarker(tx.note || tx.title));
     const r = parseReceivedFromNote(tx.note);
     setTempReceived(r ? String(r.amount) : '');
+    setTempExcluded(String(tx.note || '').includes(CASHFLOW_EXCLUDE_MARKER));
   };
   const handleSave = async () => {
     if (!selectedTx) return;
-    let nextNote = tempNote;
+    const cleanNote = stripExcludeMarker(tempNote);
+    let workNote = cleanNote;
     let receivedDelta = 0;
     if (isTransferTx(selectedTx)) {
       const original = parseReceivedFromNote(selectedTx.note);
       const newAmount = Number(tempReceived || 0);
       if (original && newAmount > 0 && newAmount !== original.amount) {
         receivedDelta = newAmount - original.amount;
-        nextNote = String(tempNote).replace(/收到\s+[\d,]+(?:\.\d+)?\s+([A-Za-z]{2,5})/, `收到 ${formatDisplayMoney(newAmount)} $1`);
+        workNote = cleanNote.replace(/收到\s+[\d,]+(?:\.\d+)?\s+([A-Za-z]{2,5})/, `收到 ${formatDisplayMoney(newAmount)} $1`);
       }
     }
+    const finalNote = tempExcluded ? `${workNote} ${CASHFLOW_EXCLUDE_MARKER}`.trim() : workNote;
     if (receivedDelta !== 0 && adjustTransferReceived) {
       try {
-        await adjustTransferReceived(selectedTx, receivedDelta, nextNote);
+        await adjustTransferReceived(selectedTx, receivedDelta, finalNote);
         setSelectedTx(null);
         notify('已更新实际入账，账户余额已同步');
         return;
@@ -1997,9 +2008,9 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
         return;
       }
     }
-    updateTransaction(selectedTx.id, { title: nextNote || selectedTx.title, note: nextNote });
+    updateTransaction(selectedTx.id, { title: workNote || selectedTx.title, note: finalNote });
     setSelectedTx(null);
-    notify('账单备注已保存');
+    notify('账单已保存');
   };
   const handleDeleteTransaction = (tx) => {
     if (tx.id) {
@@ -2262,6 +2273,13 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
                    <div className="border-[1.5px] border-[#1677ff] rounded-[10px] px-[12px] py-[10px] flex items-center bg-white shadow-[0_0_0_4px_rgba(22,119,255,0.1)] transition-shadow">
                       <input type="text" value={tempNote} onChange={(e) => setTempNote(e.target.value)} className="flex-1 text-[14px] font-medium text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="添加备注..."/><Pen className="w-[16px] h-[16px] text-[#8e8e93] shrink-0 ml-[8px]" strokeWidth={2} />
                    </div>
+                </div>
+                <div className="mt-[16px] flex items-center justify-between bg-[#f7f8fa] rounded-[12px] px-[14px] py-[12px]">
+                   <div className="flex flex-col pr-[12px]">
+                     <span className="text-[14px] font-bold text-[#1c1c1e]">不计入收支统计</span>
+                     <span className="text-[11px] text-[#8e8e93] mt-[2px] leading-[1.5]">账户互转、报销等只影响余额，不算本月收支</span>
+                   </div>
+                   <ToggleSwitch checked={tempExcluded} onChange={() => setTempExcluded((v) => !v)} />
                 </div>
                 <div className="flex space-x-[12px] mt-[24px]">
                    <button onClick={() => setSelectedTx(null)} className="flex-1 py-[12px] rounded-[12px] border border-[#e5e5ea] text-[#3a3a3c] text-[15px] font-semibold active:bg-[#f4f5f8] transition-colors">取消</button>

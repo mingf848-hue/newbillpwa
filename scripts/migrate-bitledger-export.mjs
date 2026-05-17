@@ -175,6 +175,10 @@ function mapTransaction(transaction, accountMap) {
   const account = accountMap.get(transaction.accountId);
   const transactionDate = new Date(transaction.date);
   const isIncome = transaction.type === "income";
+  const isTransfer =
+    /transfer/i.test(String(transaction.type || "")) ||
+    transaction.category === "trade" ||
+    transaction.category === "transfer";
   const category = transaction.category || "other";
   const amountValue = Number(transaction.amount || 0);
   const title =
@@ -190,8 +194,8 @@ function mapTransaction(transaction, accountMap) {
     iconType,
     title,
     subtitle,
-    tag: CATEGORY_LABELS[category] || "其他",
-    tagType: CATEGORY_TAG_TYPES[category] || (isIncome ? "income" : "shopping"),
+    tag: isTransfer ? "转账" : (CATEGORY_LABELS[category] || "其他"),
+    tagType: isTransfer ? "transfer" : (CATEGORY_TAG_TYPES[category] || (isIncome ? "income" : "shopping")),
     amount: `${isIncome ? "+" : "-"}${formatMoney(amountValue)}`,
     isIncome,
     time: `${String(transactionDate.getHours()).padStart(2, "0")}:${String(transactionDate.getMinutes()).padStart(2, "0")}`,
