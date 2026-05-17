@@ -274,6 +274,16 @@ const shouldCountInCashflow = (tx) => (
   !isManuallyExcludedFromCashflow(tx)
 );
 
+// True when a transaction is kept out of cashflow stats by an automatic rule
+// (transfer / commute ride / 报销 / adjustment) rather than the manual marker.
+const isAutoExcludedFromCashflow = (tx) => !!tx && (
+  isTransferTransaction(tx) ||
+  isInternalAccountTransferTransaction(tx) ||
+  isAdjustmentTransaction(tx) ||
+  isManualBalanceAdjustmentTransaction(tx) ||
+  isReimbursableTransaction(tx)
+);
+
 const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true) => (
   transactions.reduce((sum, tx) => (
     predicate(tx) ? sum + getTransactionAmountCny(tx, exchangeRates) : sum
@@ -2280,13 +2290,23 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
                       <input type="text" value={tempNote} onChange={(e) => setTempNote(e.target.value)} className="flex-1 text-[14px] font-medium text-[#1c1c1e] outline-none bg-transparent placeholder-[#c7c7cc]" placeholder="添加备注..."/><Pen className="w-[16px] h-[16px] text-[#8e8e93] shrink-0 ml-[8px]" strokeWidth={2} />
                    </div>
                 </div>
-                <div className="mt-[16px] flex items-center justify-between bg-[#f7f8fa] rounded-[12px] px-[14px] py-[12px]">
-                   <div className="flex flex-col pr-[12px]">
-                     <span className="text-[14px] font-bold text-[#1c1c1e]">不计入收支统计</span>
-                     <span className="text-[11px] text-[#8e8e93] mt-[2px] leading-[1.5]">账户互转、报销等只影响余额，不算本月收支</span>
-                   </div>
-                   <ToggleSwitch checked={tempExcluded} onChange={() => setTempExcluded((v) => !v)} />
-                </div>
+                {isAutoExcludedFromCashflow(selectedTx) ? (
+                  <div className="mt-[16px] flex items-center bg-[#ecfdf5] rounded-[12px] px-[14px] py-[12px]">
+                    <CheckCircleSolid />
+                    <div className="flex flex-col ml-[10px]">
+                      <span className="text-[14px] font-bold text-[#0f9d58]">已自动不计入收支统计</span>
+                      <span className="text-[11px] text-[#5c5c5e] mt-[2px] leading-[1.5]">通勤打车、报销、账户互转等只影响余额，不算本月收支</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-[16px] flex items-center justify-between bg-[#f7f8fa] rounded-[12px] px-[14px] py-[12px]">
+                     <div className="flex flex-col pr-[12px]">
+                       <span className="text-[14px] font-bold text-[#1c1c1e]">不计入收支统计</span>
+                       <span className="text-[11px] text-[#8e8e93] mt-[2px] leading-[1.5]">账户互转、报销等只影响余额，不算本月收支</span>
+                     </div>
+                     <ToggleSwitch checked={tempExcluded} onChange={() => setTempExcluded((v) => !v)} />
+                  </div>
+                )}
                 <div className="flex space-x-[12px] mt-[24px]">
                    <button onClick={() => setSelectedTx(null)} className="flex-1 py-[12px] rounded-[12px] border border-[#e5e5ea] text-[#3a3a3c] text-[15px] font-semibold active:bg-[#f4f5f8] transition-colors">取消</button>
                    <button onClick={handleSave} className="flex-1 py-[12px] rounded-[12px] bg-[#1677ff] text-white text-[15px] font-semibold active:bg-[#1565d8] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">保存</button>
