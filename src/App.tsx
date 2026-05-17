@@ -2020,8 +2020,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
       const paymentMatched = selectedFilter === 'all' || tx.paymentMethod === selectedFilter;
       const typeMatched =
         selectedType === '全部' ||
-        (selectedType === '支出' && !tx.isIncome) ||
-        (selectedType === '收入' && tx.isIncome) ||
+        (selectedType === '支出' && !tx.isIncome && !isTransferTransaction(tx) && !isInternalAccountTransferTransaction(tx)) ||
+        (selectedType === '收入' && tx.isIncome && !isTransferTransaction(tx) && !isInternalAccountTransferTransaction(tx)) ||
         (selectedType === '理财' && (tx.tagType === 'investment' || tx.tag === '理财')) ||
         (selectedType === '转账' && (tx.tagType === 'transfer' || tx.tag === '转账'));
       const rangeMatched = !txDate || (
