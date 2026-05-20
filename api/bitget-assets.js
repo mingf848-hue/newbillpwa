@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   try {
     const result = await loadBitgetAssets({
-      accountType: readQuery(req, 'accountType') || 'spot',
+      accountType: readQuery(req, 'accountType') || 'all',
       coin: readQuery(req, 'coin'),
       assetType: readQuery(req, 'assetType') || 'hold_only',
     });

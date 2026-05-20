@@ -147,6 +147,7 @@ const formatEditableMoney = (value, digits = 2) => {
 };
 
 const BITGET_ACCOUNT_TYPE_LABELS = {
+  all: '总资产',
   spot: '现货账户',
   funding: '资金账户',
   futures: '合约账户',
@@ -2414,9 +2415,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const syncBitgetAssets = async (mode = 'detail') => {
     if (bitgetSync.loading) return;
-    const accountType = mode === 'add'
-      ? getBitgetApiAccountType(exchangeAccountType)
-      : getBitgetApiAccountType(selectedAccount?.sub || exchangeAccountType);
+    const accountType = 'all';
 
     setBitgetSync((prev) => ({ ...prev, loading: true, error: '' }));
     try {
@@ -2651,9 +2650,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const renderBitgetSyncPanel = (mode = 'detail') => {
-    const previewAssets = bitgetSync.assets.slice(0, 4);
-    const accountType = bitgetSync.accountType || (mode === 'add' ? getBitgetApiAccountType(exchangeAccountType) : getBitgetApiAccountType(selectedAccount?.sub));
+    const accountType = bitgetSync.accountType || 'all';
     const typeLabel = BITGET_ACCOUNT_TYPE_LABELS[accountType] || '账户';
+    const isOverview = accountType === 'all' || bitgetSync.assets.some((asset) => asset.accountType);
+    const previewAssets = bitgetSync.assets.slice(0, isOverview ? 6 : 4);
 
     return (
       <div className="mb-[12px] rounded-[12px] border border-[#d7f7ef] bg-[#f5fffc] p-[10px]">
@@ -2662,7 +2662,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <BrandLogo type="bitget" size={24} />
             <div className="min-w-0">
               <div className="text-[12px] font-bold text-[#1c1c1e] truncate">Bitget {typeLabel}</div>
-              <div className="text-[10px] text-[#6b7280] truncate">{bitgetSync.syncedAt ? `${bitgetSync.syncedAt} 已同步` : '只读 API 余额同步'}</div>
+              <div className="text-[10px] text-[#6b7280] truncate">{bitgetSync.syncedAt ? `${bitgetSync.syncedAt} 已同步` : '全账户 USDT 估值同步'}</div>
             </div>
           </div>
           <button
@@ -2677,7 +2677,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         </div>
         {bitgetSync.totalUsdt && (
           <div className="mt-[8px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
-            <span className="text-[11px] font-medium text-[#667085]">USDT 估值</span>
+            <span className="text-[11px] font-medium text-[#667085]">USDT 总估值</span>
             <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(bitgetSync.totalUsdt))}</span>
           </div>
         )}
@@ -2685,8 +2685,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="mt-[8px] grid grid-cols-2 gap-[6px]">
             {previewAssets.map((asset) => (
               <div key={`${asset.coin}-${asset.total}`} className="rounded-[8px] bg-white px-[8px] py-[6px] border border-[#e7f8f3] min-w-0">
-                <div className="text-[10px] font-bold text-[#1c1c1e] truncate">{asset.coin}</div>
-                <div className="text-[11px] font-semibold text-[#5c5c5e] truncate">{formatDisplayMoney(parseMoneyNumber(asset.total), 6)}</div>
+                <div className="text-[10px] font-bold text-[#1c1c1e] truncate">{asset.accountTypeLabel || BITGET_ACCOUNT_TYPE_LABELS[asset.accountType] || asset.coin}</div>
+                <div className="text-[11px] font-semibold text-[#5c5c5e] truncate">{formatDisplayMoney(parseMoneyNumber(asset.usdtValue || asset.total), isOverview ? 2 : 6)}</div>
               </div>
             ))}
           </div>
@@ -2844,7 +2844,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 </div>
                 <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { resetBitgetSync(); setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
-              <div className="mb-[12px] flex items-center justify-between border-b border-[#f4f5f8] pb-[16px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">{exchangeSelected === 'Bitget' ? '读取 Bitget 币种与余额' : '当前版本仅支持 Bitget 余额同步'}</span></div><ToggleSwitch checked={apiConnected && exchangeSelected === 'Bitget'} onChange={() => { if (exchangeSelected !== 'Bitget') { notify?.('当前仅支持 Bitget API 同步'); return; } resetBitgetSync(); setApiConnected(!apiConnected); }} /></div>
+              <div className="mb-[12px] flex items-center justify-between border-b border-[#f4f5f8] pb-[16px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">{exchangeSelected === 'Bitget' ? '读取 Bitget 全账户 USDT 总估值' : '当前版本仅支持 Bitget 余额同步'}</span></div><ToggleSwitch checked={apiConnected && exchangeSelected === 'Bitget'} onChange={() => { if (exchangeSelected !== 'Bitget') { notify?.('当前仅支持 Bitget API 同步'); return; } resetBitgetSync(); setApiConnected(!apiConnected); }} /></div>
               {apiConnected && exchangeSelected === 'Bitget' && renderBitgetSyncPanel('add')}
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>

@@ -3,6 +3,9 @@ import { createHmac } from 'node:crypto';
 const BITGET_BASE_URL = process.env.BITGET_BASE_URL || 'https://api.bitget.com';
 
 const ACCOUNT_TYPE_ALIASES = {
+  all: 'all',
+  total: 'all',
+  overview: 'all',
   spot: 'spot',
   funding: 'funding',
   fund: 'funding',
@@ -16,9 +19,19 @@ const ACCOUNT_TYPE_ALIASES = {
   '资金账户': 'funding',
   '合约账户': 'futures',
   '理财账户': 'earn',
+  '全部账户': 'all',
+  '总资产': 'all',
 };
 
 const OVERVIEW_ONLY_ACCOUNT_TYPES = new Set(['futures', 'earn', 'bots', 'margin']);
+const ACCOUNT_TYPE_LABELS = {
+  spot: '现货',
+  futures: '合约',
+  funding: '资金',
+  earn: '理财',
+  bots: '策略',
+  margin: '杠杆',
+};
 
 const getBitgetCredentials = () => {
   const apiKey = process.env.BITGET_API_KEY;
@@ -150,8 +163,38 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 
-export const loadBitgetAssets = async ({ accountType = 'spot', coin = '', assetType = 'hold_only' } = {}) => {
+const normalizeOverviewAsset = (row) => {
+  const accountType = String(row?.accountType || '').toLowerCase();
+  const usdtBalance = String(row?.usdtBalance ?? '0');
+  return {
+    coin: accountType.toUpperCase(),
+    accountType,
+    accountTypeLabel: ACCOUNT_TYPE_LABELS[accountType] || accountType,
+    available: usdtBalance,
+    frozen: '0',
+    locked: '0',
+    limitAvailable: '0',
+    total: usdtBalance,
+    usdtValue: usdtBalance,
+  };
+};
+
+export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);
+
+  if (normalizedType === 'all') {
+    const overview = await loadOverview();
+    const assets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
+    const totalUsdt = formatAmount(assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue), 0));
+    return {
+      success: true,
+      source: 'bitget',
+      accountType: normalizedType,
+      totalUsdt,
+      assets,
+      requestTime: overview?.requestTime || Date.now(),
+    };
+  }
 
   if (OVERVIEW_ONLY_ACCOUNT_TYPES.has(normalizedType)) {
     const overview = await loadOverview();
