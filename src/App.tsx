@@ -148,7 +148,6 @@ const formatEditableMoney = (value, digits = 2) => {
 
 const BITGET_ACCOUNT_TYPE_LABELS = {
   all: '总资产',
-  uta: '统一账户',
   spot: '现货账户',
   funding: '资金账户',
   futures: '合约账户',
