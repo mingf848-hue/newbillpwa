@@ -44,6 +44,23 @@ const exchangeRateMiddleware: Connect.NextHandleFunction = async (req, res, next
   }
 }
 
+const bitgetAssetsMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
+  if (!(req as { url?: string }).url?.startsWith('/api/bitget-assets')) {
+    next()
+    return
+  }
+
+  try {
+    const modulePath = './api/bitget-assets.js'
+    const apiModule = await import(modulePath) as { default: (req: unknown, res: unknown) => Promise<void> }
+    await apiModule.default(req, res)
+  } catch (error) {
+    res.statusCode = 500
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }))
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -51,9 +68,11 @@ export default defineConfig({
       name: 'local-exchange-rates-api',
       configureServer(server) {
         server.middlewares.use(exchangeRateMiddleware)
+        server.middlewares.use(bitgetAssetsMiddleware)
       },
       configurePreviewServer(server) {
         server.middlewares.use(exchangeRateMiddleware)
+        server.middlewares.use(bitgetAssetsMiddleware)
       },
     },
   ],

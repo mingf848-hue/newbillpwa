@@ -1,0 +1,218 @@
+import { createHmac } from 'node:crypto';
+
+const BITGET_BASE_URL = process.env.BITGET_BASE_URL || 'https://api.bitget.com';
+
+const ACCOUNT_TYPE_ALIASES = {
+  spot: 'spot',
+  funding: 'funding',
+  fund: 'funding',
+  futures: 'futures',
+  future: 'futures',
+  earn: 'earn',
+  bots: 'bots',
+  bot: 'bots',
+  margin: 'margin',
+  '现货账户': 'spot',
+  '资金账户': 'funding',
+  '合约账户': 'futures',
+  '理财账户': 'earn',
+};
+
+const OVERVIEW_ONLY_ACCOUNT_TYPES = new Set(['futures', 'earn', 'bots', 'margin']);
+
+const getBitgetCredentials = () => {
+  const apiKey = process.env.BITGET_API_KEY;
+  const secretKey = process.env.BITGET_API_SECRET || process.env.BITGET_SECRET_KEY;
+  const passphrase = process.env.BITGET_API_PASSPHRASE || process.env.BITGET_PASSPHRASE;
+
+  if (!apiKey || !secretKey || !passphrase) {
+    throw new Error('Missing Bitget API environment variables');
+  }
+
+  return { apiKey, secretKey, passphrase };
+};
+
+const normalizeAccountType = (value = 'spot') => {
+  const raw = String(value || 'spot').trim();
+  const normalized = ACCOUNT_TYPE_ALIASES[raw] || ACCOUNT_TYPE_ALIASES[raw.toLowerCase()];
+  if (!normalized) {
+    throw new Error(`Unsupported Bitget account type: ${raw}`);
+  }
+  return normalized;
+};
+
+const buildQueryString = (params = {}) => {
+  const entries = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([a], [b]) => a.localeCompare(b));
+  const search = new URLSearchParams();
+  entries.forEach(([key, value]) => search.append(key, String(value)));
+  return search.toString();
+};
+
+const signedBitgetGet = async (requestPath, params = {}) => {
+  const { apiKey, secretKey, passphrase } = getBitgetCredentials();
+  const method = 'GET';
+  const body = '';
+  const timestamp = String(Date.now());
+  const queryString = buildQueryString(params);
+  const pathWithQuery = `${requestPath}${queryString ? `?${queryString}` : ''}`;
+  const prehash = `${timestamp}${method}${requestPath}${queryString ? `?${queryString}` : ''}${body}`;
+  const signature = createHmac('sha256', secretKey).update(prehash).digest('base64');
+
+  const response = await fetch(`${BITGET_BASE_URL}${pathWithQuery}`, {
+    method,
+    headers: {
+      'ACCESS-KEY': apiKey,
+      'ACCESS-SIGN': signature,
+      'ACCESS-TIMESTAMP': timestamp,
+      'ACCESS-PASSPHRASE': passphrase,
+      locale: 'en-US',
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Bitget request failed (${response.status}): ${text || response.statusText}`);
+  }
+
+  if (payload?.code && payload.code !== '00000') {
+    throw new Error(payload.msg || payload.message || `Bitget API error: ${payload.code}`);
+  }
+
+  return payload;
+};
+
+const parseAmount = (value) => {
+  const amount = Number(String(value ?? '0').replace(/,/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const formatAmount = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  return Number(value.toFixed(12)).toString();
+};
+
+const normalizeSpotAsset = (asset) => {
+  const available = parseAmount(asset?.available);
+  const frozen = parseAmount(asset?.frozen);
+  const locked = parseAmount(asset?.locked);
+  const total = available + frozen + locked;
+
+  return {
+    coin: String(asset?.coin || '').toUpperCase(),
+    available: String(asset?.available ?? '0'),
+    frozen: String(asset?.frozen ?? '0'),
+    locked: String(asset?.locked ?? '0'),
+    limitAvailable: String(asset?.limitAvailable ?? '0'),
+    total: formatAmount(total),
+    uTime: asset?.uTime || null,
+  };
+};
+
+const normalizeFundingAsset = (asset) => {
+  const available = parseAmount(asset?.available);
+  const frozen = parseAmount(asset?.frozen);
+  const total = available + frozen;
+
+  return {
+    coin: String(asset?.coin || '').toUpperCase(),
+    available: String(asset?.available ?? '0'),
+    frozen: String(asset?.frozen ?? '0'),
+    locked: '0',
+    limitAvailable: '0',
+    total: formatAmount(total),
+    usdtValue: String(asset?.usdtValue ?? ''),
+  };
+};
+
+const sortAssets = (assets) => assets
+  .filter((asset) => asset.coin)
+  .sort((a, b) => {
+    if (a.coin === 'USDT') return -1;
+    if (b.coin === 'USDT') return 1;
+    return parseAmount(b.usdtValue || b.total) - parseAmount(a.usdtValue || a.total);
+  });
+
+const findOverviewBalance = (overviewPayload, accountType) => {
+  const rows = Array.isArray(overviewPayload?.data) ? overviewPayload.data : [];
+  const row = rows.find((item) => String(item?.accountType || '').toLowerCase() === accountType);
+  return row?.usdtBalance !== undefined ? String(row.usdtBalance) : '';
+};
+
+const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
+
+export const loadBitgetAssets = async ({ accountType = 'spot', coin = '', assetType = 'hold_only' } = {}) => {
+  const normalizedType = normalizeAccountType(accountType);
+
+  if (OVERVIEW_ONLY_ACCOUNT_TYPES.has(normalizedType)) {
+    const overview = await loadOverview();
+    const totalUsdt = findOverviewBalance(overview, normalizedType);
+    return {
+      success: true,
+      source: 'bitget',
+      accountType: normalizedType,
+      totalUsdt,
+      assets: totalUsdt ? [{
+        coin: 'USDT',
+        available: totalUsdt,
+        frozen: '0',
+        locked: '0',
+        limitAvailable: '0',
+        total: totalUsdt,
+        usdtValue: totalUsdt,
+      }] : [],
+      requestTime: overview?.requestTime || Date.now(),
+    };
+  }
+
+  if (normalizedType === 'funding') {
+    const [assetsResult, overviewResult] = await Promise.allSettled([
+      signedBitgetGet('/api/v2/account/funding-assets', { coin }),
+      loadOverview(),
+    ]);
+
+    if (assetsResult.status === 'rejected') throw assetsResult.reason;
+
+    const assets = sortAssets((assetsResult.value?.data || []).map(normalizeFundingAsset));
+    const overviewTotal = overviewResult.status === 'fulfilled' ? findOverviewBalance(overviewResult.value, 'funding') : '';
+    const fallbackTotal = formatAmount(assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0));
+
+    return {
+      success: true,
+      source: 'bitget',
+      accountType: normalizedType,
+      totalUsdt: overviewTotal || fallbackTotal,
+      assets,
+      requestTime: assetsResult.value?.requestTime || Date.now(),
+    };
+  }
+
+  const [assetsResult, overviewResult] = await Promise.allSettled([
+    signedBitgetGet('/api/v2/spot/account/assets', { coin, assetType }),
+    loadOverview(),
+  ]);
+
+  if (assetsResult.status === 'rejected') throw assetsResult.reason;
+
+  const assets = sortAssets((assetsResult.value?.data || []).map(normalizeSpotAsset));
+  const overviewTotal = overviewResult.status === 'fulfilled' ? findOverviewBalance(overviewResult.value, 'spot') : '';
+  const usdtAsset = assets.find((asset) => asset.coin === 'USDT');
+
+  return {
+    success: true,
+    source: 'bitget',
+    accountType: normalizedType,
+    totalUsdt: overviewTotal || usdtAsset?.total || '0',
+    assets,
+    requestTime: assetsResult.value?.requestTime || Date.now(),
+  };
+};

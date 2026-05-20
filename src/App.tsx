@@ -141,6 +141,34 @@ const formatDisplayMoney = (value, digits = 2) => (
   Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 );
 
+const formatEditableMoney = (value, digits = 2) => {
+  const amount = parseMoneyNumber(value);
+  return Number.isFinite(amount) ? amount.toFixed(digits) : '0.00';
+};
+
+const BITGET_ACCOUNT_TYPE_LABELS = {
+  spot: '现货账户',
+  funding: '资金账户',
+  futures: '合约账户',
+  earn: '理财账户',
+  bots: '策略账户',
+  margin: '杠杆账户',
+};
+
+const getBitgetApiAccountType = (value = '') => {
+  const source = String(value || '').toLowerCase();
+  if (source.includes('资金') || source.includes('fund')) return 'funding';
+  if (source.includes('合约') || source.includes('future')) return 'futures';
+  if (source.includes('理财') || source.includes('earn')) return 'earn';
+  if (source.includes('策略') || source.includes('bot')) return 'bots';
+  if (source.includes('杠杆') || source.includes('margin')) return 'margin';
+  return 'spot';
+};
+
+const isBitgetAccountLike = (...values) => values
+  .filter(Boolean)
+  .some((value) => /bitget/i.test(String(value)));
+
 const sanitizeExchangeRates = (input) => {
   const safeRates = { ...FALLBACK_EXCHANGE_RATES };
   if (!input || typeof input !== 'object') return safeRates;
@@ -2343,6 +2371,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [selectedIcon, setSelectedIcon] = useState<string>('cash');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [bitgetSync, setBitgetSync] = useState({
+    loading: false,
+    assets: [],
+    totalUsdt: '',
+    accountType: '',
+    syncedAt: '',
+    error: '',
+  });
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2365,8 +2401,53 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     } catch {}
   };
 
+  const resetBitgetSync = () => {
+    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '' });
+  };
+
+  const applyBitgetBalance = (payload) => {
+    const totalUsdt = payload?.totalUsdt || payload?.assets?.find((asset) => asset.coin === 'USDT')?.total;
+    if (!totalUsdt) return;
+    setSelectedCurrency('USDT');
+    setAccountBalance(formatEditableMoney(totalUsdt));
+  };
+
+  const syncBitgetAssets = async (mode = 'detail') => {
+    if (bitgetSync.loading) return;
+    const accountType = mode === 'add'
+      ? getBitgetApiAccountType(exchangeAccountType)
+      : getBitgetApiAccountType(selectedAccount?.sub || exchangeAccountType);
+
+    setBitgetSync((prev) => ({ ...prev, loading: true, error: '' }));
+    try {
+      const response = await fetch(`/api/bitget-assets?accountType=${encodeURIComponent(accountType)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || `Bitget 同步失败 (${response.status})`);
+      }
+
+      applyBitgetBalance(payload);
+      setBitgetSync({
+        loading: false,
+        assets: Array.isArray(payload.assets) ? payload.assets : [],
+        totalUsdt: payload.totalUsdt || '',
+        accountType: payload.accountType || accountType,
+        syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        error: '',
+      });
+      notify?.('Bitget 余额已读取');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Bitget 同步失败';
+      setBitgetSync((prev) => ({ ...prev, loading: false, error: message }));
+      notify?.(message);
+    }
+  };
+
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
+    resetBitgetSync();
     setSelectedAccount(accountData);
     setAccountName(accountData.name || '');
     setAccountBalance(String(accountData.balance ?? '').replace(/,/g, ''));
@@ -2378,8 +2459,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0', compound: !!readCompoundMap()[accountData.id] });
     setIsAccountDetailModalOpen(true);
   };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { setExchangeSelected(defaultExchange); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(defaultExchange); setExchangeAccountType('现货账户'); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, _iconNode, currency = 'AED') => {
+    resetBitgetSync();
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
     const inferredIcon = name.includes('银行') ? 'landmark' : name.includes('钱包') ? 'wechat' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'mastercard' : 'cash';
     setIsAddAccountModalOpen(false);
@@ -2505,13 +2587,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const saveExchangeAccount = async () => {
+    const exchangeIcon = exchangeSelected === 'HTX' ? 'huobi' : exchangeSelected.toLowerCase();
     const created = await createAccount({
       name: exchangeAccountName.trim() || `${exchangeSelected} 现货账户`,
-      sub: "交易所账户",
+      sub: exchangeAccountType || "交易所账户",
       type: "exchange",
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency || 'USDT',
-      icon: exchangeSelected.toLowerCase(),
+      icon: exchangeIcon,
       apy_limit: aprValues.limit || '0',
       apy_base_rate: aprValues.baseRate || '0',
       apy_overflow_rate: aprValues.overflowRate || '0',
@@ -2563,6 +2646,52 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
               </div>
             ))}
          </div>
+      </div>
+    );
+  };
+
+  const renderBitgetSyncPanel = (mode = 'detail') => {
+    const previewAssets = bitgetSync.assets.slice(0, 4);
+    const accountType = bitgetSync.accountType || (mode === 'add' ? getBitgetApiAccountType(exchangeAccountType) : getBitgetApiAccountType(selectedAccount?.sub));
+    const typeLabel = BITGET_ACCOUNT_TYPE_LABELS[accountType] || '账户';
+
+    return (
+      <div className="mb-[12px] rounded-[12px] border border-[#d7f7ef] bg-[#f5fffc] p-[10px]">
+        <div className="flex items-center justify-between gap-[10px]">
+          <div className="flex items-center space-x-[8px] min-w-0">
+            <BrandLogo type="bitget" size={24} />
+            <div className="min-w-0">
+              <div className="text-[12px] font-bold text-[#1c1c1e] truncate">Bitget {typeLabel}</div>
+              <div className="text-[10px] text-[#6b7280] truncate">{bitgetSync.syncedAt ? `${bitgetSync.syncedAt} 已同步` : '只读 API 余额同步'}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => syncBitgetAssets(mode)}
+            disabled={bitgetSync.loading}
+            className="h-[30px] px-[10px] rounded-[9px] bg-[#00e5c0] text-[#101828] text-[12px] font-bold active:scale-95 transition-transform disabled:opacity-60 flex items-center space-x-[4px]"
+          >
+            <RotateCcw className={`w-[13px] h-[13px] ${bitgetSync.loading ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+            <span>{bitgetSync.loading ? '读取中' : '同步'}</span>
+          </button>
+        </div>
+        {bitgetSync.totalUsdt && (
+          <div className="mt-[8px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
+            <span className="text-[11px] font-medium text-[#667085]">USDT 估值</span>
+            <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(bitgetSync.totalUsdt))}</span>
+          </div>
+        )}
+        {previewAssets.length > 0 && (
+          <div className="mt-[8px] grid grid-cols-2 gap-[6px]">
+            {previewAssets.map((asset) => (
+              <div key={`${asset.coin}-${asset.total}`} className="rounded-[8px] bg-white px-[8px] py-[6px] border border-[#e7f8f3] min-w-0">
+                <div className="text-[10px] font-bold text-[#1c1c1e] truncate">{asset.coin}</div>
+                <div className="text-[11px] font-semibold text-[#5c5c5e] truncate">{formatDisplayMoney(parseMoneyNumber(asset.total), 6)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {bitgetSync.error && <div className="mt-[8px] text-[11px] font-medium text-[#ff3b30] leading-[1.4]">{bitgetSync.error}</div>}
       </div>
     );
   };
@@ -2673,6 +2802,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 <QuickAddRow icon={<BrandLogo type="okx" size={24} />} name="OKX" type="交易所账户" onClick={() => handleOpenAddExchange('OKX')} />
                 <QuickAddRow icon={<BrandLogo type="binance" size={24} />} name="币安 Binance" type="交易所账户" onClick={() => handleOpenAddExchange('Binance')} />
                 <QuickAddRow icon={<BrandLogo type="bybit" size={24} />} name="Bybit" type="交易所账户" onClick={() => handleOpenAddExchange('Bybit')} />
+                <QuickAddRow icon={<BrandLogo type="bitget" size={24} />} name="Bitget" type="交易所账户" onClick={() => handleOpenAddExchange('Bitget')} />
                 <QuickAddRow icon={<BrandLogo type="alipay" size={24} />} name="支付宝" type="电子钱包" onClick={() => handleOpenCustomAccount('支付宝', <BrandLogo type="alipay" size={24} />, 'CNY')} />
                 <QuickAddRow icon={<BrandLogo type="wechat" size={24} />} name="微信钱包" type="电子钱包" onClick={() => handleOpenCustomAccount('微信钱包', <BrandLogo type="wechat" size={24} />, 'CNY')} />
               </div>
@@ -2693,7 +2823,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 <div className="grid grid-cols-3 gap-[8px]">
                    {[{ id: 'OKX', icon: <BrandLogo type="okx" size={20} />, name: 'OKX' },{ id: 'Binance', icon: <BrandLogo type="binance" size={20} />, name: '币安 Binance' },{ id: 'Bybit', icon: <BrandLogo type="bybit" size={20} />, name: 'Bybit' },{ id: 'Bitget', icon: <BrandLogo type="bitget" size={20} />, name: 'Bitget' },{ id: 'Gateio', icon: <BrandLogo type="gateio" size={20} />, name: 'Gate.io' },{ id: 'KuCoin', icon: <BrandLogo type="kucoin" size={20} />, name: 'KuCoin' },{ id: 'MEXC', icon: <BrandLogo type="mexc" size={20} />, name: 'MEXC' },{ id: 'HTX', icon: <BrandLogo type="huobi" size={20} />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
                      const isSelected = exchangeSelected === ex.id;
-                     return (<button key={ex.id} onClick={() => setExchangeSelected(ex.id)} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
+                     const accountLabel = ex.id === 'Gateio' ? 'Gate.io' : ex.id;
+                     return (<button key={ex.id} onClick={() => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(ex.id); if (ex.id !== 'Other') setExchangeAccountName(`${accountLabel} ${exchangeAccountType}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
                    })}
                 </div>
               </div>
@@ -2711,9 +2842,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                     maxLength={32}
                   />
                 </div>
-                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
+                <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { resetBitgetSync(); setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
-              <div className="mb-[24px] flex items-center justify-between border-b border-[#f4f5f8] pb-[20px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">连接 API 后可自动同步余额与交易记录</span></div><ToggleSwitch checked={apiConnected} onChange={() => setApiConnected(!apiConnected)} /></div>
+              <div className="mb-[12px] flex items-center justify-between border-b border-[#f4f5f8] pb-[16px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">{exchangeSelected === 'Bitget' ? '读取 Bitget 币种与余额' : '当前版本仅支持 Bitget 余额同步'}</span></div><ToggleSwitch checked={apiConnected && exchangeSelected === 'Bitget'} onChange={() => { if (exchangeSelected !== 'Bitget') { notify?.('当前仅支持 Bitget API 同步'); return; } resetBitgetSync(); setApiConnected(!apiConnected); }} /></div>
+              {apiConnected && exchangeSelected === 'Bitget' && renderBitgetSyncPanel('add')}
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>
                 <label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label>
@@ -2791,6 +2923,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  </div>
                  <div className="flex items-center justify-between mt-[6px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
               </div>
+              {isBitgetAccountLike(selectedAccount?.name, selectedAccount?.icon, selectedAccount?.sub, selectedIcon, accountName) && renderBitgetSyncPanel('detail')}
               <div className="mb-[8px]">
                  <div className="flex items-center space-x-[4px] mb-[6px]"><h3 className="text-[12px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
                  <div className="grid grid-cols-3 gap-[6px]">
