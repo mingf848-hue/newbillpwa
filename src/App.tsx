@@ -148,6 +148,7 @@ const formatEditableMoney = (value, digits = 2) => {
 
 const BITGET_ACCOUNT_TYPE_LABELS = {
   all: '总资产',
+  uta: '统一账户',
   spot: '现货账户',
   funding: '资金账户',
   futures: '合约账户',
@@ -2379,6 +2380,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     accountType: '',
     syncedAt: '',
     error: '',
+    warnings: [],
   });
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
@@ -2403,7 +2405,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const resetBitgetSync = () => {
-    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '' });
+    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '', warnings: [] });
   };
 
   const applyBitgetBalance = (payload) => {
@@ -2435,6 +2437,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         accountType: payload.accountType || accountType,
         syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
         error: '',
+        warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
       });
       notify?.('Bitget 余额已读取');
     } catch (error) {
@@ -2691,6 +2694,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             ))}
           </div>
         )}
+        {bitgetSync.warnings?.length > 0 && <div className="mt-[8px] text-[11px] font-medium text-[#b45309] leading-[1.4]">{bitgetSync.warnings[0]}</div>}
         {bitgetSync.error && <div className="mt-[8px] text-[11px] font-medium text-[#ff3b30] leading-[1.4]">{bitgetSync.error}</div>}
       </div>
     );

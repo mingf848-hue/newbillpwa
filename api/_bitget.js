@@ -6,6 +6,8 @@ const ACCOUNT_TYPE_ALIASES = {
   all: 'all',
   total: 'all',
   overview: 'all',
+  uta: 'uta',
+  unified: 'uta',
   spot: 'spot',
   funding: 'funding',
   fund: 'funding',
@@ -21,10 +23,13 @@ const ACCOUNT_TYPE_ALIASES = {
   '理财账户': 'earn',
   '全部账户': 'all',
   '总资产': 'all',
+  '统一账户': 'uta',
 };
 
 const OVERVIEW_ONLY_ACCOUNT_TYPES = new Set(['futures', 'earn', 'bots', 'margin']);
+const DETACHED_CLASSIC_ACCOUNT_TYPES = new Set(['earn', 'funding', 'bots']);
 const ACCOUNT_TYPE_LABELS = {
+  uta: '统一账户',
   spot: '现货',
   futures: '合约',
   funding: '资金',
@@ -162,6 +167,7 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 };
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
+const loadUtaAssets = () => signedBitgetGet('/api/v3/account/assets');
 
 const normalizeOverviewAsset = (row) => {
   const accountType = String(row?.accountType || '').toLowerCase();
@@ -179,20 +185,91 @@ const normalizeOverviewAsset = (row) => {
   };
 };
 
+const normalizeUtaAccountAsset = (utaPayload) => {
+  const data = utaPayload?.data || {};
+  const usdtBalance = String(data.usdtEquity ?? data.accountEquity ?? '0');
+  return {
+    coin: 'UTA',
+    accountType: 'uta',
+    accountTypeLabel: ACCOUNT_TYPE_LABELS.uta,
+    available: usdtBalance,
+    frozen: '0',
+    locked: '0',
+    limitAvailable: '0',
+    total: usdtBalance,
+    usdtValue: usdtBalance,
+    btcEquity: data.btcEquity || '',
+    assets: Array.isArray(data.assets) ? data.assets : [],
+  };
+};
+
+const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
+
 export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const overview = await loadOverview();
-    const assets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
-    const totalUsdt = formatAmount(assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue), 0));
+    const [overviewResult, utaResult] = await Promise.allSettled([
+      loadOverview(),
+      loadUtaAssets(),
+    ]);
+
+    if (overviewResult.status === 'rejected' && utaResult.status === 'rejected') {
+      throw overviewResult.reason;
+    }
+
+    const overview = overviewResult.status === 'fulfilled' ? overviewResult.value : null;
+    const overviewAssets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
+    const classicTotal = sumUsdtValues(overviewAssets);
+    const detachedAssets = overviewAssets.filter((asset) => DETACHED_CLASSIC_ACCOUNT_TYPES.has(asset.accountType) && parseAmount(asset.usdtValue) > 0);
+
+    let assets = overviewAssets;
+    let totalUsdt = classicTotal;
+    let selectedSource = 'classic-overview';
+    let utaTotal = 0;
+
+    if (utaResult.status === 'fulfilled') {
+      const utaAsset = normalizeUtaAccountAsset(utaResult.value);
+      utaTotal = parseAmount(utaAsset.usdtValue);
+      const combinedAssets = sortAssets([utaAsset, ...detachedAssets]);
+      const combinedTotal = sumUsdtValues(combinedAssets);
+      if (combinedTotal > classicTotal) {
+        assets = combinedAssets;
+        totalUsdt = combinedTotal;
+        selectedSource = 'uta-plus-detached';
+      }
+    }
+
     return {
       success: true,
       source: 'bitget',
       accountType: normalizedType,
-      totalUsdt,
+      totalUsdt: formatAmount(totalUsdt),
       assets,
       requestTime: overview?.requestTime || Date.now(),
+      sources: {
+        selected: selectedSource,
+        classicOverviewUsdt: formatAmount(classicTotal),
+        utaUsdt: formatAmount(utaTotal),
+        detachedClassicUsdt: formatAmount(sumUsdtValues(detachedAssets)),
+      },
+      warnings: [
+        overviewResult.status === 'rejected' ? `classic overview failed: ${overviewResult.reason?.message || overviewResult.reason}` : '',
+        utaResult.status === 'rejected' ? `UTA assets failed: ${utaResult.reason?.message || utaResult.reason}` : '',
+      ].filter(Boolean),
+    };
+  }
+
+  if (normalizedType === 'uta') {
+    const uta = await loadUtaAssets();
+    const utaAsset = normalizeUtaAccountAsset(uta);
+    return {
+      success: true,
+      source: 'bitget',
+      accountType: normalizedType,
+      totalUsdt: utaAsset.usdtValue,
+      assets: [utaAsset],
+      requestTime: uta?.requestTime || Date.now(),
     };
   }
 
