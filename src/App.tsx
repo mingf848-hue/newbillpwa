@@ -1213,13 +1213,13 @@ const SearchModal = ({ isOpen, onClose, transactions }) => {
 const AprLimitDisplay = ({ balance, aprValues, currency, apiDailyEarnings = null, apiTotalEarnings = null, useApiEarnings = false }) => {
   const apiDaily = parseMoneyNumber(apiDailyEarnings);
   const apiTotal = parseMoneyNumber(apiTotalEarnings);
-  if (useApiEarnings && apiDaily > 0) {
+  if (useApiEarnings) {
     return (
       <div className="mt-[14px] p-[12px] bg-[#f5fffc] rounded-[12px] border border-[#d7f7ef]">
         <div className="grid grid-cols-2 gap-[8px]">
           <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
             <div className="text-[10px] text-[#8e8e93] mb-[2px]">API 昨日收益</div>
-            <div className="text-[15px] font-bold text-[#10b981]">{apiDaily.toFixed(4)}</div>
+            <div className="text-[15px] font-bold text-[#10b981]">{apiDailyEarnings !== null && apiDailyEarnings !== undefined ? apiDaily.toFixed(4) : '--'}</div>
             <div className="text-[10px] text-[#8e8e93]">USDT</div>
           </div>
           <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
@@ -1231,7 +1231,6 @@ const AprLimitDisplay = ({ balance, aprValues, currency, apiDailyEarnings = null
       </div>
     );
   }
-  if (useApiEarnings) return null;
   const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
   const lim = parseFloat(aprValues.limit) || 0;
   const baseRate = parseFloat(aprValues.baseRate) || 0;
@@ -2845,10 +2844,18 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(panelSync.totalUsdt))}</span>
           </div>
         )}
-        {parseMoneyNumber(panelSync.earnings?.yesterdayProfitUsdt) > 0 && (
+        <div className="mt-[6px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
+          <span className="text-[11px] font-medium text-[#667085]">API 昨日收益</span>
+          <span className="text-[14px] font-bold text-[#10b981]">
+            {panelSync.earnings?.yesterdayProfitUsdt !== undefined && panelSync.earnings?.yesterdayProfitUsdt !== null
+              ? `+${formatDisplayMoney(parseMoneyNumber(panelSync.earnings.yesterdayProfitUsdt))}`
+              : '--'}
+          </span>
+        </div>
+        {parseMoneyNumber(panelSync.earnings?.usdtTotalEarning) > 0 && (
           <div className="mt-[6px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
-            <span className="text-[11px] font-medium text-[#667085]">昨日理财收益</span>
-            <span className="text-[14px] font-bold text-[#10b981]">+{formatDisplayMoney(parseMoneyNumber(panelSync.earnings.yesterdayProfitUsdt))}</span>
+            <span className="text-[11px] font-medium text-[#667085]">API 累计收益</span>
+            <span className="text-[14px] font-bold text-[#10b981]">{formatDisplayMoney(parseMoneyNumber(panelSync.earnings.usdtTotalEarning))}</span>
           </div>
         )}
         {previewAssets.length > 0 && (
