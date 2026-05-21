@@ -170,6 +170,13 @@ const isBitgetAccountLike = (...values) => values
   .filter(Boolean)
   .some((value) => /bitget/i.test(String(value)));
 
+const isRealtimeBalanceAccount = (account) => isBitgetAccountLike(
+  account?.name,
+  account?.sub,
+  account?.icon,
+  account?.iconType
+);
+
 const sanitizeExchangeRates = (input) => {
   const safeRates = { ...FALLBACK_EXCHANGE_RATES };
   if (!input || typeof input !== 'object') return safeRates;
@@ -432,6 +439,7 @@ function useSupabaseData() {
     if (!Number.isFinite(delta) || delta === 0) return;
     const targetAccount = getTransactionSyncAccount(txLike);
     if (!targetAccount) return;
+    if (isRealtimeBalanceAccount(targetAccount)) return;
     applyAccountBalanceDelta(targetAccount.name, delta);
     await syncAccountBalanceToDb(targetAccount, delta);
   };
@@ -454,15 +462,17 @@ function useSupabaseData() {
     const inDelta = (targetAmountRaw > 0 ? targetAmountRaw : Math.abs(amount)) * direction;
     const originalOutBalance = parseMoneyNumber(outAccount.balance);
     const originalInBalance = parseMoneyNumber(inAccount.balance);
-    applyAccountBalanceDelta(outAccount.name, -outDelta);
-    applyAccountBalanceDelta(inAccount.name, inDelta);
+    const shouldSyncOut = !isRealtimeBalanceAccount(outAccount);
+    const shouldSyncIn = !isRealtimeBalanceAccount(inAccount);
+    if (shouldSyncOut) applyAccountBalanceDelta(outAccount.name, -outDelta);
+    if (shouldSyncIn) applyAccountBalanceDelta(inAccount.name, inDelta);
     try {
-      await syncAccountBalanceToDb(outAccount, -outDelta);
-      await syncAccountBalanceToDb(inAccount, inDelta);
+      if (shouldSyncOut) await syncAccountBalanceToDb(outAccount, -outDelta);
+      if (shouldSyncIn) await syncAccountBalanceToDb(inAccount, inDelta);
     } catch (error) {
       try {
-        await setAccountBalanceInDb(outAccount, originalOutBalance);
-        await setAccountBalanceInDb(inAccount, originalInBalance);
+        if (shouldSyncOut) await setAccountBalanceInDb(outAccount, originalOutBalance);
+        if (shouldSyncIn) await setAccountBalanceInDb(inAccount, originalInBalance);
       } catch (rollbackError) {
         console.error("Transfer balance rollback failed", rollbackError);
       }
@@ -695,6 +705,10 @@ function useSupabaseData() {
       return;
     }
     const { inAccount } = transferAccounts;
+    if (isRealtimeBalanceAccount(inAccount)) {
+      await updateTransaction(txLike.id, { note: nextNote });
+      return;
+    }
     const originalInBalance = parseMoneyNumber(inAccount.balance);
     applyAccountBalanceDelta(inAccount.name, deltaAmount);
     try {
@@ -2381,6 +2395,15 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     error: '',
     warnings: [],
   });
+  const [liveBitgetSync, setLiveBitgetSync] = useState({
+    loading: false,
+    assets: [],
+    totalUsdt: '',
+    accountType: '',
+    syncedAt: '',
+    error: '',
+    warnings: [],
+  });
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2414,11 +2437,27 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAccountBalance(formatEditableMoney(totalUsdt));
   };
 
-  const syncBitgetAssets = async (mode = 'detail') => {
-    if (bitgetSync.loading) return;
-    const accountType = 'all';
+  const toBitgetSyncState = (payload, accountType) => ({
+    loading: false,
+    assets: Array.isArray(payload.assets) ? payload.assets : [],
+    totalUsdt: payload.totalUsdt || '',
+    accountType: payload.accountType || accountType,
+    syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    error: '',
+    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+  });
 
-    setBitgetSync((prev) => ({ ...prev, loading: true, error: '' }));
+  const syncBitgetAssets = async (mode = 'detail', options = {}) => {
+    const { silent = false, applyToForm = true } = options;
+    if (bitgetSync.loading || liveBitgetSync.loading) return;
+    const accountType = 'all';
+    const isLiveMode = mode === 'live';
+
+    if (isLiveMode) {
+      setLiveBitgetSync((prev) => ({ ...prev, loading: true, error: '' }));
+    } else {
+      setBitgetSync((prev) => ({ ...prev, loading: true, error: '' }));
+    }
     try {
       const response = await fetch(`/api/bitget-assets?accountType=${encodeURIComponent(accountType)}`, {
         headers: { Accept: 'application/json' },
@@ -2428,23 +2467,43 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         throw new Error(payload?.error || `Bitget 同步失败 (${response.status})`);
       }
 
-      applyBitgetBalance(payload);
-      setBitgetSync({
-        loading: false,
-        assets: Array.isArray(payload.assets) ? payload.assets : [],
-        totalUsdt: payload.totalUsdt || '',
-        accountType: payload.accountType || accountType,
-        syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-        error: '',
-        warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
-      });
-      notify?.('Bitget 余额已读取');
+      const nextSync = toBitgetSyncState(payload, accountType);
+      setLiveBitgetSync(nextSync);
+      setBitgetSync(nextSync);
+      if (applyToForm) applyBitgetBalance(payload);
+      if (!silent) notify?.('Bitget 余额已读取');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Bitget 同步失败';
-      setBitgetSync((prev) => ({ ...prev, loading: false, error: message }));
-      notify?.(message);
+      if (isLiveMode) {
+        setLiveBitgetSync((prev) => ({ ...prev, loading: false, error: message }));
+      } else {
+        setBitgetSync((prev) => ({ ...prev, loading: false, error: message }));
+      }
+      if (!silent) notify?.(message);
     }
   };
+
+  const hasBitgetAccounts = useMemo(() => accounts.some(isRealtimeBalanceAccount), [accounts]);
+  useEffect(() => {
+    if (!hasBitgetAccounts) return undefined;
+    let cancelled = false;
+    const loadLiveBalance = () => {
+      if (!cancelled) syncBitgetAssets('live', { silent: true, applyToForm: false });
+    };
+    loadLiveBalance();
+    const intervalId = window.setInterval(loadLiveBalance, 30000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadLiveBalance();
+    };
+    window.addEventListener('focus', loadLiveBalance);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', loadLiveBalance);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [hasBitgetAccounts]);
 
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
@@ -2605,9 +2664,19 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setIsAddExchangeModalOpen(false);
   };
 
+  const displayAccounts = useMemo(() => {
+    const liveBalance = parseMoneyNumber(liveBitgetSync.totalUsdt);
+    if (!liveBalance) return accounts;
+    return accounts.map((account) => (
+      isRealtimeBalanceAccount(account)
+        ? { ...account, balance: formatDisplayMoney(liveBalance), currency: 'USDT', liveBalance: true }
+        : account
+    ));
+  }, [accounts, liveBitgetSync.totalUsdt]);
+
   const getAccountCnyValue = (account) => convertAmountToCny(parseMoneyNumber(account.balance), account.currency, exchangeRates);
-  const totalAssets = accounts.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
-  const getTypeValue = (type) => accounts.filter((a) => a.type === type).reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
+  const totalAssets = displayAccounts.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
+  const getTypeValue = (type) => displayAccounts.filter((a) => a.type === type).reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
   const getPct = (type) => totalAssets === 0 ? '0.0' : ((getTypeValue(type) / totalAssets) * 100).toFixed(1);
   const getVal = (type) => formatDisplayMoney(getTypeValue(type));
   const todayNetChange = useMemo(() => {
@@ -2628,7 +2697,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   ];
 
   const renderAccountSection = (title, icon, type, itemsPerSlide, spaceY) => {
-    const filtered = accounts.filter(a => a.type === type);
+    const filtered = displayAccounts.filter(a => a.type === type);
     if(filtered.length === 0) return null;
     const total = formatDisplayMoney(filtered.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0));
     const chunks = chunkArray(filtered, itemsPerSlide);
@@ -2652,10 +2721,11 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const renderBitgetSyncPanel = (mode = 'detail') => {
-    const accountType = bitgetSync.accountType || 'all';
+    const panelSync = bitgetSync.totalUsdt || bitgetSync.loading || bitgetSync.error ? bitgetSync : liveBitgetSync;
+    const accountType = panelSync.accountType || 'all';
     const typeLabel = BITGET_ACCOUNT_TYPE_LABELS[accountType] || '账户';
-    const isOverview = accountType === 'all' || bitgetSync.assets.some((asset) => asset.accountType);
-    const previewAssets = bitgetSync.assets.slice(0, isOverview ? 6 : 4);
+    const isOverview = accountType === 'all' || panelSync.assets.some((asset) => asset.accountType);
+    const previewAssets = panelSync.assets.slice(0, isOverview ? 6 : 4);
 
     return (
       <div className="mb-[12px] rounded-[12px] border border-[#d7f7ef] bg-[#f5fffc] p-[10px]">
@@ -2664,23 +2734,23 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             <BrandLogo type="bitget" size={24} />
             <div className="min-w-0">
               <div className="text-[12px] font-bold text-[#1c1c1e] truncate">Bitget {typeLabel}</div>
-              <div className="text-[10px] text-[#6b7280] truncate">{bitgetSync.syncedAt ? `${bitgetSync.syncedAt} 已同步` : '全账户 USDT 估值同步'}</div>
+              <div className="text-[10px] text-[#6b7280] truncate">{panelSync.syncedAt ? `${panelSync.syncedAt} 实时读取` : '全账户 USDT 实时估值'}</div>
             </div>
           </div>
           <button
             type="button"
             onClick={() => syncBitgetAssets(mode)}
-            disabled={bitgetSync.loading}
+            disabled={panelSync.loading}
             className="h-[30px] px-[10px] rounded-[9px] bg-[#00e5c0] text-[#101828] text-[12px] font-bold active:scale-95 transition-transform disabled:opacity-60 flex items-center space-x-[4px]"
           >
-            <RotateCcw className={`w-[13px] h-[13px] ${bitgetSync.loading ? 'animate-spin' : ''}`} strokeWidth={2.5} />
-            <span>{bitgetSync.loading ? '读取中' : '同步'}</span>
+            <RotateCcw className={`w-[13px] h-[13px] ${panelSync.loading ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+            <span>{panelSync.loading ? '读取中' : '刷新'}</span>
           </button>
         </div>
-        {bitgetSync.totalUsdt && (
+        {panelSync.totalUsdt && (
           <div className="mt-[8px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
             <span className="text-[11px] font-medium text-[#667085]">USDT 总估值</span>
-            <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(bitgetSync.totalUsdt))}</span>
+            <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(panelSync.totalUsdt))}</span>
           </div>
         )}
         {previewAssets.length > 0 && (
@@ -2693,8 +2763,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             ))}
           </div>
         )}
-        {bitgetSync.warnings?.length > 0 && <div className="mt-[8px] text-[11px] font-medium text-[#b45309] leading-[1.4]">{bitgetSync.warnings[0]}</div>}
-        {bitgetSync.error && <div className="mt-[8px] text-[11px] font-medium text-[#ff3b30] leading-[1.4]">{bitgetSync.error}</div>}
+        {panelSync.warnings?.length > 0 && <div className="mt-[8px] text-[11px] font-medium text-[#b45309] leading-[1.4]">{panelSync.warnings[0]}</div>}
+        {panelSync.error && <div className="mt-[8px] text-[11px] font-medium text-[#ff3b30] leading-[1.4]">{panelSync.error}</div>}
       </div>
     );
   };
@@ -2758,7 +2828,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="flex justify-between items-center p-[16px] pb-[8px]"><span className="text-[14px] font-bold text-[#1c1c1e]">最近变动</span><button onClick={() => setIsChangesModalOpen(true)} className="flex items-center text-[12px] text-[#8e8e93] active:opacity-60 transition-opacity">查看全部 <ChevronRight className="w-[14px] h-[14px] ml-[2px]" strokeWidth={2.5} /></button></div>
           <div className="flex flex-col">
             {transactions.slice(0, 4).map((tx, idx, arr) => {
-              const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+              const relatedAcc = displayAccounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
               return (
                 <button key={tx.id || idx} onClick={() => { if (relatedAcc) handleOpenAccountDetail(relatedAcc); else setIsChangesModalOpen(true); }} className={`w-full grid grid-cols-[36px_1fr_auto] gap-[10px] items-center px-[16px] py-[12px] bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors text-left ${idx !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                   <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
@@ -3012,7 +3082,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
             </div>
             <div className="overflow-y-auto hide-scrollbar flex-1">
               {transactions.map((tx, i, arr) => {
-                const relatedAcc = accounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
+                const relatedAcc = displayAccounts.find(a => a.name === tx.paymentMethod || a.icon === tx.iconType);
                 return (
                   <button key={tx.id || i} onClick={() => { if (relatedAcc) { setIsChangesModalOpen(false); handleOpenAccountDetail(relatedAcc); } else { setIsChangesModalOpen(false); } }} className={`w-full flex items-center px-[16px] py-[12px] bg-white active:bg-[#f9f9f9] transition-colors text-left ${i !== arr.length - 1 ? 'border-b border-[#f4f5f8]' : ''}`}>
                     <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">{getIconByString(tx.iconType, 'medium')}</div>
