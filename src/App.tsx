@@ -84,23 +84,6 @@ const parseTransactionDateTime = (fullDate) => {
   );
 };
 
-const toDateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-const formatDateLabelForTransaction = (date) => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const monthDay = `${date.getMonth() + 1}月${date.getDate()}日`;
-  if (isSameDay(date, today)) return `今天 ${monthDay}`;
-  if (isSameDay(date, yesterday)) return `昨天 ${monthDay}`;
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-  return `${monthDay} ${weekdays[date.getDay()]}`;
-};
-
-const formatFullDateForTransaction = (date, time = '23:59') => (
-  `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${time}`
-);
-
 const isSameDay = (a, b) => (
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -161,16 +144,6 @@ const formatDisplayMoney = (value, digits = 2) => (
 const formatEditableMoney = (value, digits = 2) => {
   const amount = parseMoneyNumber(value);
   return Number.isFinite(amount) ? amount.toFixed(digits) : '0.00';
-};
-
-const BITGET_ACCOUNT_TYPE_LABELS = {
-  all: '总资产',
-  spot: '现货账户',
-  funding: '资金账户',
-  futures: '合约账户',
-  earn: '理财账户',
-  bots: '策略账户',
-  margin: '杠杆账户',
 };
 
 const getBitgetApiAccountType = (value = '') => {
@@ -1210,27 +1183,7 @@ const SearchModal = ({ isOpen, onClose, transactions }) => {
   );
 };
 
-const AprLimitDisplay = ({ balance, aprValues, currency, apiDailyEarnings = null, apiTotalEarnings = null, useApiEarnings = false }) => {
-  const apiDaily = parseMoneyNumber(apiDailyEarnings);
-  const apiTotal = parseMoneyNumber(apiTotalEarnings);
-  if (useApiEarnings) {
-    return (
-      <div className="mt-[14px] p-[12px] bg-[#f5fffc] rounded-[12px] border border-[#d7f7ef]">
-        <div className="grid grid-cols-2 gap-[8px]">
-          <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-            <div className="text-[10px] text-[#8e8e93] mb-[2px]">API 昨日收益</div>
-            <div className="text-[15px] font-bold text-[#10b981]">{apiDailyEarnings !== null && apiDailyEarnings !== undefined ? apiDaily.toFixed(4) : '--'}</div>
-            <div className="text-[10px] text-[#8e8e93]">USDT</div>
-          </div>
-          <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-            <div className="text-[10px] text-[#8e8e93] mb-[2px]">API 累计收益</div>
-            <div className="text-[15px] font-bold text-[#10b981]">{apiTotal > 0 ? apiTotal.toFixed(2) : '--'}</div>
-            <div className="text-[10px] text-[#8e8e93]">USDT</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+const AprLimitDisplay = ({ balance, aprValues, currency }) => {
   const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
   const lim = parseFloat(aprValues.limit) || 0;
   const baseRate = parseFloat(aprValues.baseRate) || 0;
@@ -2431,7 +2384,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: '',
     error: '',
     warnings: [],
-    earnings: null,
   });
   const [liveBitgetSync, setLiveBitgetSync] = useState({
     loading: false,
@@ -2441,9 +2393,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: '',
     error: '',
     warnings: [],
-    earnings: null,
   });
-  const recordedBitgetEarnKeysRef = useRef(new Set());
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2467,7 +2417,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const resetBitgetSync = () => {
-    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '', warnings: [], earnings: null });
+    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '', warnings: [] });
   };
 
   const applyBitgetBalance = (payload) => {
@@ -2485,7 +2435,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     error: '',
     warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
-    earnings: payload.earnings || null,
   });
 
   const syncBitgetAssets = async (mode = 'detail', options = {}) => {
@@ -2545,49 +2494,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [hasBitgetAccounts]);
-
-  useEffect(() => {
-    const profit = parseMoneyNumber(liveBitgetSync.earnings?.yesterdayProfitUsdt);
-    if (!hasBitgetAccounts || !createTransaction || profit <= 0) return;
-
-    const earnDate = new Date();
-    earnDate.setDate(earnDate.getDate() - 1);
-    const dateKey = toDateKey(earnDate);
-    const recordKey = `BitgetEarn:${dateKey}`;
-    if (recordedBitgetEarnKeysRef.current.has(recordKey)) return;
-
-    const alreadyRecorded = transactions.some((tx) => String(tx?.note || '').includes(recordKey));
-    if (alreadyRecorded) {
-      recordedBitgetEarnKeysRef.current.add(recordKey);
-      return;
-    }
-
-    const bitgetAccount = accounts.find(isRealtimeBalanceAccount);
-    if (!bitgetAccount) return;
-
-    recordedBitgetEarnKeysRef.current.add(recordKey);
-    createTransaction({
-      dateLabel: formatDateLabelForTransaction(earnDate),
-      iconBg: 'bg-black',
-      iconType: 'bitget',
-      title: 'Bitget 理财收益',
-      subtitle: bitgetAccount.name || 'Bitget',
-      tag: '理财',
-      tagType: 'investment',
-      amount: `+${formatDisplayMoney(profit)}`,
-      isIncome: true,
-      time: '23:59',
-      fullDate: formatFullDateForTransaction(earnDate, '23:59'),
-      currency: 'USDT',
-      paymentMethod: bitgetAccount.name || 'Bitget',
-      note: `${recordKey} API自动记录，来源:${liveBitgetSync.earnings?.source || 'savings'}`,
-    }).then(() => {
-      notify?.('Bitget 昨日理财收益已记账');
-    }).catch((error) => {
-      recordedBitgetEarnKeysRef.current.delete(recordKey);
-      console.error('Bitget earn record failed', error);
-    });
-  }, [accounts, createTransaction, hasBitgetAccounts, liveBitgetSync.earnings?.yesterdayProfitUsdt, transactions]);
 
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
@@ -2757,13 +2663,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         : account
     ));
   }, [accounts, liveBitgetSync.totalUsdt]);
-  const selectedIsBitgetAccount = isRealtimeBalanceAccount({
-    name: accountName || selectedAccount?.name,
-    sub: selectedAccount?.sub,
-    icon: selectedIcon || selectedAccount?.icon,
-    iconType: selectedAccount?.iconType,
-  });
-  const selectedBitgetEarnings = bitgetSync.earnings || liveBitgetSync.earnings || null;
 
   const getAccountCnyValue = (account) => convertAmountToCny(parseMoneyNumber(account.balance), account.currency, exchangeRates);
   const totalAssets = displayAccounts.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
@@ -2813,10 +2712,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const renderBitgetSyncPanel = (mode = 'detail') => {
     const panelSync = bitgetSync.totalUsdt || bitgetSync.loading || bitgetSync.error ? bitgetSync : liveBitgetSync;
-    const accountType = panelSync.accountType || 'all';
-    const typeLabel = BITGET_ACCOUNT_TYPE_LABELS[accountType] || '账户';
-    const isOverview = accountType === 'all' || panelSync.assets.some((asset) => asset.accountType);
-    const previewAssets = panelSync.assets.slice(0, isOverview ? 6 : 4);
 
     return (
       <div className="mb-[12px] rounded-[12px] border border-[#d7f7ef] bg-[#f5fffc] p-[10px]">
@@ -2824,7 +2719,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="flex items-center space-x-[8px] min-w-0">
             <BrandLogo type="bitget" size={24} />
             <div className="min-w-0">
-              <div className="text-[12px] font-bold text-[#1c1c1e] truncate">Bitget {typeLabel}</div>
+              <div className="text-[12px] font-bold text-[#1c1c1e] truncate">Bitget 总资产</div>
               <div className="text-[10px] text-[#6b7280] truncate">{panelSync.syncedAt ? `${panelSync.syncedAt} 实时读取` : '全账户 USDT 实时估值'}</div>
             </div>
           </div>
@@ -2842,30 +2737,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="mt-[8px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
             <span className="text-[11px] font-medium text-[#667085]">USDT 总估值</span>
             <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(panelSync.totalUsdt))}</span>
-          </div>
-        )}
-        <div className="mt-[6px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
-          <span className="text-[11px] font-medium text-[#667085]">API 昨日收益</span>
-          <span className="text-[14px] font-bold text-[#10b981]">
-            {panelSync.earnings?.yesterdayProfitUsdt !== undefined && panelSync.earnings?.yesterdayProfitUsdt !== null
-              ? `+${formatDisplayMoney(parseMoneyNumber(panelSync.earnings.yesterdayProfitUsdt))}`
-              : '--'}
-          </span>
-        </div>
-        {parseMoneyNumber(panelSync.earnings?.usdtTotalEarning) > 0 && (
-          <div className="mt-[6px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
-            <span className="text-[11px] font-medium text-[#667085]">API 累计收益</span>
-            <span className="text-[14px] font-bold text-[#10b981]">{formatDisplayMoney(parseMoneyNumber(panelSync.earnings.usdtTotalEarning))}</span>
-          </div>
-        )}
-        {previewAssets.length > 0 && (
-          <div className="mt-[8px] grid grid-cols-2 gap-[6px]">
-            {previewAssets.map((asset) => (
-              <div key={`${asset.coin}-${asset.total}`} className="rounded-[8px] bg-white px-[8px] py-[6px] border border-[#e7f8f3] min-w-0">
-                <div className="text-[10px] font-bold text-[#1c1c1e] truncate">{asset.accountTypeLabel || BITGET_ACCOUNT_TYPE_LABELS[asset.accountType] || asset.coin}</div>
-                <div className="text-[11px] font-semibold text-[#5c5c5e] truncate">{formatDisplayMoney(parseMoneyNumber(asset.usdtValue || asset.total), isOverview ? 2 : 6)}</div>
-              </div>
-            ))}
           </div>
         )}
         {panelSync.warnings?.length > 0 && <div className="mt-[8px] text-[11px] font-medium text-[#b45309] leading-[1.4]">{panelSync.warnings[0]}</div>}
@@ -3113,9 +2984,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                    balance={accountBalance}
                    aprValues={aprValues}
                    currency={selectedCurrency}
-                   useApiEarnings={selectedIsBitgetAccount}
-                   apiDailyEarnings={selectedBitgetEarnings?.yesterdayProfitUsdt}
-                   apiTotalEarnings={selectedBitgetEarnings?.usdtTotalEarning}
                  />
                  <div className="flex items-center justify-between mt-[8px] px-[2px]">
                    <div className="flex flex-col">

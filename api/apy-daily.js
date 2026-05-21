@@ -81,7 +81,7 @@ export default async function handler(_req, res) {
     const today = localNow.toISOString().slice(0, 10);
     const note = `APY每日派息:${today}`;
     const accounts = await requestSupabase('accounts?select=*');
-    const eligibleAccounts = accounts.filter((account) => !isRealtimeBalanceAccount(account) && getDailyInterest(account) > 0);
+    const eligibleAccounts = accounts.filter((account) => getDailyInterest(account) > 0);
     const created = [];
 
     for (const account of eligibleAccounts) {
@@ -115,6 +115,11 @@ export default async function handler(_req, res) {
           note,
         }),
       });
+
+      if (isRealtimeBalanceAccount(account)) {
+        created.push(transaction);
+        continue;
+      }
 
       try {
         const nextBalance = parseAmount(account.balance) + interest;
