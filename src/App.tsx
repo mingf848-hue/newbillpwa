@@ -84,6 +84,23 @@ const parseTransactionDateTime = (fullDate) => {
   );
 };
 
+const toDateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const formatDateLabelForTransaction = (date) => {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const monthDay = `${date.getMonth() + 1}月${date.getDate()}日`;
+  if (isSameDay(date, today)) return `今天 ${monthDay}`;
+  if (isSameDay(date, yesterday)) return `昨天 ${monthDay}`;
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  return `${monthDay} ${weekdays[date.getDay()]}`;
+};
+
+const formatFullDateForTransaction = (date, time = '23:59') => (
+  `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${time}`
+);
+
 const isSameDay = (a, b) => (
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -2394,6 +2411,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: '',
     error: '',
     warnings: [],
+    earnings: null,
   });
   const [liveBitgetSync, setLiveBitgetSync] = useState({
     loading: false,
@@ -2403,7 +2421,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: '',
     error: '',
     warnings: [],
+    earnings: null,
   });
+  const recordedBitgetEarnKeysRef = useRef(new Set());
 
   useScrollLock(isAddAccountModalOpen || isAddExchangeModalOpen || isAccountDetailModalOpen || isChangesModalOpen || isIconPickerOpen || Boolean(assetKeyboardField));
 
@@ -2427,7 +2447,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const resetBitgetSync = () => {
-    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '', warnings: [] });
+    setBitgetSync({ loading: false, assets: [], totalUsdt: '', accountType: '', syncedAt: '', error: '', warnings: [], earnings: null });
   };
 
   const applyBitgetBalance = (payload) => {
@@ -2445,6 +2465,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     syncedAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     error: '',
     warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+    earnings: payload.earnings || null,
   });
 
   const syncBitgetAssets = async (mode = 'detail', options = {}) => {
@@ -2504,6 +2525,49 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [hasBitgetAccounts]);
+
+  useEffect(() => {
+    const profit = parseMoneyNumber(liveBitgetSync.earnings?.yesterdayProfitUsdt);
+    if (!hasBitgetAccounts || !createTransaction || profit <= 0) return;
+
+    const earnDate = new Date();
+    earnDate.setDate(earnDate.getDate() - 1);
+    const dateKey = toDateKey(earnDate);
+    const recordKey = `BitgetEarn:${dateKey}`;
+    if (recordedBitgetEarnKeysRef.current.has(recordKey)) return;
+
+    const alreadyRecorded = transactions.some((tx) => String(tx?.note || '').includes(recordKey));
+    if (alreadyRecorded) {
+      recordedBitgetEarnKeysRef.current.add(recordKey);
+      return;
+    }
+
+    const bitgetAccount = accounts.find(isRealtimeBalanceAccount);
+    if (!bitgetAccount) return;
+
+    recordedBitgetEarnKeysRef.current.add(recordKey);
+    createTransaction({
+      dateLabel: formatDateLabelForTransaction(earnDate),
+      iconBg: 'bg-black',
+      iconType: 'bitget',
+      title: 'Bitget 理财收益',
+      subtitle: bitgetAccount.name || 'Bitget',
+      tag: '理财',
+      tagType: 'investment',
+      amount: `+${formatDisplayMoney(profit)}`,
+      isIncome: true,
+      time: '23:59',
+      fullDate: formatFullDateForTransaction(earnDate, '23:59'),
+      currency: 'USDT',
+      paymentMethod: bitgetAccount.name || 'Bitget',
+      note: `${recordKey} API自动记录，来源:${liveBitgetSync.earnings?.source || 'savings'}`,
+    }).then(() => {
+      notify?.('Bitget 昨日理财收益已记账');
+    }).catch((error) => {
+      recordedBitgetEarnKeysRef.current.delete(recordKey);
+      console.error('Bitget earn record failed', error);
+    });
+  }, [accounts, createTransaction, hasBitgetAccounts, liveBitgetSync.earnings?.yesterdayProfitUsdt, transactions]);
 
   const handleOpenAccountDetail = (accountData) => {
     if (!accountData) return;
@@ -2751,6 +2815,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           <div className="mt-[8px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
             <span className="text-[11px] font-medium text-[#667085]">USDT 总估值</span>
             <span className="text-[14px] font-bold text-[#101828]">{formatDisplayMoney(parseMoneyNumber(panelSync.totalUsdt))}</span>
+          </div>
+        )}
+        {parseMoneyNumber(panelSync.earnings?.yesterdayProfitUsdt) > 0 && (
+          <div className="mt-[6px] rounded-[9px] bg-white/80 px-[9px] py-[7px] flex items-center justify-between">
+            <span className="text-[11px] font-medium text-[#667085]">昨日理财收益</span>
+            <span className="text-[14px] font-bold text-[#10b981]">+{formatDisplayMoney(parseMoneyNumber(panelSync.earnings.yesterdayProfitUsdt))}</span>
           </div>
         )}
         {previewAssets.length > 0 && (

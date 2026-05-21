@@ -189,6 +189,8 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 const loadSpotAllAssets = () => signedBitgetGet('/api/v2/spot/account/assets', { assetType: 'all' });
+const loadSavingsAccount = () => signedBitgetGet('/api/v2/earn/savings/account');
+const loadSavingsAssets = (periodType) => signedBitgetGet('/api/v2/earn/savings/assets', { periodType, limit: 100 });
 const loadSpotTicker = (coin) => {
   const normalizedCoin = String(coin || '').toUpperCase();
   if (!normalizedCoin || normalizedCoin === 'USDT') return Promise.resolve({ coin: normalizedCoin, price: 1 });
@@ -217,6 +219,73 @@ const normalizeOverviewAsset = (row) => {
 };
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
+
+const normalizeSavingsProducts = (payload) => {
+  const rows = Array.isArray(payload?.data?.resultList) ? payload.data.resultList : [];
+  return rows
+    .map((row) => ({
+      productId: String(row?.productId || ''),
+      productCoin: String(row?.productCoin || '').toUpperCase(),
+      interestCoin: String(row?.interestCoin || row?.productCoin || '').toUpperCase(),
+      periodType: row?.periodType || '',
+      holdAmount: String(row?.holdAmount ?? '0'),
+      lastProfit: String(row?.lastProfit ?? '0'),
+      totalProfit: String(row?.totalProfit ?? '0'),
+      status: row?.status || '',
+    }))
+    .filter((row) => row.interestCoin);
+};
+
+const loadSavingsEarnings = async () => {
+  const [accountResult, flexibleResult, fixedResult] = await Promise.allSettled([
+    loadSavingsAccount(),
+    loadSavingsAssets('flexible'),
+    loadSavingsAssets('fixed'),
+  ]);
+
+  const warnings = [
+    accountResult.status === 'rejected' ? `savings account failed: ${accountResult.reason?.message || accountResult.reason}` : '',
+    flexibleResult.status === 'rejected' ? `flexible savings assets failed: ${flexibleResult.reason?.message || flexibleResult.reason}` : '',
+    fixedResult.status === 'rejected' ? `fixed savings assets failed: ${fixedResult.reason?.message || fixedResult.reason}` : '',
+  ].filter(Boolean);
+
+  const products = [
+    ...(flexibleResult.status === 'fulfilled' ? normalizeSavingsProducts(flexibleResult.value) : []),
+    ...(fixedResult.status === 'fulfilled' ? normalizeSavingsProducts(fixedResult.value) : []),
+  ];
+  const profitRows = products.filter((product) => parseAmount(product.lastProfit) > 0);
+  const priceResults = await Promise.allSettled(profitRows.map((product) => loadSpotTicker(product.interestCoin)));
+  const profitProducts = profitRows.flatMap((product, index) => {
+    const priceResult = priceResults[index];
+    if (priceResult.status === 'rejected') {
+      warnings.push(`savings ${product.interestCoin} profit price failed: ${priceResult.reason?.message || priceResult.reason}`);
+      return [];
+    }
+    const profit = parseAmount(product.lastProfit);
+    const price = priceResult.value.price;
+    return [{
+      ...product,
+      profit: formatAmount(profit),
+      price: formatAmount(price),
+      usdtValue: formatAmount(profit * price),
+    }];
+  });
+
+  const productProfitUsdt = sumUsdtValues(profitProducts);
+  const accountData = accountResult.status === 'fulfilled' ? accountResult.value?.data || {} : {};
+  const account24hUsdt = parseAmount(accountData.usdt24hEarning);
+  const yesterdayProfitUsdt = productProfitUsdt > 0 ? productProfitUsdt : account24hUsdt;
+
+  return {
+    yesterdayProfitUsdt: formatAmount(yesterdayProfitUsdt),
+    source: productProfitUsdt > 0 ? 'savings-assets-last-profit' : 'savings-account-24h',
+    products: profitProducts,
+    usdt24hEarning: String(accountData.usdt24hEarning ?? ''),
+    usdtTotalEarning: String(accountData.usdtTotalEarning ?? ''),
+    requestTime: accountResult.status === 'fulfilled' ? accountResult.value?.requestTime : Date.now(),
+    warnings,
+  };
+};
 
 const loadLockedSpotAssets = async () => {
   const spotPayload = await loadSpotAllAssets();
@@ -260,9 +329,10 @@ export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetTy
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const [overviewResult, lockedSpotResult] = await Promise.allSettled([
+    const [overviewResult, lockedSpotResult, earningsResult] = await Promise.allSettled([
       loadOverview(),
       loadLockedSpotAssets(),
+      loadSavingsEarnings(),
     ]);
 
     if (overviewResult.status === 'rejected') {
@@ -274,6 +344,7 @@ export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetTy
     const classicTotal = sumUsdtValues(overviewAssets);
     const lockedSpotAssets = lockedSpotResult.status === 'fulfilled' ? lockedSpotResult.value.assets : [];
     const lockedSpotWarnings = lockedSpotResult.status === 'fulfilled' ? lockedSpotResult.value.warnings : [];
+    const earnings = earningsResult.status === 'fulfilled' ? earningsResult.value : null;
 
     let assets = overviewAssets;
     let totalUsdt = classicTotal;
@@ -295,6 +366,7 @@ export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetTy
       accountType: normalizedType,
       totalUsdt: formatAmount(totalUsdt),
       assets,
+      earnings,
       requestTime: overview?.requestTime || Date.now(),
       sources: {
         selected: selectedSource,
@@ -303,7 +375,9 @@ export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetTy
       },
       warnings: [
         lockedSpotResult.status === 'rejected' ? `locked spot assets failed: ${lockedSpotResult.reason?.message || lockedSpotResult.reason}` : '',
+        earningsResult.status === 'rejected' ? `savings earnings failed: ${earningsResult.reason?.message || earningsResult.reason}` : '',
         ...lockedSpotWarnings,
+        ...(earnings?.warnings || []),
       ].filter(Boolean),
     };
   }
