@@ -25,7 +25,6 @@ const ACCOUNT_TYPE_ALIASES = {
 
 const OVERVIEW_ONLY_ACCOUNT_TYPES = new Set(['futures', 'earn', 'bots', 'margin']);
 const ACCOUNT_TYPE_LABELS = {
-  locked_spot: '锁仓',
   spot: '现货',
   futures: '合约',
   funding: '资金',
@@ -105,31 +104,6 @@ const signedBitgetGet = async (requestPath, params = {}) => {
   return payload;
 };
 
-const publicBitgetGet = async (requestPath, params = {}) => {
-  const queryString = buildQueryString(params);
-  const pathWithQuery = `${requestPath}${queryString ? `?${queryString}` : ''}`;
-  const response = await fetch(`${BITGET_BASE_URL}${pathWithQuery}`, {
-    headers: {
-      locale: 'en-US',
-      'Content-Type': 'application/json',
-    },
-  });
-  const text = await response.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = null;
-  }
-  if (!response.ok) {
-    throw new Error(`Bitget public request failed (${response.status}): ${text || response.statusText}`);
-  }
-  if (payload?.code && payload.code !== '00000') {
-    throw new Error(payload.msg || payload.message || `Bitget public API error: ${payload.code}`);
-  }
-  return payload;
-};
-
 const parseAmount = (value) => {
   const amount = Number(String(value ?? '0').replace(/,/g, ''));
   return Number.isFinite(amount) ? amount : 0;
@@ -189,16 +163,6 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 const loadSpotAllAssets = () => signedBitgetGet('/api/v2/spot/account/assets', { assetType: 'all' });
-const loadSpotTicker = (coin) => {
-  const normalizedCoin = String(coin || '').toUpperCase();
-  if (!normalizedCoin || normalizedCoin === 'USDT') return Promise.resolve({ coin: normalizedCoin, price: 1 });
-  return publicBitgetGet('/api/v2/spot/market/tickers', { symbol: `${normalizedCoin}USDT` }).then((payload) => {
-    const ticker = Array.isArray(payload?.data) ? payload.data[0] : null;
-    const price = parseAmount(ticker?.lastPr || ticker?.bidPr || ticker?.askPr);
-    if (!price) throw new Error(`No USDT ticker for ${normalizedCoin}`);
-    return { coin: normalizedCoin, price };
-  });
-};
 
 const normalizeOverviewAsset = (row) => {
   const accountType = String(row?.accountType || '').toLowerCase();
@@ -218,93 +182,26 @@ const normalizeOverviewAsset = (row) => {
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
 
-const loadLockedSpotAssets = async () => {
-  const spotPayload = await loadSpotAllAssets();
-  const rows = Array.isArray(spotPayload?.data) ? spotPayload.data : [];
-  const lockedRows = rows
-    .map((asset) => {
-      const coin = String(asset?.coin || '').toUpperCase();
-      const lockedAmount = parseAmount(asset?.locked) + parseAmount(asset?.frozen) + parseAmount(asset?.limitAvailable);
-      return { coin, lockedAmount };
-    })
-    .filter((asset) => asset.coin && asset.coin !== 'USDT' && asset.lockedAmount > 0);
-
-  const priceResults = await Promise.allSettled(lockedRows.map((asset) => loadSpotTicker(asset.coin)));
-  const warnings = [];
-  const assets = lockedRows.flatMap((asset, index) => {
-    const priceResult = priceResults[index];
-    if (priceResult.status === 'rejected') {
-      warnings.push(`locked ${asset.coin} price failed: ${priceResult.reason?.message || priceResult.reason}`);
-      return [];
-    }
-    const price = priceResult.value.price;
-    const usdtValue = asset.lockedAmount * price;
-    return [{
-      coin: asset.coin,
-      accountType: 'locked_spot',
-      accountTypeLabel: `${asset.coin} 锁仓`,
-      available: '0',
-      frozen: '0',
-      locked: formatAmount(asset.lockedAmount),
-      limitAvailable: '0',
-      total: formatAmount(asset.lockedAmount),
-      usdtValue: formatAmount(usdtValue),
-      price: formatAmount(price),
-    }];
-  });
-
-  return { assets, warnings };
-};
-
 export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const [overviewResult, lockedSpotResult] = await Promise.allSettled([
-      loadOverview(),
-      loadLockedSpotAssets(),
-    ]);
-
-    if (overviewResult.status === 'rejected') {
-      throw overviewResult.reason;
-    }
-
-    const overview = overviewResult.value;
+    const overview = await loadOverview();
     const overviewAssets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
     const classicTotal = sumUsdtValues(overviewAssets);
-    const lockedSpotAssets = lockedSpotResult.status === 'fulfilled' ? lockedSpotResult.value.assets : [];
-    const lockedSpotWarnings = lockedSpotResult.status === 'fulfilled' ? lockedSpotResult.value.warnings : [];
-
-    let assets = overviewAssets;
-    let totalUsdt = classicTotal;
-    let selectedSource = 'classic-overview';
-
-    if (lockedSpotAssets.length > 0) {
-      const classicPlusLockedAssets = sortAssets([...overviewAssets, ...lockedSpotAssets]);
-      const classicPlusLockedTotal = sumUsdtValues(classicPlusLockedAssets);
-      if (classicPlusLockedTotal > totalUsdt) {
-        assets = classicPlusLockedAssets;
-        totalUsdt = classicPlusLockedTotal;
-        selectedSource = 'classic-plus-locked';
-      }
-    }
 
     return {
       success: true,
       source: 'bitget',
       accountType: normalizedType,
-      totalUsdt: formatAmount(totalUsdt),
-      assets,
+      totalUsdt: formatAmount(classicTotal),
+      assets: overviewAssets,
       requestTime: overview?.requestTime || Date.now(),
       sources: {
-        selected: selectedSource,
+        selected: 'classic-overview',
         classicOverviewUsdt: formatAmount(classicTotal),
-        lockedSpotUsdt: formatAmount(sumUsdtValues(lockedSpotAssets)),
       },
-      warnings: [
-        lockedSpotResult.status === 'rejected' ? `locked spot assets failed: ${lockedSpotResult.reason?.message || lockedSpotResult.reason}` : '',
-        ...lockedSpotWarnings,
-      ].filter(Boolean),
+      warnings: [],
     };
   }
 
