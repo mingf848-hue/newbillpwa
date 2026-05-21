@@ -1210,7 +1210,28 @@ const SearchModal = ({ isOpen, onClose, transactions }) => {
   );
 };
 
-const AprLimitDisplay = ({ balance, aprValues, currency }) => {
+const AprLimitDisplay = ({ balance, aprValues, currency, apiDailyEarnings = null, apiTotalEarnings = null, useApiEarnings = false }) => {
+  const apiDaily = parseMoneyNumber(apiDailyEarnings);
+  const apiTotal = parseMoneyNumber(apiTotalEarnings);
+  if (useApiEarnings && apiDaily > 0) {
+    return (
+      <div className="mt-[14px] p-[12px] bg-[#f5fffc] rounded-[12px] border border-[#d7f7ef]">
+        <div className="grid grid-cols-2 gap-[8px]">
+          <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <div className="text-[10px] text-[#8e8e93] mb-[2px]">API 昨日收益</div>
+            <div className="text-[15px] font-bold text-[#10b981]">{apiDaily.toFixed(4)}</div>
+            <div className="text-[10px] text-[#8e8e93]">USDT</div>
+          </div>
+          <div className="bg-white rounded-[10px] p-[8px] text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <div className="text-[10px] text-[#8e8e93] mb-[2px]">API 累计收益</div>
+            <div className="text-[15px] font-bold text-[#10b981]">{apiTotal > 0 ? apiTotal.toFixed(2) : '--'}</div>
+            <div className="text-[10px] text-[#8e8e93]">USDT</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (useApiEarnings) return null;
   const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
   const lim = parseFloat(aprValues.limit) || 0;
   const baseRate = parseFloat(aprValues.baseRate) || 0;
@@ -2737,6 +2758,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         : account
     ));
   }, [accounts, liveBitgetSync.totalUsdt]);
+  const selectedIsBitgetAccount = isRealtimeBalanceAccount({
+    name: accountName || selectedAccount?.name,
+    sub: selectedAccount?.sub,
+    icon: selectedIcon || selectedAccount?.icon,
+    iconType: selectedAccount?.iconType,
+  });
+  const selectedBitgetEarnings = bitgetSync.earnings || liveBitgetSync.earnings || null;
 
   const getAccountCnyValue = (account) => convertAmountToCny(parseMoneyNumber(account.balance), account.currency, exchangeRates);
   const totalAssets = displayAccounts.reduce((sum, acc) => sum + getAccountCnyValue(acc), 0);
@@ -3074,7 +3102,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                     <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
                     <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
                  </div>
-                 <AprLimitDisplay balance={accountBalance} aprValues={aprValues} currency={selectedCurrency} />
+                 <AprLimitDisplay
+                   balance={accountBalance}
+                   aprValues={aprValues}
+                   currency={selectedCurrency}
+                   useApiEarnings={selectedIsBitgetAccount}
+                   apiDailyEarnings={selectedBitgetEarnings?.yesterdayProfitUsdt}
+                   apiTotalEarnings={selectedBitgetEarnings?.usdtTotalEarning}
+                 />
                  <div className="flex items-center justify-between mt-[8px] px-[2px]">
                    <div className="flex flex-col">
                      <span className="text-[12px] font-medium text-[#1c1c1e]">复利计息</span>

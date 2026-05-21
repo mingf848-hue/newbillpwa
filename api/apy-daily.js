@@ -50,6 +50,8 @@ const getDailyInterest = (account) => {
   return ((basePrincipal * baseRate) + (overflowPrincipal * overflowRate)) / 365;
 };
 
+const isRealtimeBalanceAccount = (account) => /bitget/i.test(`${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`);
+
 const inferPlatformMeta = (account) => {
   const source = `${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`;
   if (/火币|HTX/i.test(source)) return { iconType: 'huobi', label: '火币' };
@@ -79,7 +81,7 @@ export default async function handler(_req, res) {
     const today = localNow.toISOString().slice(0, 10);
     const note = `APY每日派息:${today}`;
     const accounts = await requestSupabase('accounts?select=*');
-    const eligibleAccounts = accounts.filter((account) => getDailyInterest(account) > 0);
+    const eligibleAccounts = accounts.filter((account) => !isRealtimeBalanceAccount(account) && getDailyInterest(account) > 0);
     const created = [];
 
     for (const account of eligibleAccounts) {
