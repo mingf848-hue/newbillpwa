@@ -104,6 +104,31 @@ const signedBitgetGet = async (requestPath, params = {}) => {
   return payload;
 };
 
+const publicBitgetGet = async (requestPath, params = {}) => {
+  const queryString = buildQueryString(params);
+  const pathWithQuery = `${requestPath}${queryString ? `?${queryString}` : ''}`;
+  const response = await fetch(`${BITGET_BASE_URL}${pathWithQuery}`, {
+    headers: {
+      locale: 'en-US',
+      'Content-Type': 'application/json',
+    },
+  });
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    throw new Error(`Bitget public request failed (${response.status}): ${text || response.statusText}`);
+  }
+  if (payload?.code && payload.code !== '00000') {
+    throw new Error(payload.msg || payload.message || `Bitget public API error: ${payload.code}`);
+  }
+  return payload;
+};
+
 const parseAmount = (value) => {
   const amount = Number(String(value ?? '0').replace(/,/g, ''));
   return Number.isFinite(amount) ? amount : 0;
@@ -127,6 +152,7 @@ const normalizeSpotAsset = (asset) => {
     locked: String(asset?.locked ?? '0'),
     limitAvailable: String(asset?.limitAvailable ?? '0'),
     total: formatAmount(total),
+    usdtValue: String(asset?.usdtValue ?? ''),
     uTime: asset?.uTime || null,
   };
 };
@@ -163,6 +189,16 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 const loadSpotAllAssets = () => signedBitgetGet('/api/v2/spot/account/assets', { assetType: 'all' });
+const loadSpotTicker = (coin) => {
+  const normalizedCoin = String(coin || '').toUpperCase();
+  if (!normalizedCoin || normalizedCoin === 'USDT') return Promise.resolve({ coin: normalizedCoin, price: 1 });
+  return publicBitgetGet('/api/v2/spot/market/tickers', { symbol: `${normalizedCoin}USDT` }).then((payload) => {
+    const ticker = Array.isArray(payload?.data) ? payload.data[0] : null;
+    const price = parseAmount(ticker?.lastPr || ticker?.bidPr || ticker?.askPr);
+    if (!price) throw new Error(`No USDT ticker for ${normalizedCoin}`);
+    return { coin: normalizedCoin, price };
+  });
+};
 
 const normalizeOverviewAsset = (row) => {
   const accountType = String(row?.accountType || '').toLowerCase();
@@ -182,26 +218,57 @@ const normalizeOverviewAsset = (row) => {
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
 
+const loadValuedSpotAssets = async () => {
+  const spotPayload = await loadSpotAllAssets();
+  const rows = Array.isArray(spotPayload?.data) ? spotPayload.data : [];
+  const spotAssets = sortAssets(rows.map(normalizeSpotAsset).filter((asset) => parseAmount(asset.total) > 0));
+  const priceResults = await Promise.allSettled(spotAssets.map((asset) => loadSpotTicker(asset.coin)));
+  const warnings = [];
+  const assets = spotAssets.flatMap((asset, index) => {
+    const priceResult = priceResults[index];
+    if (priceResult.status === 'rejected') {
+      warnings.push(`${asset.coin} price failed: ${priceResult.reason?.message || priceResult.reason}`);
+      return [];
+    }
+    const directUsdtValue = parseAmount(asset.usdtValue);
+    const total = parseAmount(asset.total);
+    const price = directUsdtValue > 0 && total > 0 ? directUsdtValue / total : priceResult.value.price;
+    const usdtValue = directUsdtValue > 0 ? directUsdtValue : total * price;
+    return [{
+      ...asset,
+      accountType: 'asset',
+      accountTypeLabel: asset.coin,
+      price: formatAmount(price),
+      usdtValue: formatAmount(usdtValue),
+    }];
+  });
+
+  return {
+    assets: sortAssets(assets),
+    totalUsdt: formatAmount(sumUsdtValues(assets)),
+    requestTime: spotPayload?.requestTime || Date.now(),
+    warnings,
+  };
+};
+
 export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const overview = await loadOverview();
-    const overviewAssets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
-    const classicTotal = sumUsdtValues(overviewAssets);
+    const spotValuation = await loadValuedSpotAssets();
 
     return {
       success: true,
       source: 'bitget',
       accountType: normalizedType,
-      totalUsdt: formatAmount(classicTotal),
-      assets: overviewAssets,
-      requestTime: overview?.requestTime || Date.now(),
+      totalUsdt: spotValuation.totalUsdt,
+      assets: spotValuation.assets,
+      requestTime: spotValuation.requestTime,
       sources: {
-        selected: 'classic-overview',
-        classicOverviewUsdt: formatAmount(classicTotal),
+        selected: 'spot-assets-valuation',
+        spotAssetsUsdt: spotValuation.totalUsdt,
       },
-      warnings: [],
+      warnings: spotValuation.warnings,
     };
   }
 
