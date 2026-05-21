@@ -189,6 +189,7 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 const loadSpotAllAssets = () => signedBitgetGet('/api/v2/spot/account/assets', { assetType: 'all' });
+const loadSavingsAssets = (periodType) => signedBitgetGet('/api/v2/earn/savings/assets', { periodType, limit: 100 });
 const loadSpotTicker = (coin) => {
   const normalizedCoin = String(coin || '').toUpperCase();
   if (!normalizedCoin || normalizedCoin === 'USDT') return Promise.resolve({ coin: normalizedCoin, price: 1 });
@@ -218,13 +219,27 @@ const normalizeOverviewAsset = (row) => {
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
 
-const loadValuedSpotAssets = async () => {
-  const spotPayload = await loadSpotAllAssets();
-  const rows = Array.isArray(spotPayload?.data) ? spotPayload.data : [];
-  const spotAssets = sortAssets(rows.map(normalizeSpotAsset).filter((asset) => parseAmount(asset.total) > 0));
-  const priceResults = await Promise.allSettled(spotAssets.map((asset) => loadSpotTicker(asset.coin)));
+const normalizeSavingsAsset = (asset) => {
+  const coin = String(asset?.productCoin || asset?.interestCoin || asset?.coin || '').toUpperCase();
+  const total = parseAmount(asset?.holdAmount ?? asset?.amount ?? asset?.totalAmount ?? asset?.total);
+  return {
+    coin,
+    available: '0',
+    frozen: '0',
+    locked: formatAmount(total),
+    limitAvailable: '0',
+    total: formatAmount(total),
+    usdtValue: String(asset?.usdtValue ?? asset?.usdtAmount ?? ''),
+    accountType: 'earn_asset',
+    accountTypeLabel: `${coin} 理财`,
+  };
+};
+
+const valueAssets = async (rawAssets) => {
+  const baseAssets = sortAssets(rawAssets.filter((asset) => asset.coin && parseAmount(asset.total) > 0));
+  const priceResults = await Promise.allSettled(baseAssets.map((asset) => loadSpotTicker(asset.coin)));
   const warnings = [];
-  const assets = spotAssets.flatMap((asset, index) => {
+  const assets = baseAssets.flatMap((asset, index) => {
     const priceResult = priceResults[index];
     if (priceResult.status === 'rejected') {
       warnings.push(`${asset.coin} price failed: ${priceResult.reason?.message || priceResult.reason}`);
@@ -243,11 +258,48 @@ const loadValuedSpotAssets = async () => {
     }];
   });
 
+  return { assets: sortAssets(assets), warnings };
+};
+
+const mergeAssetsByCoinMaxValue = (assets) => {
+  const byCoin = new Map();
+  assets.forEach((asset) => {
+    const current = byCoin.get(asset.coin);
+    if (!current || parseAmount(asset.usdtValue) > parseAmount(current.usdtValue)) {
+      byCoin.set(asset.coin, asset);
+    }
+  });
+  return sortAssets(Array.from(byCoin.values()));
+};
+
+const loadValuedVisibleAssets = async () => {
+  const [spotResult, flexibleResult, fixedResult] = await Promise.allSettled([
+    loadSpotAllAssets(),
+    loadSavingsAssets('flexible'),
+    loadSavingsAssets('fixed'),
+  ]);
+  if (spotResult.status === 'rejected') throw spotResult.reason;
+
+  const warnings = [
+    flexibleResult.status === 'rejected' ? `flexible earn assets failed: ${flexibleResult.reason?.message || flexibleResult.reason}` : '',
+    fixedResult.status === 'rejected' ? `fixed earn assets failed: ${fixedResult.reason?.message || fixedResult.reason}` : '',
+  ].filter(Boolean);
+  const spotRows = Array.isArray(spotResult.value?.data) ? spotResult.value.data : [];
+  const flexibleRows = flexibleResult.status === 'fulfilled' && Array.isArray(flexibleResult.value?.data?.resultList) ? flexibleResult.value.data.resultList : [];
+  const fixedRows = fixedResult.status === 'fulfilled' && Array.isArray(fixedResult.value?.data?.resultList) ? fixedResult.value.data.resultList : [];
+  const rawAssets = [
+    ...spotRows.map(normalizeSpotAsset),
+    ...flexibleRows.map(normalizeSavingsAsset),
+    ...fixedRows.map(normalizeSavingsAsset),
+  ];
+  const valued = await valueAssets(rawAssets);
+  const assets = mergeAssetsByCoinMaxValue(valued.assets);
+
   return {
-    assets: sortAssets(assets),
+    assets,
     totalUsdt: formatAmount(sumUsdtValues(assets)),
-    requestTime: spotPayload?.requestTime || Date.now(),
-    warnings,
+    requestTime: spotResult.value?.requestTime || Date.now(),
+    warnings: [...warnings, ...valued.warnings],
   };
 };
 
@@ -255,20 +307,20 @@ export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetTy
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const spotValuation = await loadValuedSpotAssets();
+    const visibleValuation = await loadValuedVisibleAssets();
 
     return {
       success: true,
       source: 'bitget',
       accountType: normalizedType,
-      totalUsdt: spotValuation.totalUsdt,
-      assets: spotValuation.assets,
-      requestTime: spotValuation.requestTime,
+      totalUsdt: visibleValuation.totalUsdt,
+      assets: visibleValuation.assets,
+      requestTime: visibleValuation.requestTime,
       sources: {
-        selected: 'spot-assets-valuation',
-        spotAssetsUsdt: spotValuation.totalUsdt,
+        selected: 'visible-assets-valuation',
+        visibleAssetsUsdt: visibleValuation.totalUsdt,
       },
-      warnings: spotValuation.warnings,
+      warnings: visibleValuation.warnings,
     };
   }
 
