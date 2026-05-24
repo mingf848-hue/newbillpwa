@@ -24,6 +24,18 @@ const readWebhookPayload = (req) => {
   }
 };
 
+const readShortcutValue = (value) => {
+  if (value === undefined || value === null) return '';
+  if (Array.isArray(value)) return readShortcutValue(value[0]);
+  if (typeof value === 'object') {
+    const direct = value.value ?? value.text ?? value.name ?? value.string ?? value.amount;
+    if (direct !== undefined && direct !== null) return readShortcutValue(direct);
+    const primitive = Object.values(value).find((item) => ['string', 'number', 'boolean'].includes(typeof item));
+    return primitive === undefined ? '' : String(primitive);
+  }
+  return String(value).trim();
+};
+
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
     json(res, 405, { error: 'Method Not Allowed' });
@@ -39,11 +51,32 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { amount, merchant, account, card, currency, date, time: bodyTime, note } = payload;
+    const merchant = readShortcutValue(payload.merchant ?? payload.title ?? payload.name);
+    const amount = readShortcutValue(payload.amount ?? payload.money ?? payload.total);
+    const account = readShortcutValue(payload.account ?? payload.accountHint ?? payload.paymentMethod);
+    const card = readShortcutValue(payload.card);
+    const currency = readShortcutValue(payload.currency) || undefined;
+    const date = readShortcutValue(payload.date);
+    const bodyTime = readShortcutValue(payload.time);
+    const note = readShortcutValue(payload.note);
+    const dryRun = ['1', 'true', 'yes'].includes(readShortcutValue(payload.dryRun).toLowerCase());
     const whenInput = date || bodyTime;
     const txAmount = Math.abs(parseAmount(amount));
+    if (dryRun) {
+      json(res, 200, {
+        success: true,
+        dryRun: true,
+        receivedKeys: Object.keys(payload),
+        parsed: { merchant, amount, txAmount, account, card, currency, date, time: bodyTime, note },
+      });
+      return;
+    }
     if (!merchant || !txAmount) {
-      json(res, 400, { error: 'Missing merchant or amount' });
+      json(res, 400, {
+        error: 'Missing merchant or amount',
+        receivedKeys: Object.keys(payload),
+        parsed: { merchant, amount, txAmount, account, card },
+      });
       return;
     }
 
