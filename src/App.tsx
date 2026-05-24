@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import RebuiltHomePage from './RebuiltHomePage';
 import CustomInputKeyboard from './components/CustomInputKeyboard';
 import {
@@ -315,6 +315,32 @@ const sumTransactionsCny = (transactions, exchangeRates, predicate = () => true)
     predicate(tx) ? sum + getTransactionAmountCny(tx, exchangeRates) : sum
   ), 0)
 );
+
+const BALANCE_SNAPSHOT_LOCAL_DATE_KEY = 'bitledger_balance_snapshot_date';
+
+const parseSnapshotDate = (snapshot) => {
+  const match = String(snapshot?.dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
+};
+
+const formatSnapshotDateLabel = (snapshot) => {
+  const date = parseSnapshotDate(snapshot);
+  if (!date) return '';
+  return `${date.getMonth() + 1}月${date.getDate()}日快照`;
+};
+
+const findMonthEndSnapshot = (snapshots = [], year, month) => {
+  const { start, end } = getMonthDateRange(year, month);
+  return snapshots
+    .filter((snapshot) => isDateInRange(parseSnapshotDate(snapshot), start, end))
+    .sort((a, b) => {
+      const dateDiff = (parseSnapshotDate(b)?.getTime() || 0) - (parseSnapshotDate(a)?.getTime() || 0);
+      if (dateDiff !== 0) return dateDiff;
+      return String(b?.capturedAt || '').localeCompare(String(a?.capturedAt || ''));
+    })[0] || null;
+};
 
 const getCategoryVisual = (category) => {
   const mapping = {
@@ -1329,7 +1355,7 @@ const MessageCenterModal = ({ isOpen, onClose, notify, exchangeRates, transactio
 // 4. EXACT PAGE COMPONENTS WITH DYNAMIC DB
 // ==========================================
 
-const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, notify, onOpenProfile, onOpenSearch }) => {
+const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, notify, onOpenProfile, onOpenSearch, balanceSnapshots = [], onRefreshBalanceSnapshots }) => {
   const latestTxDate = useMemo(() => {
     const dates = transactions.map((tx) => parseTransactionDate(tx.fullDate)).filter(Boolean);
     return dates.sort((a, b) => b.getTime() - a.getTime())[0] || new Date();
@@ -1341,6 +1367,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isTrendRangeOpen, setIsTrendRangeOpen] = useState(false);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+  const [isSnapshotRefreshing, setIsSnapshotRefreshing] = useState(false);
   const [selectedYear, setSelectedYear] = useState(latestTxDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(latestTxDate.getMonth() + 1);
   const [trendRange, setTrendRange] = useState({ start: 1, end: latestTxDate.getMonth() + 1 });
@@ -1348,9 +1375,13 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   const trendRangeLabel = trendRange.start === trendRange.end ? `${trendRange.start}月` : `${trendRange.start}月-${trendRange.end}月`;
   const availableYears = useMemo(() => {
     const years = new Set(transactions.map((tx) => parseTransactionDate(tx.fullDate)?.getFullYear()).filter(Boolean));
+    balanceSnapshots.forEach((snapshot) => {
+      const year = parseSnapshotDate(snapshot)?.getFullYear();
+      if (year) years.add(year);
+    });
     if (!years.size) years.add(new Date().getFullYear());
     return Array.from(years).sort((a, b) => b - a);
-  }, [transactions]);
+  }, [balanceSnapshots, transactions]);
 
   const switchStatsTab = (tab: string) => setActiveTab(tab);
 
@@ -1404,6 +1435,34 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
   );
   const previousBalance = previousIncome - previousExpense;
   const getDeltaPct = (current, previous) => (previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0));
+
+  const selectedMonthSnapshot = useMemo(
+    () => findMonthEndSnapshot(balanceSnapshots, selectedYear, selectedMonth),
+    [balanceSnapshots, selectedMonth, selectedYear]
+  );
+  const previousMonthSnapshot = useMemo(
+    () => findMonthEndSnapshot(balanceSnapshots, previousRange.start.getFullYear(), previousRange.start.getMonth() + 1),
+    [balanceSnapshots, previousRange]
+  );
+  const monthEndSnapshotData = useMemo(() => monthRangeOptions.map((month) => ({
+    month,
+    snapshot: findMonthEndSnapshot(balanceSnapshots, selectedYear, month),
+  })), [balanceSnapshots, selectedYear]);
+  const monthEndDelta = selectedMonthSnapshot && previousMonthSnapshot
+    ? Number(selectedMonthSnapshot.totalCny || 0) - Number(previousMonthSnapshot.totalCny || 0)
+    : null;
+  const handleRefreshSnapshot = async () => {
+    if (!onRefreshBalanceSnapshots || isSnapshotRefreshing) return;
+    setIsSnapshotRefreshing(true);
+    try {
+      await onRefreshBalanceSnapshots();
+      notify?.('余额快照已更新');
+    } catch {
+      notify?.('余额快照更新失败');
+    } finally {
+      setIsSnapshotRefreshing(false);
+    }
+  };
 
   const expenseGroups = useMemo(() => {
     const grouped = currentCashflowTransactions
@@ -1568,6 +1627,54 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
           <div className="text-[10px] text-[#8e8e93] mb-[2px]">较上月</div>
           <div className="flex items-center text-[10px]"><span className="text-[#1677ff] flex items-center font-medium bg-[#e6f4ff] px-[4px] py-[1px] rounded-[4px]"><ArrowUpRight className="w-[9px] h-[9px] mr-[2px]" strokeWidth={2.5} /> {getDeltaPct(currentBalance, previousBalance).toFixed(1)}%</span></div>
           <div className="absolute bottom-[12px] right-[12px] w-[28px] h-[28px] bg-[#e6f4ff] rounded-[8px] flex items-center justify-center"><Wallet className="w-[14px] h-[14px] text-[#1677ff]" strokeWidth={2.5} /></div>
+        </div>
+      </div>
+
+      <div className="mx-[16px] mt-[10px] bg-white rounded-[16px] p-[14px] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
+        <div className="flex items-start justify-between gap-[12px]">
+          <div className="min-w-0">
+            <div className="text-[12px] text-[#8e8e93] font-medium mb-[4px]">真实月末余额 <span className="text-[10px] text-[#c7c7cc] font-normal">(CNY)</span></div>
+            <div className={`text-[22px] font-bold leading-tight ${selectedMonthSnapshot ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>
+              {selectedMonthSnapshot ? formatDisplayMoney(selectedMonthSnapshot.totalCny) : '暂无快照'}
+            </div>
+            <div className="mt-[5px] text-[11px] text-[#8e8e93]">
+              {selectedMonthSnapshot
+                ? `${formatSnapshotDateLabel(selectedMonthSnapshot)} · ${selectedMonthSnapshot.accounts?.length || 0} 个账户`
+                : `${selectedYear}年${selectedMonth}月没有保存过余额快照`}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefreshSnapshot}
+            disabled={isSnapshotRefreshing || !onRefreshBalanceSnapshots}
+            className="h-[30px] px-[10px] rounded-[9px] bg-[#f0f7ff] text-[#1677ff] text-[12px] font-semibold active:scale-95 transition-transform disabled:opacity-60 flex items-center space-x-[4px] shrink-0"
+          >
+            <RotateCcw className={`w-[13px] h-[13px] ${isSnapshotRefreshing ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+            <span>{isSnapshotRefreshing ? '更新中' : '存快照'}</span>
+          </button>
+        </div>
+        {monthEndDelta !== null && (
+          <div className={`mt-[10px] text-[11px] font-medium ${monthEndDelta >= 0 ? 'text-[#10b981]' : 'text-[#ff4d4f]'}`}>
+            较上月 {monthEndDelta >= 0 ? '+' : '-'}{formatDisplayMoney(Math.abs(monthEndDelta))}
+          </div>
+        )}
+        <div className="mt-[12px] flex gap-[8px] overflow-x-auto hide-scrollbar pb-[2px]">
+          {monthEndSnapshotData.map((item) => {
+            const isSelected = item.month === selectedMonth;
+            return (
+              <button
+                key={`month-snapshot-${item.month}`}
+                type="button"
+                onClick={() => setSelectedMonth(item.month)}
+                className={`min-w-[76px] rounded-[10px] px-[9px] py-[8px] text-left border transition-all ${isSelected ? 'border-[#1677ff] bg-[#f0f7ff]' : 'border-[#f0f0f0] bg-[#fbfbfd] active:bg-[#f4f5f8]'}`}
+              >
+                <div className={`text-[11px] font-semibold mb-[4px] ${isSelected ? 'text-[#1677ff]' : 'text-[#5c5c5e]'}`}>{item.month}月</div>
+                <div className={`text-[12px] font-bold leading-none ${item.snapshot ? 'text-[#1c1c1e]' : 'text-[#c7c7cc]'}`}>
+                  {item.snapshot ? `${(Number(item.snapshot.totalCny || 0) / 10000).toFixed(1)}万` : '--'}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -3117,6 +3224,40 @@ export default function App() {
       }),
     [transactions]
   );
+  const [balanceSnapshots, setBalanceSnapshots] = useState([]);
+  const syncBalanceSnapshots = useCallback(async ({ capture = false } = {}) => {
+    const response = await fetch('/api/balance-snapshots', {
+      method: capture ? 'POST' : 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success) {
+      throw new Error(payload?.error || `余额快照同步失败 (${response.status})`);
+    }
+    setBalanceSnapshots(Array.isArray(payload.snapshots) ? payload.snapshots : []);
+    return payload;
+  }, []);
+
+  useEffect(() => {
+    if (loading || accounts.length === 0) return undefined;
+    let cancelled = false;
+    const todayKey = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const shouldCapture = localStorage.getItem(BALANCE_SNAPSHOT_LOCAL_DATE_KEY) !== todayKey;
+
+    syncBalanceSnapshots({ capture: shouldCapture })
+      .then(() => {
+        if (!cancelled && shouldCapture) {
+          localStorage.setItem(BALANCE_SNAPSHOT_LOCAL_DATE_KEY, todayKey);
+        }
+      })
+      .catch((error) => {
+        console.warn('Balance snapshot sync failed', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts.length, loading, syncBalanceSnapshots]);
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -3278,7 +3419,7 @@ export default function App() {
               <>
                 {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
                 {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} adjustTransferReceived={adjustTransferReceived} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
-                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
+                {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} balanceSnapshots={balanceSnapshots} onRefreshBalanceSnapshots={() => syncBalanceSnapshots({ capture: true })} />}
                 {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
             )}

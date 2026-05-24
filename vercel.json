@@ -3,6 +3,10 @@
     {
       "path": "/api/apy-daily",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/balance-snapshots",
+      "schedule": "55 15 * * *"
     }
   ]
 }
