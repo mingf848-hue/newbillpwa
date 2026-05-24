@@ -36,6 +36,8 @@ const readShortcutValue = (value) => {
   return String(value).trim();
 };
 
+const shouldSkipAutoBooking = (merchant) => /careem|zed\s*mobility/i.test(String(merchant || ''));
+
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
     json(res, 405, { error: 'Method Not Allowed' });
@@ -79,6 +81,16 @@ export default async function handler(req, res) {
       });
       return;
     }
+    if (shouldSkipAutoBooking(merchant)) {
+      json(res, 200, {
+        success: true,
+        skipped: true,
+        reason: 'Ride pre-authorization is excluded from auto booking',
+        merchant,
+        amount: txAmount,
+      });
+      return;
+    }
 
     const accounts = await requestSupabase('accounts?select=*');
     const targetAccount = matchAccountByHint(accounts, account || card || 'Apple Pay');
@@ -89,10 +101,7 @@ export default async function handler(req, res) {
 
     const { dateLabel, fullDate, time, hours: rideHour } = formatTransactionDate(whenInput);
 
-    // Careem / taxi rides are treated as a work commute: the title records
-    // 打车上班 / 打车下班 based on the local hour, tagged 交通, and marked
-    // [报销] so it affects balance but is excluded from monthly expense stats.
-    const isTaxi = /careem|uber|taxi|出租|打车|cars taxi/i.test(String(merchant || ''));
+    const isTaxi = /uber|taxi|出租|打车|cars taxi/i.test(String(merchant || ''));
     const isCommuteRide = isTaxi && Number.isFinite(rideHour);
     const rideTitle = isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : merchant;
     const baseNote = note || `自动记账${card ? ` · ${card}` : ''}`;
