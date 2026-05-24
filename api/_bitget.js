@@ -104,31 +104,6 @@ const signedBitgetGet = async (requestPath, params = {}) => {
   return payload;
 };
 
-const publicBitgetGet = async (requestPath, params = {}) => {
-  const queryString = buildQueryString(params);
-  const pathWithQuery = `${requestPath}${queryString ? `?${queryString}` : ''}`;
-  const response = await fetch(`${BITGET_BASE_URL}${pathWithQuery}`, {
-    headers: {
-      locale: 'en-US',
-      'Content-Type': 'application/json',
-    },
-  });
-  const text = await response.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = null;
-  }
-  if (!response.ok) {
-    throw new Error(`Bitget public request failed (${response.status}): ${text || response.statusText}`);
-  }
-  if (payload?.code && payload.code !== '00000') {
-    throw new Error(payload.msg || payload.message || `Bitget public API error: ${payload.code}`);
-  }
-  return payload;
-};
-
 const parseAmount = (value) => {
   const amount = Number(String(value ?? '0').replace(/,/g, ''));
   return Number.isFinite(amount) ? amount : 0;
@@ -189,17 +164,6 @@ const findOverviewBalance = (overviewPayload, accountType) => {
 
 const loadOverview = () => signedBitgetGet('/api/v2/account/all-account-balance');
 const loadSpotAllAssets = () => signedBitgetGet('/api/v2/spot/account/assets', { assetType: 'all' });
-const loadSavingsAssets = (periodType) => signedBitgetGet('/api/v2/earn/savings/assets', { periodType, limit: 100 });
-const loadSpotTicker = (coin) => {
-  const normalizedCoin = String(coin || '').toUpperCase();
-  if (!normalizedCoin || normalizedCoin === 'USDT') return Promise.resolve({ coin: normalizedCoin, price: 1 });
-  return publicBitgetGet('/api/v2/spot/market/tickers', { symbol: `${normalizedCoin}USDT` }).then((payload) => {
-    const ticker = Array.isArray(payload?.data) ? payload.data[0] : null;
-    const price = parseAmount(ticker?.lastPr || ticker?.bidPr || ticker?.askPr);
-    if (!price) throw new Error(`No USDT ticker for ${normalizedCoin}`);
-    return { coin: normalizedCoin, price };
-  });
-};
 
 const normalizeOverviewAsset = (row) => {
   const accountType = String(row?.accountType || '').toLowerCase();
@@ -219,108 +183,26 @@ const normalizeOverviewAsset = (row) => {
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
 
-const normalizeSavingsAsset = (asset) => {
-  const coin = String(asset?.productCoin || asset?.interestCoin || asset?.coin || '').toUpperCase();
-  const total = parseAmount(asset?.holdAmount ?? asset?.amount ?? asset?.totalAmount ?? asset?.total);
-  return {
-    coin,
-    available: '0',
-    frozen: '0',
-    locked: formatAmount(total),
-    limitAvailable: '0',
-    total: formatAmount(total),
-    usdtValue: String(asset?.usdtValue ?? asset?.usdtAmount ?? ''),
-    accountType: 'earn_asset',
-    accountTypeLabel: `${coin} 理财`,
-  };
-};
-
-const valueAssets = async (rawAssets) => {
-  const baseAssets = sortAssets(rawAssets.filter((asset) => asset.coin && parseAmount(asset.total) > 0));
-  const priceResults = await Promise.allSettled(baseAssets.map((asset) => loadSpotTicker(asset.coin)));
-  const warnings = [];
-  const assets = baseAssets.flatMap((asset, index) => {
-    const priceResult = priceResults[index];
-    if (priceResult.status === 'rejected') {
-      warnings.push(`${asset.coin} price failed: ${priceResult.reason?.message || priceResult.reason}`);
-      return [];
-    }
-    const directUsdtValue = parseAmount(asset.usdtValue);
-    const total = parseAmount(asset.total);
-    const price = directUsdtValue > 0 && total > 0 ? directUsdtValue / total : priceResult.value.price;
-    const usdtValue = directUsdtValue > 0 ? directUsdtValue : total * price;
-    return [{
-      ...asset,
-      accountType: 'asset',
-      accountTypeLabel: asset.coin,
-      price: formatAmount(price),
-      usdtValue: formatAmount(usdtValue),
-    }];
-  });
-
-  return { assets: sortAssets(assets), warnings };
-};
-
-const mergeAssetsByCoinMaxValue = (assets) => {
-  const byCoin = new Map();
-  assets.forEach((asset) => {
-    const current = byCoin.get(asset.coin);
-    if (!current || parseAmount(asset.usdtValue) > parseAmount(current.usdtValue)) {
-      byCoin.set(asset.coin, asset);
-    }
-  });
-  return sortAssets(Array.from(byCoin.values()));
-};
-
-const loadValuedVisibleAssets = async () => {
-  const [spotResult, flexibleResult, fixedResult] = await Promise.allSettled([
-    loadSpotAllAssets(),
-    loadSavingsAssets('flexible'),
-    loadSavingsAssets('fixed'),
-  ]);
-  if (spotResult.status === 'rejected') throw spotResult.reason;
-
-  const warnings = [
-    flexibleResult.status === 'rejected' ? `flexible earn assets failed: ${flexibleResult.reason?.message || flexibleResult.reason}` : '',
-    fixedResult.status === 'rejected' ? `fixed earn assets failed: ${fixedResult.reason?.message || fixedResult.reason}` : '',
-  ].filter(Boolean);
-  const spotRows = Array.isArray(spotResult.value?.data) ? spotResult.value.data : [];
-  const flexibleRows = flexibleResult.status === 'fulfilled' && Array.isArray(flexibleResult.value?.data?.resultList) ? flexibleResult.value.data.resultList : [];
-  const fixedRows = fixedResult.status === 'fulfilled' && Array.isArray(fixedResult.value?.data?.resultList) ? fixedResult.value.data.resultList : [];
-  const rawAssets = [
-    ...spotRows.map(normalizeSpotAsset),
-    ...flexibleRows.map(normalizeSavingsAsset),
-    ...fixedRows.map(normalizeSavingsAsset),
-  ];
-  const valued = await valueAssets(rawAssets);
-  const assets = mergeAssetsByCoinMaxValue(valued.assets);
-
-  return {
-    assets,
-    totalUsdt: formatAmount(sumUsdtValues(assets)),
-    requestTime: spotResult.value?.requestTime || Date.now(),
-    warnings: [...warnings, ...valued.warnings],
-  };
-};
-
 export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);
 
   if (normalizedType === 'all') {
-    const visibleValuation = await loadValuedVisibleAssets();
+    const overview = await loadOverview();
+    const assets = sortAssets((overview?.data || []).map(normalizeOverviewAsset));
+    const totalUsdt = formatAmount(sumUsdtValues(assets));
 
     return {
       success: true,
       source: 'bitget',
       accountType: normalizedType,
-      totalUsdt: visibleValuation.totalUsdt,
-      assets: visibleValuation.assets,
-      requestTime: visibleValuation.requestTime,
+      totalUsdt,
+      assets,
+      requestTime: overview?.requestTime || Date.now(),
       sources: {
-        selected: 'visible-assets-valuation',
-        visibleAssetsUsdt: visibleValuation.totalUsdt,
+        selected: 'all-account-balance',
+        allAccountBalanceUsdt: totalUsdt,
       },
-      warnings: visibleValuation.warnings,
+      warnings: [],
     };
   }
 
