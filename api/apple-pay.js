@@ -6,21 +6,40 @@ const json = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+const readWebhookPayload = (req) => {
+  const queryPayload = req.query && typeof req.query === 'object' ? req.query : {};
+  const body = req.body;
+  if (!body) return queryPayload;
+  if (typeof body === 'object' && !Buffer.isBuffer(body)) return { ...queryPayload, ...body };
+  const text = Buffer.isBuffer(body) ? body.toString('utf8') : String(body);
+  if (!text.trim()) return queryPayload;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object') return { ...queryPayload, ...parsed };
+  } catch {}
+  try {
+    return { ...queryPayload, ...Object.fromEntries(new URLSearchParams(text)) };
+  } catch {
+    return queryPayload;
+  }
+};
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  if (!['GET', 'POST'].includes(req.method)) {
     json(res, 405, { error: 'Method Not Allowed' });
     return;
   }
 
   try {
+    const payload = readWebhookPayload(req);
     const secret = process.env.APPLE_PAY_WEBHOOK_KEY;
-    const incomingKey = req.query?.key || req.headers?.['x-webhook-key'];
+    const incomingKey = req.query?.key || req.headers?.['x-webhook-key'] || payload.key;
     if (secret && incomingKey !== secret) {
       json(res, 401, { error: 'Unauthorized' });
       return;
     }
 
-    const { amount, merchant, account, card, currency, date, time: bodyTime, note } = req.body || {};
+    const { amount, merchant, account, card, currency, date, time: bodyTime, note } = payload;
     const whenInput = date || bodyTime;
     const txAmount = Math.abs(parseAmount(amount));
     if (!merchant || !txAmount) {
