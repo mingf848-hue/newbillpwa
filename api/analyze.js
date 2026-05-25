@@ -117,9 +117,8 @@ export default async function handler(req, res) {
       const account = matchAccountByHint(accounts, manualPlatform || item?.accountHint || item?.account || item?.paymentMethod || '');
       if (!account) continue;
 
-      const txDate = transactionTime ? new Date(transactionTime) : new Date();
-      txDate.setSeconds(txDate.getSeconds() + index);
-      const { dateLabel, fullDate, time } = formatTransactionDate(txDate);
+      const txDateInput = transactionTime || new Date(Date.now() + index * 1000);
+      const { dateLabel, fullDate, time } = formatTransactionDate(txDateInput);
       const category = normalizeCategory(item?.category, isIncome);
       const merchant = String(item?.merchant || item?.title || category || 'AI 识别记账').trim();
       const note = String(item?.note || item?.product_name || merchant).trim();

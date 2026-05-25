@@ -34,26 +34,68 @@ export const formatAmount = (value) => value.toLocaleString('en-US', {
   maximumFractionDigits: 2,
 });
 
+const DEFAULT_TRANSACTION_TZ_OFFSET_HOURS = Number(process.env.TRANSACTION_TZ_OFFSET || 8);
+
+const fromOffsetDate = (dateInput) => {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput || Date.now());
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const localDate = new Date(safeDate.getTime() + DEFAULT_TRANSACTION_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+
+  return {
+    year: localDate.getUTCFullYear(),
+    month: localDate.getUTCMonth() + 1,
+    day: localDate.getUTCDate(),
+    hours: localDate.getUTCHours(),
+    minutes: localDate.getUTCMinutes(),
+  };
+};
+
+const buildWallClock = (year, month, day, hours = 0, minutes = 0) => ({
+  year: Number(year),
+  month: Number(month),
+  day: Number(day),
+  hours: Number(hours),
+  minutes: Number(minutes),
+});
+
 // Extract the wall-clock components the caller actually sent. An ISO string
 // like "2026-09-09T09:41:00+04:00" is read as 09:41 regardless of the
-// timezone offset, so the recorded time matches the user's local clock even
-// though the server runs in UTC.
+// timezone offset, so the recorded time matches the phone clock. If the caller
+// sends no time, use UTC+8 by default instead of the server timezone.
 export const parseWallClock = (input) => {
   if (typeof input === 'string') {
-    const m = input.match(/(\d{4})-(\d{1,2})-(\d{1,2})[T\s](\d{1,2}):(\d{2})/);
-    if (m) {
-      return { year: +m[1], month: +m[2], day: +m[3], hours: +m[4], minutes: +m[5] };
+    const value = input.trim();
+    const iso = value.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[T\s](\d{1,2}):(\d{2})/);
+    if (iso) {
+      return buildWallClock(iso[1], iso[2], iso[3], iso[4], iso[5]);
+    }
+
+    const chinese = value.match(/(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s*(\d{1,2}):(\d{2}))?/);
+    if (chinese) {
+      return buildWallClock(chinese[1], chinese[2], chinese[3], chinese[4] || 0, chinese[5] || 0);
+    }
+
+    const slashYearFirst = value.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);
+    if (slashYearFirst) {
+      return buildWallClock(slashYearFirst[1], slashYearFirst[2], slashYearFirst[3], slashYearFirst[4] || 0, slashYearFirst[5] || 0);
+    }
+
+    const slashYearLast = value.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\D+(\d{1,2}):(\d{2}))?/);
+    if (slashYearLast) {
+      const first = Number(slashYearLast[1]);
+      const second = Number(slashYearLast[2]);
+      const isDayFirst = first > 12;
+      return buildWallClock(
+        slashYearLast[3],
+        isDayFirst ? second : first,
+        isDayFirst ? first : second,
+        slashYearLast[4] || 0,
+        slashYearLast[5] || 0
+      );
     }
   }
-  const d = input ? new Date(input) : new Date();
-  const safe = Number.isNaN(d.getTime()) ? new Date() : d;
-  return {
-    year: safe.getFullYear(),
-    month: safe.getMonth() + 1,
-    day: safe.getDate(),
-    hours: safe.getHours(),
-    minutes: safe.getMinutes(),
-  };
+
+  return fromOffsetDate(input);
 };
 
 export const formatTransactionDate = (dateInput) => {
