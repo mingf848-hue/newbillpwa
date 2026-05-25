@@ -65,11 +65,17 @@ export default async function handler(req, res) {
     const whenInput = date || bodyTime;
     const txAmount = Math.abs(parseAmount(amount));
     if (dryRun) {
+      const formatted = formatTransactionDate(whenInput);
       json(res, 200, {
         success: true,
         dryRun: true,
         receivedKeys: Object.keys(payload),
         parsed: { merchant, amount, txAmount, account, card, currency, date, time: bodyTime, note },
+        formattedTime: {
+          dateLabel: formatted.dateLabel,
+          fullDate: formatted.fullDate,
+          time: formatted.time,
+        },
       });
       return;
     }

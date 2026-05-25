@@ -633,22 +633,59 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       return 'M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10';
     }
 
-    let running = 0;
-    const points = monthTransactions.map((tx, index) => {
-      const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
-      running += tx.isIncome ? amount : -Math.abs(amount);
-      return { x: index, y: running };
-    });
-
-    const values = points.map((point) => point.y);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
     const width = 200;
     const height = 80;
-    const scaled = points.map((point, index) => ({
-      x: points.length === 1 ? width : (index / (points.length - 1)) * width,
-      y: 68 - ((point.y - min) / range) * 50,
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const dailyDeltas = Array.from({ length: daysInMonth }, () => 0);
+    const activeDays = new Set();
+
+    monthTransactions.forEach((tx) => {
+      const date = parseTransactionDate(tx.fullDate);
+      if (!date) return;
+      const dayIndex = Math.max(0, Math.min(daysInMonth - 1, date.getDate() - 1));
+      const amount = convertAmountToCny(parseMoneyNumber(tx.amount), tx.currency, exchangeRates);
+      dailyDeltas[dayIndex] += tx.isIncome ? amount : -Math.abs(amount);
+      activeDays.add(dayIndex);
+    });
+
+    let running = 0;
+    const rawPoints = [{ x: -10, value: 0 }];
+    dailyDeltas.forEach((delta, index) => {
+      running += delta;
+      if (activeDays.has(index)) {
+        rawPoints.push({
+          x: daysInMonth === 1 ? width : (index / (daysInMonth - 1)) * width,
+          value: running,
+        });
+      }
+    });
+    rawPoints.push({ x: 210, value: running });
+
+    if (rawPoints.length < 5) {
+      const finalValue = running || monthlyIncome - monthlyExpenses;
+      const base = Math.max(Math.abs(finalValue), monthlyIncome, monthlyExpenses, 1);
+      const wave = Math.max(base * 0.12, 300);
+      rawPoints.splice(
+        0,
+        rawPoints.length,
+        { x: -10, value: 0 },
+        { x: 36, value: finalValue * 0.22 + wave },
+        { x: 84, value: finalValue * 0.46 - wave * 0.65 },
+        { x: 138, value: finalValue * 0.72 + wave * 0.45 },
+        { x: 210, value: finalValue }
+      );
+    }
+
+    const values = rawPoints.map((point) => point.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const padding = Math.max(range * 0.16, Math.max(Math.abs(max), Math.abs(min), 1) * 0.08, 120);
+    const bottom = 68;
+    const top = 12;
+    const scaled = rawPoints.map((point) => ({
+      x: point.x,
+      y: bottom - ((point.value - (min - padding)) / ((range || 1) + padding * 2)) * (bottom - top),
     }));
 
     return scaled.reduce((path, point, index) => {
@@ -657,7 +694,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
       const controlX = (prev.x + point.x) / 2;
       return `${path} C${controlX},${prev.y} ${controlX},${point.y} ${point.x},${point.y}`;
     }, '');
-  }, [transactions, selectedYear, selectedMonth, exchangeRates]);
+  }, [transactions, selectedYear, selectedMonth, exchangeRates, monthlyIncome, monthlyExpenses]);
 
   const budgetUsed = monthlyExpenses;
   const budgetRemaining = budgetAmount - budgetUsed;
@@ -979,6 +1016,11 @@ ${transcript}
   const handleReceiptUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    setActiveModal(null);
+    setShowInlineKeyboard(false);
+    setActivePicker(null);
+    setAiOpenPicker(null);
 
     try {
       setIsAiProcessing(true);

@@ -960,6 +960,26 @@ const BILLS_FILTER_OPTIONS = [
   { id: '现金', name: '现金', icon: <CashIcon size={20} /> },
 ];
 
+const inferBillFilterIconType = (name = '') => {
+  const source = String(name || '').toLowerCase();
+  if (/wechat|微信/.test(source)) return 'wechat';
+  if (/alipay|支付宝/.test(source)) return 'alipay';
+  if (/apple/.test(source)) return 'apple';
+  if (/mashreq/.test(source)) return 'mashreq';
+  if (/adcb/.test(source)) return 'adcb';
+  if (/okx/.test(source)) return 'okx';
+  if (/bitget/.test(source)) return 'bitget';
+  if (/binance|币安/.test(source)) return 'binance';
+  if (/火币|htx/.test(source)) return 'huobi';
+  if (/cash|现金/.test(source)) return 'cash';
+  return 'landmark';
+};
+
+const getBillFilterIcon = (name, account) => {
+  const iconType = account?.icon || account?.iconType || inferBillFilterIconType(name);
+  return iconType === 'cash' ? <CashIcon size={20} /> : <BrandLogo type={iconType} size={20} />;
+};
+
 const BILLS_CALENDAR_DAYS = [
   { val: 30, type: 'prev' }, { val: 31, type: 'prev' }, 
   { val: 1, type: 'curr' }, { val: 2, type: 'curr' }, { val: 3, type: 'curr' }, { val: 4, type: 'curr' }, { val: 5, type: 'curr' },
@@ -2010,7 +2030,7 @@ const SwipeableTransactionRow = ({ tx, tIdx, isLast, onEdit, onDelete }) => {
   );
 };
 
-const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, updateTransaction, deleteTransaction, adjustTransferReceived, notify, onOpenProfile }) => {
+const BillsPage = ({ setIsMessageCenterOpen, transactions, accounts = [], exchangeRates, updateTransaction, deleteTransaction, adjustTransferReceived, notify, onOpenProfile }) => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [tempNote, setTempNote] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -2140,6 +2160,29 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
   const stripExcludeMarker = (note) => String(note || '').replace(/\s*\[不计收支\]\s*/g, ' ').trim();
   const [tempReceived, setTempReceived] = useState('');
   const [tempExcluded, setTempExcluded] = useState(false);
+  const billFilterOptions = useMemo(() => {
+    const options = [{ id: 'all', name: '全部账户', icon: <CheckCircleSolid /> }];
+    const seen = new Set(['all']);
+    const pushOption = (id, name, account = null) => {
+      const normalizedId = String(id || '').trim();
+      if (!normalizedId || seen.has(normalizedId)) return;
+      seen.add(normalizedId);
+      options.push({
+        id: normalizedId,
+        name: name || normalizedId,
+        icon: getBillFilterIcon(name || normalizedId, account),
+      });
+    };
+
+    accounts.forEach((account) => pushOption(account?.name, account?.name, account));
+    transactions.forEach((tx) => {
+      pushOption(tx?.paymentMethod, tx?.paymentMethod);
+      if (tx?.subtitle && tx.subtitle !== tx?.paymentMethod) pushOption(tx.subtitle, tx.subtitle);
+    });
+    BILLS_FILTER_OPTIONS.forEach((option) => pushOption(option.id, option.name));
+
+    return options;
+  }, [accounts, transactions]);
   const handleOpenModal = (tx) => {
     setSelectedTx(tx);
     setTempNote(stripExcludeMarker(tx.note || tx.title));
@@ -2192,7 +2235,7 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
     const { start: weekStart, end: weekEnd } = getWeekRange(baseDate);
     const validTxs = transactions.filter(tx => {
       const txDate = parseTransactionDate(tx.fullDate);
-      const paymentMatched = selectedFilter === 'all' || tx.paymentMethod === selectedFilter;
+      const paymentMatched = selectedFilter === 'all' || tx.paymentMethod === selectedFilter || tx.subtitle === selectedFilter;
       const typeMatched =
         selectedType === '全部' ||
         (selectedType === '支出' && !tx.isIncome && !isTransferTransaction(tx) && !isInternalAccountTransferTransaction(tx)) ||
@@ -2342,8 +2385,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, exchangeRates, update
               <div className="fixed inset-0 z-[40]" onClick={() => setIsFilterOpen(false)} style={{ touchAction: 'none' }}></div>
               <div className="absolute top-[42px] right-0 w-[210px] bg-white rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[50] animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                 <div className="absolute -top-[5px] right-[18px] w-[12px] h-[12px] bg-white transform rotate-45 border-t border-l border-[#f0f0f0] rounded-sm"></div>
-                <div className="relative bg-white rounded-[16px] overflow-hidden py-[8px]">
-                  {BILLS_FILTER_OPTIONS.map((opt) => {
+                <div className="relative bg-white rounded-[16px] overflow-y-auto hide-scrollbar py-[8px] max-h-[60vh]">
+                  {billFilterOptions.map((opt) => {
                     const isSelected = selectedFilter === opt.id;
                     return (
                       <button key={opt.id} onClick={() => { setSelectedFilter(opt.id); setIsFilterOpen(false); }} className="w-full flex items-center justify-between px-[16px] py-[10px] hover:bg-[#f9f9f9] active:bg-[#f4f5f8] transition-colors text-left">
@@ -3426,7 +3469,7 @@ export default function App() {
             ) : (
               <>
                 {activeTab === 'home' && <RebuiltHomePage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} budget={budget} exchangeRates={exchangeRates} updateBudget={updateBudget} createTransaction={createTransaction} onOpenBills={() => setActiveTab('bills')} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} notify={notify} />}
-                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} adjustTransferReceived={adjustTransferReceived} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
+                {activeTab === 'bills' && <BillsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} accounts={accounts} exchangeRates={exchangeRates} updateTransaction={updateTransaction} deleteTransaction={deleteTransaction} adjustTransferReceived={adjustTransferReceived} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} />}
                 {activeTab === 'stats' && <StatsPage setIsMessageCenterOpen={setIsMessageCenterOpen} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} balanceSnapshots={balanceSnapshots} onRefreshBalanceSnapshots={() => syncBalanceSnapshots({ capture: true })} />}
                 {activeTab === 'assets' && <AssetsPage setIsMessageCenterOpen={setIsMessageCenterOpen} accounts={accounts} transactions={activeTransactions} exchangeRates={exchangeRates} notify={notify} createAccount={createAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} createTransaction={createTransaction} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} />}
               </>
