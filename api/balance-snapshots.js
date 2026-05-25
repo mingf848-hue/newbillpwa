@@ -1,7 +1,8 @@
 import { loadBitgetAssets } from './_bitget.js';
 import { requestSupabase, parseAmount } from './_supabase.js';
 
-const SETTINGS_KEY = 'balance_snapshots';
+const SNAPSHOT_PAYMENT_METHOD = '__balance_snapshot__';
+const SNAPSHOT_NOTE_PREFIX = 'BALANCE_SNAPSHOT:';
 const SNAPSHOT_TZ_OFFSET_HOURS = Number(process.env.BALANCE_SNAPSHOT_TZ_OFFSET || 8);
 const FALLBACK_RATES = {
   CNY: 1,
@@ -27,6 +28,21 @@ const getLocalDateKey = (date = new Date()) => {
 const getMonthKey = (dateKey) => dateKey.slice(0, 7);
 
 const isRealtimeBalanceAccount = (account) => /bitget/i.test(`${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`);
+
+const formatAmount = (value) => Number(value || 0).toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const getSnapshotDateParts = (dateKey) => {
+  const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+};
 
 const fetchRates = async () => {
   try {
@@ -56,34 +72,86 @@ const convertToCny = (amount, currency, rates) => {
   return parseAmount(amount) * rate;
 };
 
-const readStoredSnapshots = async () => {
-  const rows = await requestSupabase(`settings?key=eq.${encodeURIComponent(SETTINGS_KEY)}&select=*`);
-  const row = Array.isArray(rows) ? rows[0] : null;
-  if (!row?.value) return { row, snapshots: [] };
-
+const parseStoredSnapshot = (transaction) => {
   try {
-    const parsed = JSON.parse(row.value);
-    const snapshots = Array.isArray(parsed) ? parsed : parsed?.snapshots;
-    return { row, snapshots: Array.isArray(snapshots) ? snapshots : [] };
+    const note = String(transaction?.note || '');
+    if (!note.startsWith(SNAPSHOT_NOTE_PREFIX)) return null;
+    const parsed = JSON.parse(note.slice(SNAPSHOT_NOTE_PREFIX.length));
+    if (!parsed?.dateKey || !Number.isFinite(Number(parsed.totalCny))) return null;
+    return {
+      ...parsed,
+      totalCny: Number(parsed.totalCny),
+      transactionId: transaction.id,
+    };
   } catch {
-    return { row, snapshots: [] };
+    return null;
   }
 };
 
-const writeStoredSnapshots = async (row, snapshots) => {
-  const value = JSON.stringify({ version: 1, snapshots });
-  if (row?.key) {
-    await requestSupabase(`settings?key=eq.${encodeURIComponent(SETTINGS_KEY)}`, {
+const readStoredSnapshots = async () => {
+  const rows = await requestSupabase(`transactions?tagType=eq.snapshot&paymentMethod=eq.${encodeURIComponent(SNAPSHOT_PAYMENT_METHOD)}&select=*`);
+  const snapshots = (Array.isArray(rows) ? rows : [])
+    .map(parseStoredSnapshot)
+    .filter(Boolean)
+    .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)));
+
+  return { rows: Array.isArray(rows) ? rows : [], snapshots };
+};
+
+const compactSnapshot = (snapshot) => ({
+  id: snapshot.id,
+  dateKey: snapshot.dateKey,
+  monthKey: snapshot.monthKey,
+  capturedAt: snapshot.capturedAt,
+  currency: snapshot.currency,
+  totalCny: snapshot.totalCny,
+  accountCount: Array.isArray(snapshot.accounts) ? snapshot.accounts.length : Number(snapshot.accountCount || 0),
+  rates: snapshot.rates,
+  warnings: snapshot.warnings,
+});
+
+const snapshotToTransaction = (snapshot) => {
+  const parts = getSnapshotDateParts(snapshot.dateKey);
+  const year = parts?.year || new Date().getFullYear();
+  const month = parts?.month || new Date().getMonth() + 1;
+  const day = parts?.day || new Date().getDate();
+  const compact = compactSnapshot(snapshot);
+
+  return {
+    dateLabel: `${month}月${day}日`,
+    iconBg: 'bg-[#1677ff]',
+    iconType: 'wallet',
+    title: '余额快照',
+    subtitle: '系统快照',
+    tag: '资产快照',
+    tagType: 'snapshot',
+    amount: `+${formatAmount(snapshot.totalCny)}`,
+    isIncome: true,
+    time: '23:55',
+    fullDate: `${year}年${month}月${day}日 23:55`,
+    currency: 'CNY',
+    paymentMethod: SNAPSHOT_PAYMENT_METHOD,
+    note: `${SNAPSHOT_NOTE_PREFIX}${JSON.stringify(compact)}`,
+  };
+};
+
+const writeStoredSnapshot = async (rows, snapshot) => {
+  const existingRow = rows.find((row) => parseStoredSnapshot(row)?.dateKey === snapshot.dateKey);
+  const payload = snapshotToTransaction(snapshot);
+
+  if (existingRow?.id) {
+    const [updated] = await requestSupabase(`transactions?id=eq.${encodeURIComponent(existingRow.id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ value }),
+      body: JSON.stringify(payload),
     });
-    return;
+    return updated;
   }
 
-  await requestSupabase('settings', {
+  const [created] = await requestSupabase('transactions', {
     method: 'POST',
-    body: JSON.stringify({ key: SETTINGS_KEY, value }),
+    body: JSON.stringify(payload),
   });
+  return created;
 };
 
 const buildSnapshot = async () => {
@@ -137,22 +205,15 @@ const buildSnapshot = async () => {
 };
 
 const captureSnapshot = async () => {
-  const { row, snapshots } = await readStoredSnapshots();
+  const { rows, snapshots } = await readStoredSnapshots();
   const nextSnapshot = await buildSnapshot();
-  const byDate = new Map();
+  const storedRow = await writeStoredSnapshot(rows, nextSnapshot);
+  const storedSnapshot = parseStoredSnapshot(storedRow) || compactSnapshot(nextSnapshot);
+  const byDate = new Map(snapshots.map((snapshot) => [snapshot.dateKey, snapshot]));
+  byDate.set(storedSnapshot.dateKey, storedSnapshot);
+  const nextSnapshots = Array.from(byDate.values()).sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)));
 
-  snapshots.forEach((snapshot) => {
-    if (snapshot?.dateKey) byDate.set(snapshot.dateKey, snapshot);
-  });
-  byDate.set(nextSnapshot.dateKey, nextSnapshot);
-
-  const nextSnapshots = Array.from(byDate.values())
-    .filter((snapshot) => snapshot?.dateKey)
-    .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)))
-    .slice(0, 500);
-
-  await writeStoredSnapshots(row, nextSnapshots);
-  return { snapshot: nextSnapshot, snapshots: nextSnapshots };
+  return { snapshot: storedSnapshot, snapshots: nextSnapshots };
 };
 
 export default async function handler(req, res) {

@@ -276,6 +276,12 @@ const isManualBalanceAdjustmentTransaction = (tx) => {
     note === '余额人工修正 (不计入统计)';
 };
 
+const isBalanceSnapshotTransaction = (tx) => (
+  tx?.tagType === 'snapshot' ||
+  String(tx?.paymentMethod || '') === '__balance_snapshot__' ||
+  String(tx?.note || '').startsWith('BALANCE_SNAPSHOT:')
+);
+
 // Reimbursable items (commute taxi, 报销 income) affect balance but are
 // excluded from monthly income/expense statistics.
 const isReimbursableTransaction = (tx) => {
@@ -296,6 +302,7 @@ const shouldCountInCashflow = (tx) => (
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
   !isManualBalanceAdjustmentTransaction(tx) &&
+  !isBalanceSnapshotTransaction(tx) &&
   !isReimbursableTransaction(tx) &&
   !isManuallyExcludedFromCashflow(tx)
 );
@@ -307,6 +314,7 @@ const isAutoExcludedFromCashflow = (tx) => !!tx && (
   isInternalAccountTransferTransaction(tx) ||
   isAdjustmentTransaction(tx) ||
   isManualBalanceAdjustmentTransaction(tx) ||
+  isBalanceSnapshotTransaction(tx) ||
   isReimbursableTransaction(tx)
 );
 
@@ -1639,7 +1647,7 @@ const StatsPage = ({ setIsMessageCenterOpen, transactions = [], exchangeRates, n
             </div>
             <div className="mt-[5px] text-[11px] text-[#8e8e93]">
               {selectedMonthSnapshot
-                ? `${formatSnapshotDateLabel(selectedMonthSnapshot)} · ${selectedMonthSnapshot.accounts?.length || 0} 个账户`
+                ? `${formatSnapshotDateLabel(selectedMonthSnapshot)} · ${selectedMonthSnapshot.accountCount || selectedMonthSnapshot.accounts?.length || 0} 个账户`
                 : `${selectedYear}年${selectedMonth}月没有保存过余额快照`}
             </div>
           </div>
@@ -3215,7 +3223,7 @@ export default function App() {
   const { accounts, transactions, budget, exchangeRates, loading, updateTransaction, deleteTransaction, createTransaction, createAccount, updateAccount, deleteAccount, updateBudget, adjustTransferReceived } = useSupabaseData();
   const activeTransactions = useMemo(
     () => transactions
-      .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx))
+      .filter((tx) => !tx.deleted && !isManualBalanceAdjustmentTransaction(tx) && !isBalanceSnapshotTransaction(tx))
       .map((tx) => normalizeTransactionPresentation(tx))
       .sort((a, b) => {
         const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
