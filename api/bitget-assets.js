@@ -15,6 +15,13 @@ const readQuery = (req, key) => {
   return url.searchParams.get(key) || '';
 };
 
+const normalizeBitgetError = (message) => {
+  if (/40014|spot order read|spot order write|Incorrect permissions/i.test(message)) {
+    return 'Bitget API 权限不足：请到 Bitget API Key 权限里开启现货 Spot 读取权限（错误码 40014）。开启后重新保存/刷新即可。';
+  }
+  return message;
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     json(res, 405, { error: 'Method Not Allowed' });
@@ -32,6 +39,6 @@ export default async function handler(req, res) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown Bitget API error';
     const statusCode = message.startsWith('Unsupported') ? 400 : 502;
-    json(res, statusCode, { success: false, error: message });
+    json(res, statusCode, { success: false, error: normalizeBitgetError(message), rawError: message });
   }
 }
