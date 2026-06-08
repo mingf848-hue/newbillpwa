@@ -146,6 +146,92 @@ const formatEditableMoney = (value, digits = 2) => {
   return Number.isFinite(amount) ? amount.toFixed(digits) : '0.00';
 };
 
+const createApyConfigId = () => `apy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createEmptyApyConfig = (index = 0) => ({
+  id: createApyConfigId(),
+  name: `活动 ${index + 1}`,
+  limit: '0',
+  baseRate: '0',
+  overflowRate: '0',
+});
+
+const parseApyConfigList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+};
+
+const normalizeApyConfig = (config = {}, index = 0) => ({
+  id: String(config.id || createApyConfigId()),
+  name: String(config.name || config.title || `活动 ${index + 1}`).trim() || `活动 ${index + 1}`,
+  limit: String(config.limit ?? config.apy_limit ?? '0'),
+  baseRate: String(config.baseRate ?? config.base_rate ?? config.apy_base_rate ?? '0'),
+  overflowRate: String(config.overflowRate ?? config.overflow_rate ?? config.apy_overflow_rate ?? '0'),
+});
+
+const isActiveApyConfig = (config) => (
+  parseMoneyNumber(config?.limit) > 0 ||
+  parseMoneyNumber(config?.baseRate) > 0 ||
+  parseMoneyNumber(config?.overflowRate) > 0
+);
+
+const normalizeApyConfigList = (configs, { keepEmpty = true } = {}) => {
+  const normalized = (Array.isArray(configs) ? configs : [])
+    .map((config, index) => normalizeApyConfig(config, index))
+    .filter((config) => keepEmpty || isActiveApyConfig(config));
+  return normalized.length > 0 || !keepEmpty ? normalized : [createEmptyApyConfig()];
+};
+
+const getAccountApyConfigs = (account) => {
+  const explicitConfigs = parseApyConfigList(account?.apy_configs);
+  const configured = explicitConfigs.length > 0 ? explicitConfigs : parseApyConfigList(account?.apy_limit);
+  if (configured.length > 0) return normalizeApyConfigList(configured);
+
+  const legacyConfig = normalizeApyConfig({
+    name: '默认活动',
+    limit: account?.apy_limit || '0',
+    baseRate: account?.apy_base_rate || '0',
+    overflowRate: account?.apy_overflow_rate || '0',
+  });
+  return [legacyConfig];
+};
+
+const getPersistableApyConfigs = (configs) => normalizeApyConfigList(configs, { keepEmpty: false });
+
+const buildApyAccountPayload = (configs) => {
+  const persistable = getPersistableApyConfigs(configs);
+  const primary = persistable[0] || normalizeApyConfig();
+  const shouldStoreList = persistable.length > 1 || persistable.some((config, index) => config.name && config.name !== `活动 ${index + 1}` && config.name !== '默认活动');
+  return {
+    apy_configs: persistable,
+    apy_limit: shouldStoreList ? JSON.stringify(persistable) : (primary.limit || '0'),
+    apy_base_rate: primary.baseRate || '0',
+    apy_overflow_rate: primary.overflowRate || '0',
+  };
+};
+
+const isMissingApyConfigsColumnError = (error) => {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('apy_configs') || message.includes('schema cache');
+};
+
+const getApyConfigDailyInterest = (balance, config) => {
+  const limit = parseMoneyNumber(config?.limit);
+  const baseRate = parseMoneyNumber(config?.baseRate) / 100;
+  const overflowRate = parseMoneyNumber(config?.overflowRate) / 100;
+  const basePrincipal = limit > 0 ? Math.min(balance, limit) : balance;
+  const overflowPrincipal = limit > 0 ? Math.max(0, balance - limit) : 0;
+  return ((basePrincipal * baseRate) + (overflowPrincipal * overflowRate)) / 365;
+};
+
 const getBitgetApiAccountType = (value = '') => {
   const source = String(value || '').toLowerCase();
   if (source.includes('资金') || source.includes('fund')) return 'funding';
@@ -684,15 +770,34 @@ function useSupabaseData() {
   };
 
   const createAccount = async (payload) => {
-    const [created] = await fetchSupabase("accounts", "POST", payload);
-    setAccounts(prev => [created, ...prev]);
-    return created;
+    const savePayload = async (body) => {
+      const [created] = await fetchSupabase("accounts", "POST", body);
+      return created;
+    };
+    try {
+      const created = await savePayload(payload);
+      setAccounts(prev => [created, ...prev]);
+      return created;
+    } catch (error) {
+      if (!Object.prototype.hasOwnProperty.call(payload || {}, 'apy_configs') || !isMissingApyConfigsColumnError(error)) throw error;
+      const { apy_configs, ...fallbackPayload } = payload;
+      const created = await savePayload(fallbackPayload);
+      const enriched = { ...created, apy_configs };
+      setAccounts(prev => [enriched, ...prev]);
+      return enriched;
+    }
   };
 
   const updateAccount = async (id, updates) => {
     setAccounts(prev => prev.map(account => account.id === id ? { ...account, ...updates } : account));
     if (id !== undefined && id !== null) {
-      await fetchSupabase(`accounts?id=eq.${encodeURIComponent(id)}`, "PATCH", updates);
+      try {
+        await fetchSupabase(`accounts?id=eq.${encodeURIComponent(id)}`, "PATCH", updates);
+      } catch (error) {
+        if (!Object.prototype.hasOwnProperty.call(updates || {}, 'apy_configs') || !isMissingApyConfigsColumnError(error)) throw error;
+        const { apy_configs, ...fallbackUpdates } = updates;
+        await fetchSupabase(`accounts?id=eq.${encodeURIComponent(id)}`, "PATCH", fallbackUpdates);
+      }
     }
   };
 
@@ -1237,15 +1342,16 @@ const SearchModal = ({ isOpen, onClose, transactions }) => {
   );
 };
 
-const AprLimitDisplay = ({ balance, aprValues, currency }) => {
-  const bal = parseFloat(String(balance).replace(/,/g, '')) || 0;
-  const lim = parseFloat(aprValues.limit) || 0;
-  const baseRate = parseFloat(aprValues.baseRate) || 0;
-  const overflowRate = parseFloat(aprValues.overflowRate) || 0;
-  if (lim === 0 && baseRate === 0) return null;
-  const dailyEarnings = lim > 0
-    ? (Math.min(bal, lim) * (baseRate / 100) / 365 + Math.max(0, bal - lim) * (overflowRate / 100) / 365)
-    : (bal * baseRate / 100 / 365);
+const AprLimitDisplay = ({ balance, apyConfigs, currency }) => {
+  const bal = parseMoneyNumber(balance);
+  const activeConfigs = getPersistableApyConfigs(apyConfigs);
+  if (activeConfigs.length === 0) return null;
+  const configEarnings = activeConfigs.map((config) => ({
+    ...config,
+    daily: getApyConfigDailyInterest(bal, config),
+  })).filter((config) => config.daily > 0);
+  const dailyEarnings = configEarnings.reduce((sum, config) => sum + config.daily, 0);
+  if (dailyEarnings <= 0) return null;
   const monthlyEarnings = dailyEarnings * 30;
   return (
     <div className="mt-[14px] p-[12px] bg-[#f8faff] rounded-[12px] border border-[#e8f0fe]">
@@ -1261,6 +1367,16 @@ const AprLimitDisplay = ({ balance, aprValues, currency }) => {
           <div className="text-[10px] text-[#8e8e93]">{currency}</div>
         </div>
       </div>
+      {configEarnings.length > 1 && (
+        <div className="mt-[10px] space-y-[5px]">
+          {configEarnings.map((config) => (
+            <div key={config.id} className="flex items-center justify-between text-[10px] text-[#5c5c5e]">
+              <span className="truncate pr-[8px]">{config.name}</span>
+              <span className="font-semibold text-[#10b981] shrink-0">+{config.daily.toFixed(4)} / 日</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -2526,7 +2642,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [exchangeSelected, setExchangeSelected] = useState('OKX');
   const [apiConnected, setApiConnected] = useState(false);
   const [aprConfigEnabled, setAprConfigEnabled] = useState(true);
-  const [aprValues, setAprValues] = useState({ limit: '0', baseRate: '0', overflowRate: '0', compound: false });
+  const [aprValues, setAprValues] = useState({ configs: [createEmptyApyConfig()], compound: false });
   const [exchangeAccountName, setExchangeAccountName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [assetKeyboardField, setAssetKeyboardField] = useState(null);
@@ -2664,10 +2780,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       ? accountData.icon
       : (typeof accountData.iconType === 'string' ? accountData.iconType : 'cash');
     setSelectedIcon(iconStr || 'cash');
-    setAprValues({ limit: accountData.apy_limit || '0', baseRate: accountData.apy_base_rate || '0', overflowRate: accountData.apy_overflow_rate || '0', compound: !!readCompoundMap()[accountData.id] });
+    setAprValues({ configs: getAccountApyConfigs(accountData), compound: !!readCompoundMap()[accountData.id] });
     setIsAccountDetailModalOpen(true);
   };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(defaultExchange); setExchangeAccountType('现货账户'); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(defaultExchange); setExchangeAccountType('现货账户'); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ configs: [createEmptyApyConfig()], compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, _iconNode, currency = 'AED') => {
     resetBitgetSync();
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
@@ -2678,41 +2794,71 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAccountBalance('0.00');
     setSelectedCurrency(currency);
     setSelectedIcon(inferredIcon);
-    setAprValues({ limit: '0', baseRate: '0', overflowRate: '0', compound: false });
+    setAprValues({ configs: [createEmptyApyConfig()], compound: false });
     setIsAccountDetailModalOpen(true);
   };
 
   const closeAssetKeyboard = () => setAssetKeyboardField(null);
   const openAssetKeyboard = (field) => setAssetKeyboardField(field);
+  const openApyKeyboard = (index, field) => setAssetKeyboardField(`apy:${index}:${field}`);
+  const getApyKeyboardTarget = () => {
+    const match = String(assetKeyboardField || '').match(/^apy:(\d+):(limit|baseRate|overflowRate)$/);
+    if (!match) return null;
+    return { index: Number(match[1]), field: match[2] };
+  };
+  const updateApyConfig = (index, updates) => {
+    setAprValues((prev) => ({
+      ...prev,
+      configs: normalizeApyConfigList((prev.configs || [createEmptyApyConfig()]).map((config, configIndex) => (
+        configIndex === index ? { ...config, ...updates } : config
+      ))),
+    }));
+  };
+  const addApyConfig = () => {
+    setAprValues((prev) => {
+      const configs = normalizeApyConfigList(prev.configs || []);
+      return { ...prev, configs: [...configs, createEmptyApyConfig(configs.length)] };
+    });
+  };
+  const removeApyConfig = (index) => {
+    setAprValues((prev) => {
+      const configs = normalizeApyConfigList(prev.configs || []);
+      const nextConfigs = configs.filter((_, configIndex) => configIndex !== index);
+      return { ...prev, configs: nextConfigs.length > 0 ? nextConfigs : [createEmptyApyConfig()] };
+    });
+  };
   const getAssetKeyboardValue = () => {
+    const apyTarget = getApyKeyboardTarget();
+    if (apyTarget) return aprValues.configs?.[apyTarget.index]?.[apyTarget.field] || '';
     if (assetKeyboardField === 'balance') return accountBalance;
-    if (assetKeyboardField === 'limit') return aprValues.limit;
-    if (assetKeyboardField === 'baseRate') return aprValues.baseRate;
-    if (assetKeyboardField === 'overflowRate') return aprValues.overflowRate;
     return '';
   };
   const setAssetKeyboardValue = (nextValue) => {
+    const apyTarget = getApyKeyboardTarget();
+    if (apyTarget) {
+      updateApyConfig(apyTarget.index, { [apyTarget.field]: nextValue });
+      return;
+    }
     if (assetKeyboardField === 'balance') {
       setAccountBalance(nextValue);
-      return;
-    }
-    if (assetKeyboardField === 'limit') {
-      setAprValues((prev) => ({ ...prev, limit: nextValue }));
-      return;
-    }
-    if (assetKeyboardField === 'baseRate') {
-      setAprValues((prev) => ({ ...prev, baseRate: nextValue }));
-      return;
-    }
-    if (assetKeyboardField === 'overflowRate') {
-      setAprValues((prev) => ({ ...prev, overflowRate: nextValue }));
     }
   };
-  const assetKeyboardMeta = {
-    balance: { label: '余额', suffix: selectedCurrency },
-    limit: { label: '高息限额', suffix: selectedCurrency },
-    baseRate: { label: '基础利率 (APR)', suffix: '%' },
-    overflowRate: { label: '超出利率 (APR)', suffix: '%' },
+  const getAssetKeyboardMeta = () => {
+    const apyTarget = getApyKeyboardTarget();
+    if (apyTarget) {
+      const configName = aprValues.configs?.[apyTarget.index]?.name || `活动 ${apyTarget.index + 1}`;
+      const labels = {
+        limit: `${configName} · 高息限额`,
+        baseRate: `${configName} · 基础利率 (APR)`,
+        overflowRate: `${configName} · 超出利率 (APR)`,
+      };
+      return {
+        label: labels[apyTarget.field],
+        suffix: apyTarget.field === 'limit' ? selectedCurrency : '%',
+      };
+    }
+    if (assetKeyboardField === 'balance') return { label: '余额', suffix: selectedCurrency };
+    return { label: '', suffix: '' };
   };
 
   const saveAccountDetail = async () => {
@@ -2726,14 +2872,13 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     const nextBalanceNumber = Number(accountBalance || 0);
     const previousBalanceNumber = parseMoneyNumber(selectedAccount.balance);
     const balanceDelta = nextBalanceNumber - previousBalanceNumber;
+    const apyPayload = buildApyAccountPayload(aprValues.configs);
     const payload = {
       name: nextName,
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency,
       icon: selectedIcon || selectedAccount.iconType || 'cash',
-      apy_limit: aprValues.limit || '0',
-      apy_base_rate: aprValues.baseRate || '0',
-      apy_overflow_rate: aprValues.overflowRate || '0',
+      ...apyPayload,
     };
     setIsSavingAccount(true);
     try {
@@ -2748,6 +2893,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
           apy_limit: payload.apy_limit,
           apy_base_rate: payload.apy_base_rate,
           apy_overflow_rate: payload.apy_overflow_rate,
+          apy_configs: payload.apy_configs,
         });
         if (createTransaction) {
           const now = new Date();
@@ -2803,9 +2949,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency || 'USDT',
       icon: exchangeIcon,
-      apy_limit: aprValues.limit || '0',
-      apy_base_rate: aprValues.baseRate || '0',
-      apy_overflow_rate: aprValues.overflowRate || '0',
+      ...buildApyAccountPayload(aprValues.configs),
     });
     if (created?.id) writeCompoundFlag(created.id, !!aprValues.compound);
     closeAssetKeyboard();
@@ -2902,6 +3046,74 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       </div>
     );
   };
+
+  const renderApyConfigEditor = () => {
+    const configs = normalizeApyConfigList(aprValues.configs);
+    return (
+      <div className="space-y-[8px]">
+        {configs.map((config, index) => (
+          <div key={config.id || index} className="rounded-[12px] border border-[#f0f0f0] bg-white p-[8px]">
+            <div className="flex items-center gap-[6px] mb-[8px]">
+              <input
+                type="text"
+                value={config.name}
+                onChange={(e) => updateApyConfig(index, { name: e.target.value })}
+                placeholder={`活动 ${index + 1}`}
+                className="min-w-0 flex-1 h-[30px] rounded-[8px] bg-[#f7f8fa] px-[9px] text-[12px] font-bold text-[#1c1c1e] outline-none focus:ring-1 focus:ring-[#1677ff]/30 placeholder:text-[#c7c7cc]"
+                maxLength={24}
+              />
+              {configs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeApyConfig(index)}
+                  aria-label="删除 APY 活动"
+                  className="w-[30px] h-[30px] rounded-[8px] bg-[#fff0ee] text-[#ff3b30] flex items-center justify-center active:scale-95 transition-transform shrink-0"
+                >
+                  <X className="w-[14px] h-[14px]" strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-[6px]">
+              <div className="rounded-[10px] border border-[#f0f0f0] p-[8px]">
+                <div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div>
+                <div className="relative mb-[2px]">
+                  <input type="text" readOnly inputMode="none" onFocus={() => openApyKeyboard(index, 'limit')} onClick={() => openApyKeyboard(index, 'limit')} value={config.limit} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px] cursor-pointer" placeholder="0" />
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span>
+                </div>
+                <div className="text-[9px] text-[#8e8e93] leading-tight">活动金额上限</div>
+              </div>
+              <div className="rounded-[10px] border border-[#f0f0f0] p-[8px]">
+                <div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div>
+                <div className="relative mb-[2px]">
+                  <input type="text" readOnly inputMode="none" onFocus={() => openApyKeyboard(index, 'baseRate')} onClick={() => openApyKeyboard(index, 'baseRate')} value={config.baseRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" />
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span>
+                </div>
+                <div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div>
+              </div>
+              <div className="rounded-[10px] border border-[#f0f0f0] p-[8px]">
+                <div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div>
+                <div className="relative mb-[2px]">
+                  <input type="text" readOnly inputMode="none" onFocus={() => openApyKeyboard(index, 'overflowRate')} onClick={() => openApyKeyboard(index, 'overflowRate')} value={config.overflowRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" />
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span>
+                </div>
+                <div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div>
+              </div>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addApyConfig}
+          className="w-full h-[34px] rounded-[10px] border border-dashed border-[#b8d7ff] bg-[#f7fbff] text-[#1677ff] text-[12px] font-bold flex items-center justify-center space-x-[5px] active:scale-[0.99] transition-transform"
+        >
+          <Plus className="w-[14px] h-[14px]" strokeWidth={2.5} />
+          <span>新增 APY 活动</span>
+        </button>
+      </div>
+    );
+  };
+
+  const activeAssetKeyboardMeta = getAssetKeyboardMeta();
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -3069,11 +3281,9 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 </div>
               </div>
               <div className="mb-[8px]">
-                <div className="flex items-center justify-between mb-[16px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APR 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">配置后将用于收益计算与统计</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
-                <div className={`space-y-[14px] overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[400px]' : 'opacity-0 max-h-0'}`}>
-                  <div><div className="flex items-center space-x-[4px] mb-[6px] ml-[2px]"><label className="text-[12px] font-medium text-[#5c5c5e]">高息限额</label><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('limit')} onClick={() => openAssetKeyboard('limit')} value={aprValues.limit} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[40px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><span className="text-[11px] text-[#8e8e93] block mt-[6px] ml-[2px]">超过该金额后按超出利率计算</span></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">基础利率 (APR)</label><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
-                  <div><label className="text-[12px] font-medium text-[#5c5c5e] block mb-[6px] ml-[2px]">超出利率 (APR)</label><div className="relative"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} placeholder="0" className="w-full border border-[#f0f0f0] rounded-[12px] pl-[14px] pr-[30px] py-[12px] text-[15px] font-medium text-[#1c1c1e] outline-none placeholder:text-[#c7c7cc] focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 transition-all cursor-pointer"/><span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[14px] font-bold text-[#8e8e93]">%</span></div></div>
+                <div className="flex items-center justify-between mb-[12px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APY 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">可为多个活动分别设置年化</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
+                <div className={`overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[640px]' : 'opacity-0 max-h-0'}`}>
+                  {renderApyConfigEditor()}
                 </div>
               </div>
             </div>
@@ -3133,14 +3343,10 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
               {isBitgetAccountLike(selectedAccount?.name, selectedAccount?.icon, selectedAccount?.sub, selectedIcon, accountName) && renderBitgetSyncPanel('detail')}
               <div className="mb-[8px]">
                  <div className="flex items-center space-x-[4px] mb-[6px]"><h3 className="text-[12px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
-                 <div className="grid grid-cols-3 gap-[6px]">
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">高息限额</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('limit')} onClick={() => openAssetKeyboard('limit')} value={aprValues.limit} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[28px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[#8e8e93]">{selectedCurrency}</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">享受高息上限</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">基础利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('baseRate')} onClick={() => openAssetKeyboard('baseRate')} value={aprValues.baseRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">限额内年化</div></div>
-                    <div className="border border-[#f0f0f0] rounded-[10px] p-[8px] bg-white"><div className="text-[10px] font-medium text-[#5c5c5e] mb-[4px]">超出利率</div><div className="relative mb-[2px]"><input type="text" readOnly inputMode="none" onFocus={() => openAssetKeyboard('overflowRate')} onClick={() => openAssetKeyboard('overflowRate')} value={aprValues.overflowRate} className="w-full bg-transparent text-[15px] font-bold text-[#1c1c1e] outline-none pr-[16px] cursor-pointer" placeholder="0" /><span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8e8e93]">%</span></div><div className="text-[9px] text-[#8e8e93] leading-tight">超出部分年化</div></div>
-                 </div>
+                 {renderApyConfigEditor()}
                  <AprLimitDisplay
                    balance={accountBalance}
-                   aprValues={aprValues}
+                   apyConfigs={aprValues.configs}
                    currency={selectedCurrency}
                  />
                  <div className="flex items-center justify-between mt-[8px] px-[2px]">
@@ -3239,12 +3445,12 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
       <CustomInputKeyboard
         open={Boolean(assetKeyboardField)}
-        label={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].label : ''}
+        label={activeAssetKeyboardMeta.label}
         value={getAssetKeyboardValue()}
-        suffix={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].suffix : ''}
-        mode={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].mode || 'number' : 'number'}
-        placeholder={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].placeholder || '' : ''}
-        quickActions={assetKeyboardField ? assetKeyboardMeta[assetKeyboardField].quickActions || [] : []}
+        suffix={activeAssetKeyboardMeta.suffix}
+        mode={activeAssetKeyboardMeta.mode || 'number'}
+        placeholder={activeAssetKeyboardMeta.placeholder || ''}
+        quickActions={activeAssetKeyboardMeta.quickActions || []}
         onClose={closeAssetKeyboard}
         onChange={setAssetKeyboardValue}
       />

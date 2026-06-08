@@ -40,14 +40,66 @@ const formatAmount = (value) => value.toLocaleString('en-US', {
   maximumFractionDigits: 2,
 });
 
-const getDailyInterest = (account) => {
-  const balance = parseAmount(account.balance);
-  const limit = parseAmount(account.apy_limit);
-  const baseRate = parseAmount(account.apy_base_rate) / 100;
-  const overflowRate = parseAmount(account.apy_overflow_rate) / 100;
+const parseApyConfigList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return [];
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+};
+
+const normalizeApyConfig = (config = {}, index = 0) => ({
+  name: String(config.name || config.title || `活动 ${index + 1}`).trim() || `活动 ${index + 1}`,
+  limit: String(config.limit ?? config.apy_limit ?? '0'),
+  baseRate: String(config.baseRate ?? config.base_rate ?? config.apy_base_rate ?? '0'),
+  overflowRate: String(config.overflowRate ?? config.overflow_rate ?? config.apy_overflow_rate ?? '0'),
+});
+
+const isActiveApyConfig = (config) => (
+  parseAmount(config?.limit) > 0 ||
+  parseAmount(config?.baseRate) > 0 ||
+  parseAmount(config?.overflowRate) > 0
+);
+
+const getAccountApyConfigs = (account) => {
+  const explicitConfigs = parseApyConfigList(account?.apy_configs);
+  const configured = explicitConfigs.length > 0 ? explicitConfigs : parseApyConfigList(account?.apy_limit);
+  if (configured.length > 0) {
+    return configured.map(normalizeApyConfig).filter(isActiveApyConfig);
+  }
+
+  return [normalizeApyConfig({
+    name: '默认活动',
+    limit: account?.apy_limit || '0',
+    baseRate: account?.apy_base_rate || '0',
+    overflowRate: account?.apy_overflow_rate || '0',
+  })].filter(isActiveApyConfig);
+};
+
+const getConfigDailyInterest = (balance, config) => {
+  const limit = parseAmount(config.limit);
+  const baseRate = parseAmount(config.baseRate) / 100;
+  const overflowRate = parseAmount(config.overflowRate) / 100;
   const basePrincipal = limit > 0 ? Math.min(balance, limit) : balance;
   const overflowPrincipal = limit > 0 ? Math.max(0, balance - limit) : 0;
   return ((basePrincipal * baseRate) + (overflowPrincipal * overflowRate)) / 365;
+};
+
+const getDailyInterestBreakdown = (account) => {
+  const balance = parseAmount(account.balance);
+  const configs = getAccountApyConfigs(account).map((config) => ({
+    ...config,
+    dailyInterest: getConfigDailyInterest(balance, config),
+  })).filter((config) => config.dailyInterest > 0);
+  return {
+    configs,
+    total: configs.reduce((sum, config) => sum + config.dailyInterest, 0),
+  };
 };
 
 const isRealtimeBalanceAccount = (account) => /bitget/i.test(`${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`);
@@ -81,15 +133,18 @@ export default async function handler(_req, res) {
     const today = localNow.toISOString().slice(0, 10);
     const note = `APY每日派息:${today}`;
     const accounts = await requestSupabase('accounts?select=*');
-    const eligibleAccounts = accounts.filter((account) => getDailyInterest(account) > 0);
+    const eligibleAccounts = accounts
+      .map((account) => ({ account, breakdown: getDailyInterestBreakdown(account) }))
+      .filter(({ breakdown }) => breakdown.total > 0);
     const created = [];
 
-    for (const account of eligibleAccounts) {
+    for (const { account, breakdown } of eligibleAccounts) {
       const existing = await requestSupabase(`transactions?paymentMethod=eq.${encodeURIComponent(account.name)}&note=eq.${encodeURIComponent(note)}&select=id`);
       if (existing.length > 0) continue;
 
-      const interest = getDailyInterest(account);
+      const interest = breakdown.total;
       const platformMeta = inferPlatformMeta(account);
+      const payoutLabel = breakdown.configs.length > 1 ? '多活动理财派息' : '活期理财派息';
       const year = localNow.getUTCFullYear();
       const month = localNow.getUTCMonth() + 1;
       const day = localNow.getUTCDate();
@@ -102,7 +157,7 @@ export default async function handler(_req, res) {
           dateLabel: `今天 ${month}月${day}日`,
           iconBg: 'bg-[#10b981]',
           iconType: platformMeta.iconType,
-          title: `${platformMeta.label} 活期理财派息`,
+          title: `${platformMeta.label} ${payoutLabel}`,
           subtitle: platformMeta.label,
           tag: '理财',
           tagType: 'investment',
