@@ -44,14 +44,21 @@ const exchangeRateMiddleware: Connect.NextHandleFunction = async (req, res, next
   }
 }
 
-const bitgetAssetsMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
-  if (!(req as { url?: string }).url?.startsWith('/api/bitget-assets')) {
+const bitgetApiModules = {
+  '/api/bitget-assets': './api/bitget-assets.js',
+  '/api/bitget-earn-income': './api/bitget-earn-income.js',
+} as const
+
+const bitgetApiMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
+  const reqUrl = (req as { url?: string }).url || ''
+  const modulePath = Object.entries(bitgetApiModules).find(([path]) => reqUrl.startsWith(path))?.[1]
+
+  if (!modulePath) {
     next()
     return
   }
 
   try {
-    const modulePath = './api/bitget-assets.js'
     const apiModule = await import(modulePath) as { default: (req: unknown, res: unknown) => Promise<void> }
     await apiModule.default(req, res)
   } catch (error) {
@@ -68,11 +75,11 @@ export default defineConfig({
       name: 'local-exchange-rates-api',
       configureServer(server) {
         server.middlewares.use(exchangeRateMiddleware)
-        server.middlewares.use(bitgetAssetsMiddleware)
+        server.middlewares.use(bitgetApiMiddleware)
       },
       configurePreviewServer(server) {
         server.middlewares.use(exchangeRateMiddleware)
-        server.middlewares.use(bitgetAssetsMiddleware)
+        server.middlewares.use(bitgetApiMiddleware)
       },
     },
   ],

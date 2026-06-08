@@ -368,6 +368,15 @@ const isBalanceSnapshotTransaction = (tx) => (
   String(tx?.note || '').startsWith('BALANCE_SNAPSHOT:')
 );
 
+const isDailyInterestPayoutTransaction = (tx) => {
+  const note = String(tx?.note || '');
+  const title = String(tx?.title || '');
+  return note.startsWith('APY每日派息:') ||
+    note.startsWith('BITGET_EARN_DAILY:') ||
+    title.includes('每日派息') ||
+    title.includes('昨日理财派息');
+};
+
 // Reimbursable items (commute taxi, 报销 income) affect balance but are
 // excluded from monthly income/expense statistics.
 const isReimbursableTransaction = (tx) => {
@@ -2368,8 +2377,8 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, accounts = [], exchan
       const queryMatched = !keyword || [tx.title, tx.subtitle, tx.tag, tx.paymentMethod, tx.note]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
-      // Hide tiny investment payouts (< 0.1 in original currency) when not explicitly searching
-      const isSmallPayout = !keyword && tx.isIncome && (tx.tagType === 'investment' || tx.tag === '理财') && Math.abs(parseMoneyNumber(tx.amount)) < 0.1;
+      // Hide incidental tiny investment records, but keep daily interest payouts visible in bills.
+      const isSmallPayout = !keyword && !isDailyInterestPayoutTransaction(tx) && tx.isIncome && (tx.tagType === 'investment' || tx.tag === '理财') && Math.abs(parseMoneyNumber(tx.amount)) < 0.1;
       return paymentMatched && typeMatched && rangeMatched && queryMatched && !isSmallPayout;
     }).sort((a, b) => {
       const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
@@ -2640,7 +2649,6 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [accountBalance, setAccountBalance] = useState('');
   const [isAdjustOnly, setIsAdjustOnly] = useState(true);
   const [exchangeSelected, setExchangeSelected] = useState('OKX');
-  const [apiConnected, setApiConnected] = useState(false);
   const [aprConfigEnabled, setAprConfigEnabled] = useState(true);
   const [aprValues, setAprValues] = useState({ configs: [createEmptyApyConfig()], compound: false });
   const [exchangeAccountName, setExchangeAccountName] = useState('');
@@ -2783,7 +2791,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     setAprValues({ configs: getAccountApyConfigs(accountData), compound: !!readCompoundMap()[accountData.id] });
     setIsAccountDetailModalOpen(true);
   };
-  const handleOpenAddExchange = (defaultExchange = 'OKX') => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(defaultExchange); setExchangeAccountType('现货账户'); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ configs: [createEmptyApyConfig()], compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
+  const handleOpenAddExchange = (defaultExchange = 'OKX') => { resetBitgetSync(); setExchangeSelected(defaultExchange); setExchangeAccountType('现货账户'); setExchangeAccountName(`${defaultExchange} 现货账户`); setAccountBalance('0.00'); setSelectedCurrency('USDT'); setAprValues({ configs: [createEmptyApyConfig()], compound: false }); setIsAddAccountModalOpen(false); setIsAddExchangeModalOpen(true); };
   const handleOpenCustomAccount = (name, _iconNode, currency = 'AED') => {
     resetBitgetSync();
     const inferredType = name.includes('银行') ? 'bank' : name.includes('钱包') ? 'wallet' : name.includes('现金') ? 'cash' : name.includes('信用卡') ? 'bank' : 'other';
@@ -2872,7 +2880,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
     const nextBalanceNumber = Number(accountBalance || 0);
     const previousBalanceNumber = parseMoneyNumber(selectedAccount.balance);
     const balanceDelta = nextBalanceNumber - previousBalanceNumber;
-    const apyPayload = buildApyAccountPayload(aprValues.configs);
+    const usesBitgetApiIncome = isBitgetAccountLike(selectedAccount?.name, selectedAccount?.icon, selectedAccount?.sub, selectedIcon, accountName);
+    const apyPayload = usesBitgetApiIncome ? buildApyAccountPayload([]) : buildApyAccountPayload(aprValues.configs);
     const payload = {
       name: nextName,
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -2942,6 +2951,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const saveExchangeAccount = async () => {
     const exchangeIcon = exchangeSelected === 'HTX' ? 'huobi' : exchangeSelected.toLowerCase();
+    const usesBitgetApiIncome = exchangeSelected === 'Bitget';
     const created = await createAccount({
       name: exchangeAccountName.trim() || `${exchangeSelected} 现货账户`,
       sub: exchangeAccountType || "交易所账户",
@@ -2949,7 +2959,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
       balance: Number(accountBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       currency: selectedCurrency || 'USDT',
       icon: exchangeIcon,
-      ...buildApyAccountPayload(aprValues.configs),
+      ...(usesBitgetApiIncome ? buildApyAccountPayload([]) : buildApyAccountPayload(aprValues.configs)),
     });
     if (created?.id) writeCompoundFlag(created.id, !!aprValues.compound);
     closeAssetKeyboard();
@@ -3114,6 +3124,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   };
 
   const activeAssetKeyboardMeta = getAssetKeyboardMeta();
+  const isAddingBitgetExchange = exchangeSelected === 'Bitget';
+  const isEditingBitgetAccount = isBitgetAccountLike(selectedAccount?.name, selectedAccount?.icon, selectedAccount?.sub, selectedIcon, accountName);
 
   return (
     <div className="bg-[#f4f5f8] font-sans text-gray-900 pb-[24px] relative overflow-x-hidden animate-in fade-in duration-300">
@@ -3243,7 +3255,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                    {[{ id: 'OKX', icon: <BrandLogo type="okx" size={20} />, name: 'OKX' },{ id: 'Binance', icon: <BrandLogo type="binance" size={20} />, name: '币安 Binance' },{ id: 'Bybit', icon: <BrandLogo type="bybit" size={20} />, name: 'Bybit' },{ id: 'Bitget', icon: <BrandLogo type="bitget" size={20} />, name: 'Bitget' },{ id: 'Gateio', icon: <BrandLogo type="gateio" size={20} />, name: 'Gate.io' },{ id: 'KuCoin', icon: <BrandLogo type="kucoin" size={20} />, name: 'KuCoin' },{ id: 'MEXC', icon: <BrandLogo type="mexc" size={20} />, name: 'MEXC' },{ id: 'HTX', icon: <BrandLogo type="huobi" size={20} />, name: 'HTX 火币' },{ id: 'Other', icon: <div className="w-[20px] h-[20px] bg-[#e5e5ea] rounded-full flex items-center justify-center shrink-0"><MoreHorizontal className="w-[12px] h-[12px] text-[#8e8e93]" strokeWidth={3}/></div>, name: '其他交易所' },].map(ex => {
                      const isSelected = exchangeSelected === ex.id;
                      const accountLabel = ex.id === 'Gateio' ? 'Gate.io' : ex.id;
-                     return (<button key={ex.id} onClick={() => { resetBitgetSync(); setApiConnected(false); setExchangeSelected(ex.id); if (ex.id !== 'Other') setExchangeAccountName(`${accountLabel} ${exchangeAccountType}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
+                     return (<button key={ex.id} onClick={() => { resetBitgetSync(); setExchangeSelected(ex.id); if (ex.id !== 'Other') setExchangeAccountName(`${accountLabel} ${exchangeAccountType}`); }} className={`relative rounded-[10px] py-[10px] px-[8px] flex flex-row items-center space-x-[6px] cursor-pointer transition-colors border text-left ${isSelected ? 'border-[#1677ff] bg-[#f0f6ff]' : 'border-[#f0f0f0] active:bg-[#f9f9f9]'}`}>{ex.icon}<span className={`text-[12px] whitespace-nowrap overflow-hidden text-ellipsis ${isSelected ? 'font-bold text-[#1c1c1e]' : 'font-medium text-[#5c5c5e]'}`}>{ex.name}</span>{isSelected && (<div className="absolute -top-[1.5px] -right-[1.5px] w-[18px] h-[18px] bg-[#1677ff] rounded-bl-[8px] rounded-tr-[8px] flex items-center justify-center shadow-sm"><Check className="w-[12px] h-[12px] text-white" strokeWidth={3.5} /></div>)}</button>)
                    })}
                 </div>
               </div>
@@ -3263,8 +3275,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                 </div>
                 <div className="relative"><label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">账户类型</label><button onClick={() => setIsExchangeTypeOpen(!isExchangeTypeOpen)} className="w-full border border-[#f0f0f0] rounded-[12px] px-[14px] py-[12px] flex justify-between items-center bg-white cursor-pointer active:bg-[#f9f9f9] transition-colors"><span className="text-[15px] font-medium text-[#1c1c1e]">{exchangeAccountType}</span><ChevronDown className={`w-[16px] h-[16px] text-[#c7c7cc] transition-transform ${isExchangeTypeOpen ? 'rotate-180' : ''}`} strokeWidth={2} /></button>{isExchangeTypeOpen && (<><div className="fixed inset-0 z-[200]" onClick={() => setIsExchangeTypeOpen(false)} style={{ touchAction: 'none' }}></div><div className="absolute top-[68px] left-0 right-0 z-[210] bg-white rounded-[12px] border border-[#f0f0f0] shadow-[0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">{['现货账户', '合约账户', '资金账户', '理财账户'].map(t => (<button key={t} onClick={() => { resetBitgetSync(); setExchangeAccountType(t); setIsExchangeTypeOpen(false); }} className="w-full px-[14px] py-[12px] text-left text-[15px] font-medium text-[#1c1c1e] border-b last:border-0 border-[#f4f5f8] active:bg-[#f9f9f9] flex items-center justify-between">{t}{exchangeAccountType === t && <Check className="w-[16px] h-[16px] text-[#1677ff]" strokeWidth={2.5} />}</button>))}</div></>)}</div>
               </div>
-              <div className="mb-[12px] flex items-center justify-between border-b border-[#f4f5f8] pb-[16px]"><div className="flex flex-col pr-[16px]"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">API 连接 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">{exchangeSelected === 'Bitget' ? '读取 Bitget 全账户 USDT 总估值' : '当前版本仅支持 Bitget 余额同步'}</span></div><ToggleSwitch checked={apiConnected && exchangeSelected === 'Bitget'} onChange={() => { if (exchangeSelected !== 'Bitget') { notify?.('当前仅支持 Bitget API 同步'); return; } resetBitgetSync(); setApiConnected(!apiConnected); }} /></div>
-              {apiConnected && exchangeSelected === 'Bitget' && renderBitgetSyncPanel('add')}
+              {isAddingBitgetExchange && renderBitgetSyncPanel('add')}
               <div className="mb-[24px]">
                 <h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[10px]">选择货币</h3>
                 <label className="text-[12px] text-[#8e8e93] block mb-[6px] ml-[2px]">计价货币</label>
@@ -3280,12 +3291,14 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                   })}
                 </div>
               </div>
-              <div className="mb-[8px]">
-                <div className="flex items-center justify-between mb-[12px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APY 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">可为多个活动分别设置年化</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
-                <div className={`overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[640px]' : 'opacity-0 max-h-0'}`}>
-                  {renderApyConfigEditor()}
+              {!isAddingBitgetExchange && (
+                <div className="mb-[8px]">
+                  <div className="flex items-center justify-between mb-[12px]"><div className="flex flex-col"><h3 className="text-[13px] font-bold text-[#5c5c5e] mb-[4px]">APY 配置 <span className="text-[#8e8e93] font-normal">(可选)</span></h3><span className="text-[11px] text-[#8e8e93]">可为多个活动分别设置年化</span></div><ToggleSwitch checked={aprConfigEnabled} onChange={() => setAprConfigEnabled(!aprConfigEnabled)} /></div>
+                  <div className={`overflow-hidden transition-all duration-300 ${aprConfigEnabled ? 'opacity-100 max-h-[640px]' : 'opacity-0 max-h-0'}`}>
+                    {renderApyConfigEditor()}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <div className="px-[20px] pb-[20px] pt-[12px] bg-white rounded-b-[24px] shrink-0 border-t border-[#f4f5f8]"><button onClick={saveExchangeAccount} className="w-full py-[14px] rounded-[14px] text-[16px] font-bold text-white bg-[#1677ff] active:bg-[#0f60d6] transition-colors shadow-[0_4px_12px_rgba(22,119,255,0.25)]">添加账户</button></div>
           </div>
@@ -3340,23 +3353,25 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
                  </div>
                  <div className="flex items-center justify-between mt-[6px]"><span className="text-[12px] font-medium text-[#1c1c1e]">仅调整余额，不计入收支</span><ToggleSwitch checked={isAdjustOnly} onChange={() => setIsAdjustOnly(!isAdjustOnly)} /></div>
               </div>
-              {isBitgetAccountLike(selectedAccount?.name, selectedAccount?.icon, selectedAccount?.sub, selectedIcon, accountName) && renderBitgetSyncPanel('detail')}
-              <div className="mb-[8px]">
-                 <div className="flex items-center space-x-[4px] mb-[6px]"><h3 className="text-[12px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
-                 {renderApyConfigEditor()}
-                 <AprLimitDisplay
-                   balance={accountBalance}
-                   apyConfigs={aprValues.configs}
-                   currency={selectedCurrency}
-                 />
-                 <div className="flex items-center justify-between mt-[8px] px-[2px]">
-                   <div className="flex flex-col">
-                     <span className="text-[12px] font-medium text-[#1c1c1e]">复利计息</span>
-                     <span className="text-[10px] text-[#8e8e93] mt-[1px]">{aprValues.compound ? '利息再投资，按复利结算' : '利息单利结算'}</span>
+              {isEditingBitgetAccount && renderBitgetSyncPanel('detail')}
+              {!isEditingBitgetAccount && (
+                <div className="mb-[8px]">
+                   <div className="flex items-center space-x-[4px] mb-[6px]"><h3 className="text-[12px] font-bold text-[#1c1c1e]">4. APY 配置</h3><Info className="w-[12px] h-[12px] text-[#c7c7cc]" strokeWidth={2} /></div>
+                   {renderApyConfigEditor()}
+                   <AprLimitDisplay
+                     balance={accountBalance}
+                     apyConfigs={aprValues.configs}
+                     currency={selectedCurrency}
+                   />
+                   <div className="flex items-center justify-between mt-[8px] px-[2px]">
+                     <div className="flex flex-col">
+                       <span className="text-[12px] font-medium text-[#1c1c1e]">复利计息</span>
+                       <span className="text-[10px] text-[#8e8e93] mt-[1px]">{aprValues.compound ? '利息再投资，按复利结算' : '利息单利结算'}</span>
+                     </div>
+                     <ToggleSwitch checked={!!aprValues.compound} onChange={() => setAprValues((prev) => ({ ...prev, compound: !prev.compound }))} />
                    </div>
-                   <ToggleSwitch checked={!!aprValues.compound} onChange={() => setAprValues((prev) => ({ ...prev, compound: !prev.compound }))} />
-                 </div>
-              </div>
+                </div>
+              )}
             </div>
             <div className="px-[14px] py-[8px] bg-white rounded-b-[22px] shrink-0 border-t border-[#f4f5f8] space-y-[8px]">
                <div className="flex space-x-[10px]">

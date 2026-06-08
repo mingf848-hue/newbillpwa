@@ -63,7 +63,7 @@ const buildQueryString = (params = {}) => {
   return search.toString();
 };
 
-const signedBitgetGet = async (requestPath, params = {}) => {
+export const signedBitgetGet = async (requestPath, params = {}) => {
   const { apiKey, secretKey, passphrase } = getBitgetCredentials();
   const method = 'GET';
   const body = '';
@@ -182,6 +182,179 @@ const normalizeOverviewAsset = (row) => {
 };
 
 const sumUsdtValues = (assets) => assets.reduce((sum, asset) => sum + parseAmount(asset.usdtValue || asset.total), 0);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TZ_OFFSET_HOURS = Number(process.env.TRANSACTION_TZ_OFFSET || 8);
+
+const formatDateKey = (date) => {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const getBitgetEarnDateRange = ({ dateKey = '', daysAgo = 1, tzOffsetHours = DEFAULT_TZ_OFFSET_HOURS } = {}) => {
+  const offsetMs = tzOffsetHours * 60 * 60 * 1000;
+  let localStartUtcMs;
+  let resolvedDateKey = dateKey;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey))) {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    localStartUtcMs = Date.UTC(year, month - 1, day) - offsetMs;
+  } else {
+    const localNow = new Date(Date.now() + offsetMs);
+    const targetLocal = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()) - daysAgo * DAY_MS);
+    resolvedDateKey = formatDateKey(targetLocal);
+    localStartUtcMs = targetLocal.getTime() - offsetMs;
+  }
+
+  return {
+    dateKey: resolvedDateKey,
+    startTime: String(localStartUtcMs),
+    endTime: String(localStartUtcMs + DAY_MS - 1),
+    tzOffsetHours,
+  };
+};
+
+const getResultList = (payload) => (
+  Array.isArray(payload?.data?.resultList) ? payload.data.resultList : []
+);
+
+const normalizeEarnRecord = (record, source, queryType) => {
+  const coin = String(record?.settleCoinName || record?.coinName || record?.coin || record?.productCoin || 'USDT').toUpperCase();
+  const ts = Number(record?.ts || record?.cTime || record?.uTime || 0);
+  return {
+    id: String(record?.orderId || `${source}:${queryType}:${coin}:${ts}:${record?.amount || '0'}`),
+    source,
+    queryType,
+    product: String(record?.product || record?.productType || record?.productLevel || ''),
+    coin,
+    amount: formatAmount(parseAmount(record?.amount)),
+    amountNumber: parseAmount(record?.amount),
+    timestamp: Number.isFinite(ts) ? ts : 0,
+    raw: record,
+  };
+};
+
+const fetchEarnRecordsPage = async ({ endpoint, params, source, queryType, idLessThan }) => {
+  const payload = await signedBitgetGet(endpoint, {
+    ...params,
+    limit: 100,
+    ...(idLessThan ? { idLessThan } : {}),
+  });
+  return {
+    records: getResultList(payload).map((record) => normalizeEarnRecord(record, source, queryType)),
+    endId: payload?.data?.endId ? String(payload.data.endId) : '',
+    requestTime: payload?.requestTime || Date.now(),
+  };
+};
+
+const fetchEarnRecords = async ({ endpoint, params, source, queryType, maxPages = 3 }) => {
+  const records = [];
+  let endId = '';
+  let requestTime = Date.now();
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const result = await fetchEarnRecordsPage({ endpoint, params, source, queryType, idLessThan: endId });
+    records.push(...result.records);
+    requestTime = result.requestTime;
+    if (!result.endId || result.endId === endId || result.records.length === 0) break;
+    endId = result.endId;
+  }
+
+  return { records, requestTime };
+};
+
+const groupEarnTotals = (records) => {
+  const byCoin = new Map();
+  records.forEach((record) => {
+    if (!record.amountNumber) return;
+    const current = byCoin.get(record.coin) || {
+      coin: record.coin,
+      amount: '0',
+      amountNumber: 0,
+      recordCount: 0,
+      sources: [],
+      latestTimestamp: 0,
+    };
+    current.amountNumber += record.amountNumber;
+    current.amount = formatAmount(current.amountNumber);
+    current.recordCount += 1;
+    current.latestTimestamp = Math.max(current.latestTimestamp, record.timestamp || 0);
+    if (!current.sources.includes(record.source)) current.sources.push(record.source);
+    byCoin.set(record.coin, current);
+  });
+  return Array.from(byCoin.values()).sort((a, b) => b.amountNumber - a.amountNumber);
+};
+
+export const loadBitgetEarnIncome = async ({ startTime, endTime, coin = '', includeSharkfin = true } = {}) => {
+  if (!startTime || !endTime) throw new Error('Missing Bitget Earn income date range');
+
+  const tasks = [
+    {
+      endpoint: '/api/v2/earn/savings/records',
+      params: { coin, periodType: 'flexible', orderType: 'pay_interest', startTime, endTime },
+      source: 'savings',
+      queryType: 'flexible',
+    },
+    {
+      endpoint: '/api/v2/earn/savings/records',
+      params: { coin, periodType: 'fixed', orderType: 'pay_interest', startTime, endTime },
+      source: 'savings',
+      queryType: 'fixed',
+    },
+  ];
+
+  if (includeSharkfin) {
+    tasks.push({
+      endpoint: '/api/v2/earn/sharkfin/records',
+      params: { coin, type: 'interest', startTime, endTime },
+      source: 'sharkfin',
+      queryType: 'interest',
+    });
+  }
+
+  const results = await Promise.allSettled(tasks.map((task) => fetchEarnRecords(task)));
+  const records = [];
+  const warnings = [];
+  let requestTime = Date.now();
+
+  results.forEach((result, index) => {
+    const task = tasks[index];
+    if (result.status === 'fulfilled') {
+      records.push(...result.value.records);
+      requestTime = Math.max(requestTime, result.value.requestTime || 0);
+      return;
+    }
+    warnings.push(`${task.source}:${task.queryType} ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+  });
+
+  if (records.length === 0 && warnings.length === tasks.length) {
+    throw new Error(warnings.join(' | '));
+  }
+
+  return {
+    success: true,
+    source: 'bitget',
+    startTime,
+    endTime,
+    records,
+    totals: groupEarnTotals(records),
+    warnings,
+    requestTime,
+  };
+};
+
+export const loadBitgetEarnIncomeForDate = async ({ dateKey = '', daysAgo = 1, tzOffsetHours = DEFAULT_TZ_OFFSET_HOURS, coin = '', includeSharkfin = true } = {}) => {
+  const range = getBitgetEarnDateRange({ dateKey, daysAgo, tzOffsetHours });
+  const income = await loadBitgetEarnIncome({
+    startTime: range.startTime,
+    endTime: range.endTime,
+    coin,
+    includeSharkfin,
+  });
+  return { ...income, ...range };
+};
 
 export const loadBitgetAssets = async ({ accountType = 'all', coin = '', assetType = 'hold_only' } = {}) => {
   const normalizedType = normalizeAccountType(accountType);

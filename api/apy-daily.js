@@ -1,5 +1,8 @@
+import { loadBitgetEarnIncomeForDate } from './_bitget.js';
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const TZ_OFFSET_HOURS = Number(process.env.TRANSACTION_TZ_OFFSET || 8);
 
 const json = (res, statusCode, payload) => {
   res.statusCode = statusCode;
@@ -39,6 +42,28 @@ const formatAmount = (value) => value.toLocaleString('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+const formatDateKey = (date) => {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKey = (dateKey) => {
+  const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+};
+
+const getPreviousLocalDateKey = (localNow) => {
+  const previous = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()) - 24 * 60 * 60 * 1000);
+  return formatDateKey(previous);
+};
 
 const parseApyConfigList = (value) => {
   if (Array.isArray(value)) return value;
@@ -117,6 +142,75 @@ const inferPlatformMeta = (account) => {
   return { iconType: account?.icon || 'landmark', label: account?.name || '理财账户' };
 };
 
+const findBitgetAccount = (accounts) => (
+  accounts.find(isRealtimeBalanceAccount) ||
+  accounts.find((account) => /bitget/i.test(`${account?.name || ''} ${account?.sub || ''} ${account?.icon || ''}`)) ||
+  null
+);
+
+const createBitgetEarnTransactions = async (accounts, localNow) => {
+  const dateKey = getPreviousLocalDateKey(localNow);
+  const dateParts = parseDateKey(dateKey);
+  if (!dateParts) return { processed: 0, created: 0, warnings: ['Invalid Bitget Earn date'] };
+
+  let income;
+  try {
+    income = await loadBitgetEarnIncomeForDate({ dateKey, tzOffsetHours: TZ_OFFSET_HOURS });
+  } catch (error) {
+    return {
+      processed: 0,
+      created: 0,
+      warnings: [error instanceof Error ? error.message : 'Bitget Earn income sync failed'],
+    };
+  }
+
+  const bitgetAccount = findBitgetAccount(accounts);
+  const paymentMethod = bitgetAccount?.name || 'Bitget';
+  const created = [];
+
+  for (const total of income.totals || []) {
+    if (!total.amountNumber || total.amountNumber <= 0) continue;
+    const currency = total.coin || 'USDT';
+    const note = `BITGET_EARN_DAILY:${dateKey}:${currency}`;
+    const existing = await requestSupabase(`transactions?paymentMethod=eq.${encodeURIComponent(paymentMethod)}&note=eq.${encodeURIComponent(note)}&select=id`);
+    if (existing.length > 0) continue;
+
+    const sourceLabel = total.sources?.includes('sharkfin') && total.sources?.includes('savings')
+      ? 'Savings + SharkFin'
+      : total.sources?.includes('sharkfin')
+        ? 'SharkFin'
+        : 'Savings';
+
+    const [transaction] = await requestSupabase('transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        dateLabel: `昨天 ${dateParts.month}月${dateParts.day}日`,
+        iconBg: 'bg-[#00e5c0]',
+        iconType: 'bitget',
+        title: 'Bitget 昨日理财派息',
+        subtitle: sourceLabel,
+        tag: '理财',
+        tagType: 'investment',
+        amount: `+${formatAmount(total.amountNumber)}`,
+        isIncome: true,
+        time: '23:59',
+        fullDate: `${dateParts.year}年${dateParts.month}月${dateParts.day}日 23:59`,
+        currency,
+        paymentMethod,
+        note,
+      }),
+    });
+    created.push(transaction);
+  }
+
+  return {
+    processed: income.records?.length || 0,
+    created: created.length,
+    warnings: income.warnings || [],
+    dateKey,
+  };
+};
+
 export default async function handler(_req, res) {
   try {
     const userAgent = String(_req.headers?.['user-agent'] || '');
@@ -191,7 +285,14 @@ export default async function handler(_req, res) {
       created.push(transaction);
     }
 
-    json(res, 200, { ok: true, processed: eligibleAccounts.length, created: created.length });
+    const bitgetEarn = await createBitgetEarnTransactions(accounts, localNow);
+
+    json(res, 200, {
+      ok: true,
+      processed: eligibleAccounts.length,
+      created: created.length,
+      bitgetEarn,
+    });
   } catch (error) {
     json(res, 500, { ok: false, error: error instanceof Error ? error.message : 'Unknown error' });
   }
