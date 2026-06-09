@@ -817,6 +817,13 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const budgetProgressPercent = budgetAmount > 0 ? Math.min(100, (budgetUsed / budgetAmount) * 100) : 0;
   const monthlyBalance = monthlyIncome - monthlyExpenses;
   const previousBalance = previousMonthStats.income - previousMonthStats.expense;
+  const recordExpressionPreview = useMemo(() => {
+    const raw = String(inputValue || '');
+    if (!/[+\-×÷*/]/.test(raw)) return '';
+    const result = evaluateMoneyExpression(raw);
+    if (result === null) return '';
+    return formatExpressionResult(result);
+  }, [inputValue]);
 
   const recentTransactions = useMemo(
     () => [...transactions]
@@ -2109,9 +2116,12 @@ ${transcript}
           </div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={()=>setShowInlineKeyboard(true)}>
             <span className="text-[20px] font-bold text-[#1c1c1e]">{getCurrencySymbol(recordAccount?.currency || 'CNY')}</span>
-            <div className="flex items-center flex-1 ml-[10px] h-[30px]">
-              <span className={`text-[24px] font-bold ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
-              {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px]"></div>}
+            <div className="flex items-center justify-between flex-1 ml-[10px] min-w-0 h-[34px]">
+              <div className="flex items-center min-w-0">
+                <span className={`text-[24px] font-bold truncate ${inputValue ? 'text-[#1c1c1e]' : 'text-gray-300'}`}>{inputValue || '请输入金额'}</span>
+                {showInlineKeyboard && <div className="w-[2px] h-[24px] bg-[#1677ff] animate-pulse ml-[4px] shrink-0"></div>}
+              </div>
+              {recordExpressionPreview && <span className="ml-[8px] text-[13px] font-semibold text-[#1677ff] shrink-0">= {recordExpressionPreview}</span>}
             </div>
             {showInlineKeyboard ? (
               inputValue && <XCircle onClick={(e) => {e.stopPropagation(); setInputValue('')}} className="w-[20px] h-[20px] text-gray-300 active:text-gray-400" />
@@ -2131,7 +2141,7 @@ ${transcript}
           </div>
         </div>
 
-        <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: showInlineKeyboard ? '390px' : '310px' }}>
+        <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: showInlineKeyboard ? '430px' : '310px' }}>
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-white transition-transform duration-300 ease-out pb-[20px] flex flex-col ${showInlineKeyboard ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
             <div className="px-[24px] flex-1 overflow-y-auto hide-scrollbar">
               {renderFormList()}
@@ -2185,15 +2195,17 @@ ${transcript}
               </div>
             </div>
             <div className="px-[16px] grid grid-cols-4 gap-[6px]">
-              {['1','2','3','+','4','5','6','-','7','8','9','÷','.','0','delete'].map((key) => (
+              {['1','2','3','+','4','5','6','-','7','8','9','×','.','0','delete','÷'].map((key) => (
                 <button key={key} onClick={() => handleKeyboardPress(key, 'record')} className="bg-white h-[42px] rounded-[8px] flex flex-col items-center justify-center shadow-sm active:bg-gray-100">
-                  {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','÷','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
+                  {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','×','÷','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
                 </button>
               ))}
+            </div>
+            <div className="px-[16px] pt-[8px]">
               <button
                 disabled={isSavingRecord}
                 onClick={() => (inputValue ? handleSaveRecord() : setShowInlineKeyboard(false))}
-                className="bg-[#1677ff] h-[42px] rounded-[8px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60"
+                className="w-full bg-[#1677ff] h-[42px] rounded-[10px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60"
               >
                 <span className="text-[14px] font-medium text-white">{isSavingRecord ? '保存中…' : inputValue ? '保存' : '确认'}</span>
               </button>
