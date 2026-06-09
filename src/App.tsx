@@ -668,13 +668,17 @@ function useSupabaseData() {
     };
   }, []);
 
-  useEffect(() => {
+  const exchangeRateCurrencyKey = useMemo(() => {
     const currencies = Array.from(new Set([
       DEFAULT_DISPLAY_CURRENCY,
       ...accounts.map((account) => normalizeCurrency(account.currency)),
       ...transactions.map((tx) => normalizeCurrency(tx.currency)),
-    ])).filter(Boolean);
+    ])).filter(Boolean).sort();
+    return currencies.join('|');
+  }, [accounts, transactions]);
 
+  useEffect(() => {
+    const currencies = exchangeRateCurrencyKey ? exchangeRateCurrencyKey.split('|') : [];
     let cancelled = false;
     const loadRates = async () => {
       try {
@@ -700,7 +704,7 @@ function useSupabaseData() {
     return () => {
       cancelled = true;
     };
-  }, [accounts, transactions]);
+  }, [exchangeRateCurrencyKey]);
 
   const updateTransaction = async (id, updates) => {
     const previousTransaction = transactions.find((tx) => tx.id === id);

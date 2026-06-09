@@ -251,6 +251,21 @@ const parseTransactionDate = (fullDate) => {
   return new Date(Number(year), Number(month) - 1, Number(day));
 };
 
+const parseTransactionDateTime = (fullDate) => {
+  const match = String(fullDate || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!match) return null;
+  const [, year, month, day, hours = '0', minutes = '0'] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    0,
+    0
+  );
+};
+
 const convertAmountToCny = (amount, currency, exchangeRates) => {
   const rate = exchangeRates?.[String(currency || 'CNY').toUpperCase()] ?? 0;
   return parseMoneyNumber(amount) * (String(currency || 'CNY').toUpperCase() === 'CNY' ? 1 : rate);
@@ -287,7 +302,24 @@ const isInternalAccountTransferTransaction = (tx) => {
 
 const isManualBalanceAdjustmentTransaction = (tx) => {
   const note = String(tx?.note || '').trim();
-  return note === '余额人工修正' || note === '余额人工修正（不计入统计）';
+  return note === '余额人工修正' ||
+    note === '余额人工修正（不计入统计）' ||
+    note === '余额人工修正 (不计入统计)';
+};
+
+const isBalanceSnapshotTransaction = (tx) => (
+  tx?.tagType === 'snapshot' ||
+  String(tx?.paymentMethod || '') === '__balance_snapshot__' ||
+  String(tx?.note || '').startsWith('BALANCE_SNAPSHOT:')
+);
+
+const isDailyInterestPayoutTransaction = (tx) => {
+  const note = String(tx?.note || '');
+  const title = String(tx?.title || '');
+  return note.startsWith('APY每日派息:') ||
+    note.startsWith('BITGET_EARN_DAILY:') ||
+    title.includes('每日派息') ||
+    title.includes('昨日理财派息');
 };
 
 // Reimbursable items (commute taxi, 报销 income) affect balance but are
@@ -310,6 +342,7 @@ const shouldCountInCashflow = (tx) => (
   !isAdjustmentTransaction(tx) &&
   !isInternalAccountTransferTransaction(tx) &&
   !isManualBalanceAdjustmentTransaction(tx) &&
+  !isBalanceSnapshotTransaction(tx) &&
   !isReimbursableTransaction(tx) &&
   !isManuallyExcludedFromCashflow(tx)
 );
@@ -627,7 +660,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
         const date = parseTransactionDate(tx.fullDate);
         return date && date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth && shouldCountInCashflow(tx);
       })
-      .sort((a, b) => new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime());
+      .sort((a, b) => (parseTransactionDateTime(a.fullDate)?.getTime() || 0) - (parseTransactionDateTime(b.fullDate)?.getTime() || 0));
 
     if (monthTransactions.length === 0) {
       return 'M-10,65 C20,65 30,75 50,60 C70,45 80,65 100,50 C120,35 140,55 160,25 C175,5 190,15 210,10';
@@ -704,8 +737,17 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
 
   const recentTransactions = useMemo(
     () => [...transactions]
-      .filter((tx) => !(tx.isIncome && (tx.tagType === 'investment' || tx.tag === '理财') && Math.abs(parseMoneyNumber(tx.amount)) < 0.1))
-      .sort((a, b) => new Date(b.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime() - new Date(a.fullDate.replace(/年|月/g, '-').replace('日', '')).getTime())
+      .filter((tx) => {
+        const isSmallPayout = tx.isIncome &&
+          (tx.tagType === 'investment' || tx.tag === '理财') &&
+          Math.abs(parseMoneyNumber(tx.amount)) < 0.1;
+        return !isSmallPayout || isDailyInterestPayoutTransaction(tx);
+      })
+      .sort((a, b) => {
+        const timeDiff = (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b.id || '').localeCompare(String(a.id || ''));
+      })
       .slice(0, 5),
     [transactions]
   );
