@@ -36,7 +36,7 @@ const readShortcutValue = (value) => {
   return String(value).trim();
 };
 
-const shouldSkipAutoBooking = (merchant) => /careem|zed\s*mobility/i.test(String(merchant || ''));
+const shouldSkipAutoBooking = (merchant) => /zed\s*mobility/i.test(String(merchant || ''));
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
@@ -107,11 +107,11 @@ export default async function handler(req, res) {
 
     const { dateLabel, fullDate, time, hours: rideHour } = formatTransactionDate(whenInput);
 
-    const isTaxi = /uber|taxi|出租|打车|cars taxi/i.test(String(merchant || ''));
+    const isTaxi = /uber|taxi|出租|打车|cars taxi|careem/i.test(String(merchant || ''));
     const isCommuteRide = isTaxi && Number.isFinite(rideHour);
     const rideTitle = isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : merchant;
     const baseNote = note || `自动记账${card ? ` · ${card}` : ''}`;
-    const finalNote = isCommuteRide ? `${baseNote} [报销]` : baseNote;
+    const finalNote = baseNote;
 
     const [transaction] = await requestSupabase('transactions', {
       method: 'POST',

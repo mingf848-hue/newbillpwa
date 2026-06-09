@@ -322,19 +322,12 @@ const isDailyInterestPayoutTransaction = (tx) => {
     title.includes('昨日理财派息');
 };
 
-// Reimbursable items (commute taxi, 报销 income) affect balance but are
-// excluded from monthly income/expense statistics.
+// Reimbursable items affect balance but are excluded from monthly
+// income/expense statistics.
 const isReimbursableTransaction = (tx) => {
   const tag = String(tx?.tag || '');
   const note = String(tx?.note || '');
-  const title = String(tx?.title || '');
-  if (tag === '报销' || note.includes('[报销]')) return true;
-  // Commute rides to/from work are reimbursed by the company. Catch both the
-  // explicit 打车上班/下班 wording and 交通-category rides noted as 上班/下班.
-  const text = `${title} ${note}`;
-  if (/打车上班|打车下班/.test(text)) return true;
-  const isRideContext = tx?.tagType === 'transport' || tag === '交通' || /打车|taxi|careem/i.test(text);
-  return isRideContext && /上班|下班/.test(text);
+  return tag === '报销' || note.includes('[报销]');
 };
 
 const shouldCountInCashflow = (tx) => (
