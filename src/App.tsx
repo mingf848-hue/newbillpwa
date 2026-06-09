@@ -2404,6 +2404,35 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, accounts = [], exchan
     () => filteredData.flatMap((group) => group.transactions),
     [filteredData]
   );
+  const currentDate = new Date();
+  const isViewingCurrentMonth = selectedYear === currentDate.getFullYear() && selectedMonth === currentDate.getMonth() + 1;
+  const activeBillFilterName = billFilterOptions.find((option) => option.id === selectedFilter)?.name || selectedFilter;
+  const billPeriodLabel = selectedRange === '月'
+    ? (isViewingCurrentMonth ? '本月' : selectedMonthLabel)
+    : selectedRange === '周'
+      ? `${selectedMonth}月${selectedDate}日所在周`
+      : `${selectedMonth}月${selectedDate}日`;
+  const billFilterChips = useMemo(() => {
+    const chips = [{ id: 'period', label: billPeriodLabel }];
+    if (selectedFilter !== 'all') chips.push({ id: 'account', label: activeBillFilterName });
+    if (selectedType !== '全部') chips.push({ id: 'type', label: selectedType });
+    if (searchQuery.trim()) chips.push({ id: 'search', label: `搜 "${searchQuery.trim()}"` });
+    return chips;
+  }, [activeBillFilterName, billPeriodLabel, searchQuery, selectedFilter, selectedType]);
+  const isBillFilterDirty = Boolean(searchQuery.trim()) || selectedFilter !== 'all' || selectedType !== '全部' || selectedRange !== '月' || !isViewingCurrentMonth;
+  const resetBillFilters = () => {
+    const now = new Date();
+    setSearchQuery('');
+    setSelectedFilter('all');
+    setSelectedType('全部');
+    setSelectedRange('月');
+    setSelectedYear(now.getFullYear());
+    setSelectedMonth(now.getMonth() + 1);
+    setSelectedDate(now.getDate());
+    setIsCalendarOpen(false);
+    setIsFilterOpen(false);
+    searchInputRef.current?.blur();
+  };
   const currentExpenseCny = useMemo(
     () => filteredTransactions.filter((tx) => !tx.isIncome && shouldCountInCashflow(tx)).reduce((sum, tx) => sum + getTransactionAmountCny(tx, exchangeRates, { absolute: true }), 0),
     [filteredTransactions, exchangeRates]
@@ -2537,6 +2566,30 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, accounts = [], exchan
         </div>
       </div>
 
+      <div className="px-[16px] mt-[10px]">
+        <div className={`rounded-[14px] px-[10px] py-[8px] flex items-center justify-between gap-[10px] border shadow-[0_1px_4px_rgba(0,0,0,0.02)] ${isBillFilterDirty ? 'bg-[#f7fbff] border-[#d6e8ff]' : 'bg-white/80 border-transparent'}`}>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center space-x-[6px] text-[12px] font-semibold text-[#1c1c1e]">
+              <Filter className="w-[13px] h-[13px] text-[#1677ff]" strokeWidth={2.4} />
+              <span>{filteredTransactions.length} 笔账单</span>
+            </div>
+            <div className="mt-[6px] flex items-center gap-[6px] overflow-x-auto hide-scrollbar">
+              {billFilterChips.map((chip) => (
+                <span key={chip.id} className="h-[24px] px-[9px] rounded-full bg-white text-[11px] font-medium text-[#5c5c5e] border border-[#eef1f5] whitespace-nowrap flex items-center shrink-0">
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          {isBillFilterDirty && (
+            <button onClick={resetBillFilters} className="h-[32px] px-[10px] rounded-[10px] bg-[#1677ff] text-white text-[12px] font-semibold active:bg-[#0f60d6] transition-colors shrink-0 flex items-center space-x-[4px]">
+              <X className="w-[13px] h-[13px]" strokeWidth={2.6} />
+              <span>清空</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       </div>
       </div>
 
@@ -2558,7 +2611,14 @@ const BillsPage = ({ setIsMessageCenterOpen, transactions, accounts = [], exchan
 
       <div className="px-[16px] mt-[16px] space-y-[16px] relative z-0 pb-[24px]">
         {filteredData.length === 0 ? (
-           <div className="py-[40px] text-center text-[#8e8e93] text-[13px] bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">没有找到相关交易记录</div>
+           <div className="py-[36px] text-center text-[#8e8e93] text-[13px] bg-white rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+             <div>没有找到相关交易记录</div>
+             {isBillFilterDirty && (
+               <button onClick={resetBillFilters} className="mt-[12px] px-[14px] py-[8px] rounded-[10px] bg-[#f0f6ff] text-[#1677ff] text-[13px] font-semibold active:bg-[#e1efff] transition-colors">
+                 清空筛选
+               </button>
+             )}
+           </div>
         ) : (
           filteredData.map((group, gIdx) => (
             <div key={gIdx} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
