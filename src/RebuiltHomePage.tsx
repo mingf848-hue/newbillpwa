@@ -328,8 +328,8 @@ const isReimbursableTransaction = (tx) => {
   const tag = String(tx?.tag || '');
   const note = String(tx?.note || '');
   const title = String(tx?.title || '');
-  const isTaxiRide = /打车上班|打车下班/.test(title) || /uber|taxi|出租|打车|cars taxi|careem/i.test(`${title} ${note}`);
-  return tag === '报销' || (note.includes('[报销]') && !isTaxiRide);
+  const isLegacyAutoTaxiReimbursement = /打车上班|打车下班/.test(title);
+  return tag === '报销' || (note.includes('[报销]') && !isLegacyAutoTaxiReimbursement);
 };
 
 const shouldCountInCashflow = (tx) => (
@@ -399,6 +399,7 @@ const INCOME_CATEGORIES = [
 ];
 
 const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '家庭': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '报销': 'investment', '其他': 'shopping', '转账': 'transfer' };
+const RECORD_DEFAULT_TAGS = ['工作', '生活', '家庭', '重要', '报销', '订阅', '旅行', '学习'];
 const RECORD_PREFERENCES_KEY = 'bitledger_record_preferences';
 const DEFAULT_RECORD_PREFERENCES = {
   activeTab: '支出',
@@ -442,6 +443,36 @@ const formatQuickAmountLabel = (value) => {
     minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     maximumFractionDigits: 2,
   });
+};
+
+const readRecordNoteTags = (note) => (
+  Array.from(String(note || '').matchAll(/\[([^\]]{1,12})\]/g))
+    .map((match) => match[1].trim())
+    .filter(Boolean)
+);
+
+const stripRecordNoteTags = (note) => (
+  String(note || '')
+    .replace(/\s*\[[^\]]{1,12}\]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const composeRecordNote = (note, tag) => {
+  const cleanNote = String(note || '').trim();
+  const cleanTag = String(tag || '').trim();
+  if (!cleanTag) return cleanNote;
+  const marker = `[${cleanTag}]`;
+  if (cleanNote.includes(marker)) return cleanNote;
+  return `${cleanNote} ${marker}`.trim();
+};
+
+const extractRecordNoteSuggestion = (tx) => {
+  const note = stripRecordNoteTags(tx?.note || '');
+  if (note && !/BALANCE_SNAPSHOT|APY每日派息|BITGET_EARN_DAILY|账户转账|余额人工修正/.test(note)) return note;
+  const title = String(tx?.title || '');
+  const match = title.match(/^[^（）()]+[（(](.+)[）)]$/);
+  return match?.[1]?.trim() || '';
 };
 
 const normalizeMoneyExpression = (value) => String(value || '')
@@ -815,6 +846,42 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     return unique.slice(0, 4);
   }, [transactions, recordActiveTab, recordCategory, recordCategoryIncome, recordAccount]);
 
+  const recordContextTransactions = useMemo(() => {
+    const isIncome = recordActiveTab === '收入';
+    const category = isIncome ? recordCategoryIncome : recordCategory;
+    const accountName = recordAccount?.name || '';
+    return [...transactions]
+      .filter((tx) => {
+        if (tx.isIncome !== isIncome) return false;
+        if (tx.tag !== category) return false;
+        if (accountName && tx.paymentMethod !== accountName && tx.subtitle !== accountName) return false;
+        return true;
+      })
+      .sort((a, b) => (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0));
+  }, [transactions, recordActiveTab, recordCategory, recordCategoryIncome, recordAccount]);
+
+  const recordNoteSuggestions = useMemo(() => {
+    const unique = [];
+    recordContextTransactions.forEach((tx) => {
+      const suggestion = extractRecordNoteSuggestion(tx).slice(0, 50);
+      if (suggestion && !unique.includes(suggestion)) unique.push(suggestion);
+    });
+    return unique.slice(0, 5);
+  }, [recordContextTransactions]);
+
+  const recordTagSuggestions = useMemo(() => {
+    const unique = [];
+    recordContextTransactions.forEach((tx) => {
+      readRecordNoteTags(tx.note).forEach((tag) => {
+        if (tag && !unique.includes(tag)) unique.push(tag);
+      });
+    });
+    RECORD_DEFAULT_TAGS.forEach((tag) => {
+      if (!unique.includes(tag)) unique.push(tag);
+    });
+    return unique.slice(0, 10);
+  }, [recordContextTransactions]);
+
   const resolveAccountByHint = (hint) => {
     if (!accounts.length) return null;
     const text = String(hint || '').trim().toLowerCase();
@@ -958,6 +1025,18 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const formatDateForDisplay = (date) => {
     const d = new Date(date);
     return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const getNextRecordDateAfterSave = (date) => {
+    const now = new Date();
+    const saved = new Date(date);
+    const isToday = saved.getFullYear() === now.getFullYear() &&
+      saved.getMonth() === now.getMonth() &&
+      saved.getDate() === now.getDate();
+    if (isToday) return now;
+    const next = new Date(saved);
+    next.setMinutes(next.getMinutes() + 1);
+    return next;
   };
 
   const requestVoiceParse = async (transcript) => {
@@ -1197,6 +1276,7 @@ ${transcript}
     const isIncome = recordActiveTab === '收入';
     const category = isIncome ? recordCategoryIncome : recordCategory;
     const account = recordAccount;
+    const finalNote = composeRecordNote(recordNote, recordTag);
     const { dateLabel, fullDate, time } = formatTransactionDate(recordDate);
     setIsSavingRecord(true);
     try {
@@ -1214,13 +1294,13 @@ ${transcript}
         fullDate,
         currency: account ? (account.currency || 'CNY') : 'CNY',
         paymentMethod: account ? account.name : '默认账户',
-        note: recordNote
+        note: finalNote
       });
       persistRecordPreferences({ activeTab: recordActiveTab, expenseCategory: recordCategory, incomeCategory: recordCategoryIncome, account });
       setInputValue('');
       setRecordNote('');
       setRecordTag('');
-      setRecordDate(new Date());
+      setRecordDate(getNextRecordDateAfterSave(recordDate));
       setActivePicker(null);
       setShowInlineKeyboard(false);
       notify?.('已保存，可继续记下一笔');
@@ -1511,17 +1591,32 @@ ${transcript}
             placeholder="添加备注"
             className="w-full h-[74px] bg-white rounded-[10px] p-[10px] text-[13px] text-[#1c1c1e] placeholder-[#c7c7cc] outline-none resize-none"
           />
+          {recordNoteSuggestions.length > 0 && (
+            <div className="mt-[8px] flex flex-wrap gap-[6px]">
+              {recordNoteSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => {
+                    setRecordNote(suggestion);
+                    setActivePicker(null);
+                  }}
+                  className="max-w-full h-[28px] px-[9px] rounded-full bg-white text-[11px] font-medium text-[#3a3a3c] active:bg-gray-50 truncate"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="text-right text-[10px] text-[#c7c7cc] mt-[4px]">{recordNote.length}/50</div>
         </div>
       );
     }
 
     if (picker === 'tag') {
-      const tags = ['工作', '生活', '家庭', '重要', '报销', '订阅', '旅行', '学习'];
       return (
         <div className="mt-[10px] bg-[#f7f8fb] rounded-[14px] p-[10px]">
           <div className="flex flex-wrap gap-[8px]">
-            {tags.map((tag) => {
+            {recordTagSuggestions.map((tag) => {
               const isSelected = recordTag === tag;
               return (
                 <button

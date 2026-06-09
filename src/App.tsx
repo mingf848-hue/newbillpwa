@@ -383,8 +383,8 @@ const isReimbursableTransaction = (tx) => {
   const tag = String(tx?.tag || '');
   const note = String(tx?.note || '');
   const title = String(tx?.title || '');
-  const isTaxiRide = /打车上班|打车下班/.test(title) || /uber|taxi|出租|打车|cars taxi|careem/i.test(`${title} ${note}`);
-  return tag === '报销' || (note.includes('[报销]') && !isTaxiRide);
+  const isLegacyAutoTaxiReimbursement = /打车上班|打车下班/.test(title);
+  return tag === '报销' || (note.includes('[报销]') && !isLegacyAutoTaxiReimbursement);
 };
 
 const shouldCountInCashflow = (tx) => (
