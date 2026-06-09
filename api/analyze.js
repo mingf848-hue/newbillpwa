@@ -10,13 +10,14 @@ const cleanJson = (text) => String(text || '').replace(/```json/gi, '').replace(
 const normalizeCategory = (value, isIncome = false) => {
   const source = String(value || '').trim();
   if (!source) return isIncome ? '工资' : '其他';
-  if (/food|meal|餐|外卖/i.test(source)) return '餐饮';
-  if (/transport|taxi|metro|地铁|公交|交通/i.test(source)) return '交通';
-  if (/shop|shopping|购物|超市|商店/i.test(source)) return '购物';
-  if (/fun|game|娱乐|电影/i.test(source)) return '娱乐';
-  if (/rent|home|住房|房租/i.test(source)) return '住房';
-  if (/medical|health|医院|医疗/i.test(source)) return '医疗';
-  if (/education|study|学习|教育/i.test(source)) return '教育';
+  if (/food|meal|餐|外卖|talabat|deliveroo|zomato|restaurant|cafe|coffee|starbucks|mcdonald|kfc|pizza|burger|咖啡|餐厅/i.test(source)) return '餐饮';
+  if (/transport|taxi|metro|地铁|公交|交通|careem|uber|rta|parking|salik|nol/i.test(source)) return '交通';
+  if (/shop|shopping|购物|超市|商店|amazon|noon|carrefour|lulu|spinneys|waitrose|union\s*coop|supermarket|grocery|mall|store|淘宝|京东|便利店/i.test(source)) return '购物';
+  if (/fun|game|娱乐|电影|netflix|spotify|cinema|movie|steam|playstation|xbox/i.test(source)) return '娱乐';
+  if (/rent|home|住房|房租|dewa|electric|water|utility|物业|水电/i.test(source)) return '住房';
+  if (/etisalat|\bdu\b|telecom|internet|maintenance|openai|apple(\.com| store| music| icloud| app store| itunes)|google|microsoft|adobe|github|notion|subscription|订阅|软件|宽带|话费/i.test(source)) return '家庭';
+  if (/medical|health|医院|医疗|pharmacy|hospital|clinic|doctor|药|诊所/i.test(source)) return '医疗';
+  if (/education|study|学习|教育|school|university|course|tuition|book|kindle|课程|书/i.test(source)) return '教育';
   if (/invest|理财|收益|利息/i.test(source)) return '理财';
   if (/salary|工资/i.test(source)) return '工资';
   if (/bonus|奖金/i.test(source)) return '奖金';
@@ -24,7 +25,7 @@ const normalizeCategory = (value, isIncome = false) => {
   if (/transfer|转账|划转/i.test(source)) return '转账';
   return source;
 };
-const TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
+const TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '家庭': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '其他': 'shopping', '转账': 'transfer' };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
 
 识别规则：
 1. 尽量识别真实金额、商户名、币种、时间、支付平台或账户线索。
-2. category 只能从这些中文分类中选一个：餐饮、交通、购物、娱乐、住房、医疗、教育、理财、工资、奖金、兼职、其他、转账。
+2. category 只能从这些中文分类中选一个：餐饮、交通、购物、娱乐、住房、家庭、医疗、教育、理财、工资、奖金、兼职、其他、转账。
 3. type 只能是 "expense" 或 "income"。
 4. accountHint 尽量填写：支付宝、微信、Apple Pay、银行卡、现金、OKX、Bitget、火币、HTX、币安、Bybit、Gate.io、KuCoin、MEXC；不确定就留空。
 5. 如果截图里有多笔交易，返回数组；如果只有一笔，也返回长度为 1 的数组。

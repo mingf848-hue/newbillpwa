@@ -38,6 +38,42 @@ const readShortcutValue = (value) => {
 
 const shouldSkipAutoBooking = (merchant) => /zed\s*mobility/i.test(String(merchant || ''));
 
+const MERCHANT_RULES = [
+  { match: /careem|uber|taxi|出租|打车|cars taxi|rta|metro|公交|parking|salik|nol/i, category: '交通', tagType: 'transport' },
+  { match: /talabat|deliveroo|zomato|restaurant|cafe|coffee|starbucks|mcdonald|kfc|pizza|burger|餐|外卖|咖啡|餐厅/i, category: '餐饮', tagType: 'shopping' },
+  { match: /carrefour|lulu|spinneys|waitrose|union\s*coop|supermarket|grocery|hypermarket|超市|便利店/i, category: '购物', tagType: 'shopping' },
+  { match: /amazon|noon|ikea|mall|store|shop|shopping|淘宝|京东|购物|商店/i, category: '购物', tagType: 'shopping' },
+  { match: /netflix|spotify|cinema|movie|game|steam|playstation|xbox|娱乐|电影|游戏/i, category: '娱乐', tagType: 'shopping' },
+  { match: /school|university|course|tuition|education|book|kindle|学习|教育|课程|书/i, category: '教育', tagType: 'shopping' },
+  { match: /pharmacy|hospital|clinic|medical|health|doctor|药|医院|医疗|诊所/i, category: '医疗', tagType: 'shopping' },
+  { match: /dewa|utility|electric|water|rent|物业|房租|水电/i, category: '住房', tagType: 'shopping' },
+  { match: /etisalat|\bdu\b|telecom|internet|maintenance|openai|apple(\.com| store| music| icloud| app store| itunes)|google|microsoft|adobe|github|notion|subscription|订阅|软件|宽带|话费/i, category: '家庭', tagType: 'shopping' },
+];
+
+const inferMerchantIcon = (merchant, fallback = 'apple') => {
+  const source = String(merchant || '');
+  if (/amazon/i.test(source)) return 'amazon';
+  if (/noon/i.test(source)) return 'noon';
+  if (/apple/i.test(source)) return 'apple';
+  if (/openai/i.test(source)) return 'openai';
+  if (/cash|现金/i.test(source)) return 'cash';
+  return fallback;
+};
+
+const inferMerchantMeta = (merchant, { rideHour } = {}) => {
+  const source = String(merchant || '');
+  const matched = MERCHANT_RULES.find((rule) => rule.match.test(source));
+  const isTaxi = /uber|taxi|出租|打车|cars taxi|careem/i.test(source);
+  const isCommuteRide = isTaxi && Number.isFinite(rideHour);
+  return {
+    category: matched?.category || '其他',
+    tagType: matched?.tagType || 'shopping',
+    iconType: inferMerchantIcon(source),
+    title: isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : source,
+    isCommuteRide,
+  };
+};
+
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
     json(res, 405, { error: 'Method Not Allowed' });
@@ -66,11 +102,13 @@ export default async function handler(req, res) {
     const txAmount = Math.abs(parseAmount(amount));
     if (dryRun) {
       const formatted = formatTransactionDate(whenInput);
+      const merchantMeta = inferMerchantMeta(merchant, { rideHour: formatted.hours });
       json(res, 200, {
         success: true,
         dryRun: true,
         receivedKeys: Object.keys(payload),
         parsed: { merchant, amount, txAmount, account, card, currency, date, time: bodyTime, note },
+        inferred: merchantMeta,
         formattedTime: {
           dateLabel: formatted.dateLabel,
           fullDate: formatted.fullDate,
@@ -106,10 +144,7 @@ export default async function handler(req, res) {
     }
 
     const { dateLabel, fullDate, time, hours: rideHour } = formatTransactionDate(whenInput);
-
-    const isTaxi = /uber|taxi|出租|打车|cars taxi|careem/i.test(String(merchant || ''));
-    const isCommuteRide = isTaxi && Number.isFinite(rideHour);
-    const rideTitle = isCommuteRide ? (rideHour < 14 ? '打车上班' : '打车下班') : merchant;
+    const merchantMeta = inferMerchantMeta(merchant, { rideHour });
     const baseNote = note || `自动记账${card ? ` · ${card}` : ''}`;
     const finalNote = baseNote;
 
@@ -118,11 +153,11 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         dateLabel,
         iconBg: 'bg-black',
-        iconType: 'apple',
-        title: rideTitle,
+        iconType: merchantMeta.iconType,
+        title: merchantMeta.title || merchant,
         subtitle: targetAccount.name,
-        tag: isCommuteRide ? '交通' : '其他',
-        tagType: isCommuteRide ? 'transport' : 'shopping',
+        tag: merchantMeta.category,
+        tagType: merchantMeta.tagType,
         amount: `-${formatAmount(txAmount)}`,
         isIncome: false,
         time,
