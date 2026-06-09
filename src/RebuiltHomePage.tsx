@@ -150,25 +150,37 @@ const DonutChart = () => (
 );
 
 // --- 首页极其紧凑的交易项 ---
-const TransactionItem = ({ iconBg, Icon, title, tagText, tagType, category, time, amount, amountType, onClick }) => {
+const TransactionItem = ({ Icon, title, tagText, tagType, category, time, amount, amountType, onClick, onRepeat }) => {
   const isIncome = amountType === 'income';
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center justify-between py-[10px] active:bg-[#f9f9f9] transition-colors text-left">
-      <div className="flex items-center space-x-[10px] flex-1 min-w-0">
-        <div className="w-[28px] h-[28px] flex items-center justify-center shrink-0">{Icon}</div>
-        <div className="flex flex-col justify-center min-w-0">
-          <div className="text-[13px] font-medium text-[#1c1c1e] truncate mb-[1px]">{title}</div>
-          <div className="flex items-center space-x-[6px]">
-            <span className={`text-[9px] px-[4px] py-[0.5px] rounded-[3px] font-medium ${tagType === 'expense' ? 'bg-[#f0f5ff] text-[#1677ff]' : 'bg-[#ecfdf5] text-[#10b981]'}`}>{tagText}</span>
-            <span className="text-[10px] text-[#8e8e93] truncate">{category}</span>
+    <div className="w-full flex items-center justify-between py-[8px]">
+      <button type="button" onClick={onClick} className="flex items-center justify-between flex-1 min-w-0 py-[2px] active:bg-[#f9f9f9] transition-colors text-left">
+        <div className="flex items-center space-x-[10px] flex-1 min-w-0">
+          <div className="w-[28px] h-[28px] flex items-center justify-center shrink-0">{Icon}</div>
+          <div className="flex flex-col justify-center min-w-0">
+            <div className="text-[13px] font-medium text-[#1c1c1e] truncate mb-[1px]">{title}</div>
+            <div className="flex items-center space-x-[6px]">
+              <span className={`text-[9px] px-[4px] py-[0.5px] rounded-[3px] font-medium ${tagType === 'expense' ? 'bg-[#f0f5ff] text-[#1677ff]' : 'bg-[#ecfdf5] text-[#10b981]'}`}>{tagText}</span>
+              <span className="text-[10px] text-[#8e8e93] truncate">{category}</span>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex items-center space-x-[10px] shrink-0 ml-[8px]">
-        <span className="text-[11px] text-[#8e8e93]">{time}</span>
-        <span className={`text-[14px] font-bold tracking-tight text-right min-w-[50px] ${isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{amount}</span>
-      </div>
-    </button>
+        <div className="flex items-center space-x-[10px] shrink-0 ml-[8px]">
+          <span className="text-[11px] text-[#8e8e93]">{time}</span>
+          <span className={`text-[14px] font-bold tracking-tight text-right min-w-[50px] ${isIncome ? 'text-[#10b981]' : 'text-[#ff3b30]'}`}>{amount}</span>
+        </div>
+      </button>
+      {onRepeat && (
+        <button
+          type="button"
+          onClick={onRepeat}
+          className="ml-[8px] h-[28px] px-[8px] rounded-[8px] bg-[#f0f5ff] text-[#1677ff] text-[11px] font-semibold active:bg-[#e6f0ff] transition-colors shrink-0"
+          aria-label={`再记 ${title}`}
+        >
+          再记
+        </button>
+      )}
+    </div>
   );
 };
 
@@ -988,7 +1000,7 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     return preferences;
   };
 
-  const openRecordModal = () => {
+  const openRecordModal = ({ showKeyboard = true } = {}) => {
     const preferences = readRecordPreferences();
     recordPreferencesRef.current = preferences;
     setRecordActiveTab(preferences.activeTab);
@@ -1001,7 +1013,55 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     setRecordTag('');
     setActivePicker(null);
     setActiveModal('record');
+    setShowInlineKeyboard(showKeyboard);
+  };
+
+  const resolveRecordAccountFromTransaction = (tx) => {
+    if (!accounts.length) return null;
+    return accounts.find((account) => account.name === tx?.paymentMethod) ||
+      accounts.find((account) => account.name === tx?.subtitle) ||
+      resolveAccountByHint(`${tx?.paymentMethod || ''} ${tx?.subtitle || ''} ${tx?.iconType || ''}`);
+  };
+
+  const normalizeRecordCategoryForTab = (category, isIncome) => {
+    const list = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    return categoryExists(list, category) ? category : (isIncome ? DEFAULT_RECORD_PREFERENCES.incomeCategory : DEFAULT_RECORD_PREFERENCES.expenseCategory);
+  };
+
+  const canRepeatRecordTransaction = (tx) => !!tx &&
+    !isTransferTransaction(tx) &&
+    !isInternalAccountTransferTransaction(tx) &&
+    !isAdjustmentTransaction(tx) &&
+    !isManualBalanceAdjustmentTransaction(tx) &&
+    !isBalanceSnapshotTransaction(tx) &&
+    !isDailyInterestPayoutTransaction(tx);
+
+  const openRecordFromTransaction = (tx) => {
+    if (!canRepeatRecordTransaction(tx)) {
+      notify?.('这类记录不适合直接再记');
+      return;
+    }
+    const isIncome = !!tx.isIncome;
+    const category = normalizeRecordCategoryForTab(tx.tag, isIncome);
+    const account = resolveRecordAccountFromTransaction(tx);
+    const tags = readRecordNoteTags(tx.note);
+    setRecordActiveTab(isIncome ? '收入' : '支出');
+    if (isIncome) setRecordCategoryIncome(category);
+    else setRecordCategory(category);
+    setRecordAccount(account);
+    setRecordDate(new Date());
+    setInputValue(formatExpressionResult(Math.abs(parseMoneyNumber(tx.amount))));
+    setRecordNote(extractRecordNoteSuggestion(tx).slice(0, 50));
+    setRecordTag(tags[0] || '');
+    setActivePicker(null);
+    setActiveModal('record');
     setShowInlineKeyboard(false);
+    persistRecordPreferences({
+      activeTab: isIncome ? '收入' : '支出',
+      expenseCategory: isIncome ? recordCategory : category,
+      incomeCategory: isIncome ? category : recordCategoryIncome,
+      account,
+    });
   };
 
   // Init account selections when accounts load
@@ -1842,7 +1902,6 @@ ${transcript}
             {recentTransactions.map((tx) => (
               <TransactionItem
                 key={tx.id || `${tx.title}-${tx.fullDate}`}
-                iconBg={tx.iconBg}
                 Icon={getHomeTransactionIcon(tx)}
                 title={tx.title}
                 tagText={tx.isIncome ? '收入' : '支出'}
@@ -1852,6 +1911,7 @@ ${transcript}
                 amount={tx.amount}
                 amountType={tx.isIncome ? 'income' : 'expense'}
                 onClick={() => onOpenBills?.()}
+                onRepeat={canRepeatRecordTransaction(tx) ? () => openRecordFromTransaction(tx) : null}
               />
             ))}
           </div>
@@ -2031,8 +2091,12 @@ ${transcript}
                   {key === 'delete' ? <Delete className="w-[18px] h-[18px] text-[#1c1c1e]" /> : <span className={`${['+','-','÷','.'].includes(key) ? 'text-[22px]' : 'text-[18px]'} font-medium text-[#1c1c1e] leading-none`}>{key}</span>}
                 </button>
               ))}
-              <button onClick={() => setShowInlineKeyboard(false)} className="bg-[#1677ff] h-[42px] rounded-[8px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors">
-                <span className="text-[14px] font-medium text-white">确认</span>
+              <button
+                disabled={isSavingRecord}
+                onClick={() => (inputValue ? handleSaveRecord() : setShowInlineKeyboard(false))}
+                className="bg-[#1677ff] h-[42px] rounded-[8px] flex items-center justify-center shadow-md shadow-blue-200 active:bg-blue-700 transition-colors disabled:opacity-60"
+              >
+                <span className="text-[14px] font-medium text-white">{isSavingRecord ? '保存中…' : inputValue ? '保存' : '确认'}</span>
               </button>
             </div>
           </div>
