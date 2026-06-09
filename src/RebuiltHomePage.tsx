@@ -894,6 +894,46 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     return unique.slice(0, 10);
   }, [recordContextTransactions]);
 
+  const recordQuickCategories = useMemo(() => {
+    const isIncome = recordActiveTab === '收入';
+    const selected = isIncome ? recordCategoryIncome : recordCategory;
+    const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    const recency = new Map();
+    transactions.forEach((tx) => {
+      if (tx.isIncome !== isIncome || !tx.tag) return;
+      const time = parseTransactionDateTime(tx.fullDate)?.getTime() || 0;
+      recency.set(tx.tag, Math.max(recency.get(tx.tag) || 0, time));
+    });
+    return [...categories].sort((a, b) => {
+      if (a.name === selected) return -1;
+      if (b.name === selected) return 1;
+      const timeDiff = (recency.get(b.name) || 0) - (recency.get(a.name) || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return categories.findIndex((item) => item.name === a.name) - categories.findIndex((item) => item.name === b.name);
+    });
+  }, [transactions, recordActiveTab, recordCategory, recordCategoryIncome]);
+
+  const recordQuickAccounts = useMemo(() => {
+    if (!accounts.length) return [];
+    const isIncome = recordActiveTab === '收入';
+    const category = isIncome ? recordCategoryIncome : recordCategory;
+    const recency = new Map();
+    transactions.forEach((tx) => {
+      if (tx.isIncome !== isIncome || tx.tag !== category) return;
+      const time = parseTransactionDateTime(tx.fullDate)?.getTime() || 0;
+      [tx.paymentMethod, tx.subtitle].filter(Boolean).forEach((name) => {
+        recency.set(name, Math.max(recency.get(name) || 0, time));
+      });
+    });
+    return [...accounts].sort((a, b) => {
+      if (recordAccount?.id === a.id) return -1;
+      if (recordAccount?.id === b.id) return 1;
+      const timeDiff = Math.max(recency.get(b.name) || 0, recency.get(b.sub) || 0) - Math.max(recency.get(a.name) || 0, recency.get(a.sub) || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return accounts.findIndex((item) => item.id === a.id) - accounts.findIndex((item) => item.id === b.id);
+    });
+  }, [accounts, transactions, recordActiveTab, recordCategory, recordCategoryIncome, recordAccount]);
+
   const resolveAccountByHint = (hint) => {
     if (!accounts.length) return null;
     const text = String(hint || '').trim().toLowerCase();
@@ -1026,6 +1066,34 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const normalizeRecordCategoryForTab = (category, isIncome) => {
     const list = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     return categoryExists(list, category) ? category : (isIncome ? DEFAULT_RECORD_PREFERENCES.incomeCategory : DEFAULT_RECORD_PREFERENCES.expenseCategory);
+  };
+
+  const resolveRecentAccountForCategory = (category, isIncome) => {
+    const recent = [...transactions]
+      .filter((tx) => tx.isIncome === isIncome && tx.tag === category)
+      .sort((a, b) => (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0));
+    for (const tx of recent) {
+      const account = resolveRecordAccountFromTransaction(tx);
+      if (account) return account;
+    }
+    return null;
+  };
+
+  const applyRecordCategory = (category, isIncome = recordActiveTab === '收入') => {
+    const normalized = normalizeRecordCategoryForTab(category, isIncome);
+    if (isIncome) setRecordCategoryIncome(normalized);
+    else setRecordCategory(normalized);
+    const recentAccount = resolveRecentAccountForCategory(normalized, isIncome);
+    if (recentAccount) setRecordAccount(recentAccount);
+  };
+
+  const handleRecordTabChange = (tab) => {
+    const isIncome = tab === '收入';
+    setRecordActiveTab(tab);
+    setActivePicker(null);
+    const category = isIncome ? recordCategoryIncome : recordCategory;
+    const recentAccount = resolveRecentAccountForCategory(category, isIncome);
+    if (recentAccount) setRecordAccount(recentAccount);
   };
 
   const canRepeatRecordTransaction = (tx) => !!tx &&
@@ -1572,8 +1640,7 @@ ${transcript}
                 <button
                   key={item.name}
                   onClick={() => {
-                    if (recordActiveTab === '收入') setRecordCategoryIncome(item.name);
-                    else setRecordCategory(item.name);
+                    applyRecordCategory(item.name, recordActiveTab === '收入');
                     setActivePicker(null);
                   }}
                   className={`h-[64px] rounded-[12px] flex flex-col items-center justify-center space-y-[5px] transition-colors ${isSelected ? 'bg-white ring-2 ring-[#1677ff]/70 shadow-sm' : 'bg-white/70 active:bg-white'}`}
@@ -2038,7 +2105,7 @@ ${transcript}
             </button>
           </div>
           <div className="flex space-x-[20px] border-b border-gray-50 px-[20px] pt-[8px] pb-[8px]">
-            {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>{setRecordActiveTab(tab); setActivePicker(null);}} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
+            {['支出','收入'].map(tab=>(<button key={tab} onClick={()=>handleRecordTabChange(tab)} className={`text-[15px] font-medium relative ${recordActiveTab===tab?'text-[#1677ff]':'text-gray-400'}`}>{tab}{recordActiveTab===tab && <div className="absolute -bottom-[8px] left-0 right-0 h-[2px] bg-[#1677ff]"></div>}</button>))}
           </div>
           <div className="flex items-center justify-between border-b border-gray-50 py-[12px] px-[20px] cursor-pointer" onClick={()=>setShowInlineKeyboard(true)}>
             <span className="text-[20px] font-bold text-[#1c1c1e]">{getCurrencySymbol(recordAccount?.currency || 'CNY')}</span>
@@ -2064,7 +2131,7 @@ ${transcript}
           </div>
         </div>
 
-        <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: '310px' }}>
+        <div className="relative overflow-hidden transition-all duration-300 ease-out" style={{ height: showInlineKeyboard ? '390px' : '310px' }}>
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-white transition-transform duration-300 ease-out pb-[20px] flex flex-col ${showInlineKeyboard ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
             <div className="px-[24px] flex-1 overflow-y-auto hide-scrollbar">
               {renderFormList()}
@@ -2076,6 +2143,38 @@ ${transcript}
           </div>
 
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-[#f4f5f8] transition-transform duration-300 ease-out flex flex-col pb-[16px] pt-[8px] ${showInlineKeyboard ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
+            <div className="px-[16px] pb-[7px] flex space-x-[6px] overflow-x-auto hide-scrollbar">
+              {recordQuickCategories.map((item) => {
+                const IconComp = item.icon;
+                const selected = (recordActiveTab === '收入' ? recordCategoryIncome : recordCategory) === item.name;
+                return (
+                  <button
+                    key={item.name}
+                    onClick={() => applyRecordCategory(item.name, recordActiveTab === '收入')}
+                    className={`h-[32px] px-[9px] rounded-full flex items-center space-x-[5px] shrink-0 transition-colors ${selected ? 'bg-[#1677ff] text-white shadow-sm' : 'bg-white text-[#3a3a3c] active:bg-gray-100'}`}
+                  >
+                    <IconComp className="w-[12px] h-[12px]" strokeWidth={2.5} />
+                    <span className="text-[12px] font-medium">{item.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-[16px] pb-[7px] flex space-x-[6px] overflow-x-auto hide-scrollbar">
+              {recordQuickAccounts.map((account) => {
+                const selected = recordAccount?.id === account.id;
+                return (
+                  <button
+                    key={account.id}
+                    onClick={() => setRecordAccount(account)}
+                    className={`h-[32px] px-[8px] rounded-full flex items-center space-x-[5px] shrink-0 transition-colors ${selected ? 'bg-[#ecfdf5] text-[#0f9d58] ring-1 ring-[#10b981]/40' : 'bg-white text-[#3a3a3c] active:bg-gray-100'}`}
+                  >
+                    <HomeBrandLogo type={account.icon || 'landmark'} size={18} />
+                    <span className="text-[12px] font-medium max-w-[92px] truncate">{account.name}</span>
+                  </button>
+                );
+              })}
+              {recordQuickAccounts.length === 0 && <div className="h-[32px] px-[10px] rounded-full bg-white text-[12px] text-[#8e8e93] shrink-0 flex items-center">暂无账户</div>}
+            </div>
             <div className="px-[16px] pb-[8px] flex justify-between space-x-[8px]">
               {recordQuickAmounts.map(val => (<button key={val} onClick={() => addQuickAmount(val)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{formatQuickAmountLabel(val)}</button>))}
             </div>
