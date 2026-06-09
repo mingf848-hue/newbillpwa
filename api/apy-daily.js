@@ -43,6 +43,17 @@ const formatAmount = (value) => value.toLocaleString('en-US', {
   maximumFractionDigits: 2,
 });
 
+const formatPayoutAmount = (value) => {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0';
+  const abs = Math.abs(amount);
+  if (abs >= 1) return formatAmount(amount);
+  return amount.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: abs >= 0.01 ? 4 : 8,
+  });
+};
+
 const formatDateKey = (date) => {
   const year = date.getUTCFullYear();
   const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
@@ -153,6 +164,11 @@ const createBitgetEarnTransactions = async (accounts, localNow) => {
   const dateParts = parseDateKey(dateKey);
   if (!dateParts) return { processed: 0, created: 0, warnings: ['Invalid Bitget Earn date'] };
 
+  const bitgetAccount = findBitgetAccount(accounts);
+  if (!bitgetAccount) {
+    return { processed: 0, created: 0, warnings: ['No Bitget account found, skipped Earn payout import'], dateKey };
+  }
+
   let income;
   try {
     income = await loadBitgetEarnIncomeForDate({ dateKey, tzOffsetHours: TZ_OFFSET_HOURS });
@@ -164,15 +180,14 @@ const createBitgetEarnTransactions = async (accounts, localNow) => {
     };
   }
 
-  const bitgetAccount = findBitgetAccount(accounts);
-  const paymentMethod = bitgetAccount?.name || 'Bitget';
+  const paymentMethod = bitgetAccount.name || 'Bitget';
   const created = [];
 
   for (const total of income.totals || []) {
     if (!total.amountNumber || total.amountNumber <= 0) continue;
     const currency = total.coin || 'USDT';
     const note = `BITGET_EARN_DAILY:${dateKey}:${currency}`;
-    const existing = await requestSupabase(`transactions?paymentMethod=eq.${encodeURIComponent(paymentMethod)}&note=eq.${encodeURIComponent(note)}&select=id`);
+    const existing = await requestSupabase(`transactions?note=eq.${encodeURIComponent(note)}&select=id`);
     if (existing.length > 0) continue;
 
     const sourceLabel = total.sources?.includes('sharkfin') && total.sources?.includes('savings')
@@ -191,7 +206,7 @@ const createBitgetEarnTransactions = async (accounts, localNow) => {
         subtitle: sourceLabel,
         tag: '理财',
         tagType: 'investment',
-        amount: `+${formatAmount(total.amountNumber)}`,
+        amount: `+${formatPayoutAmount(total.amountNumber)}`,
         isIncome: true,
         time: '23:59',
         fullDate: `${dateParts.year}年${dateParts.month}月${dateParts.day}日 23:59`,
@@ -223,13 +238,13 @@ export default async function handler(_req, res) {
       return;
     }
 
-    const localNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const localNow = new Date(Date.now() + TZ_OFFSET_HOURS * 60 * 60 * 1000);
     const today = localNow.toISOString().slice(0, 10);
     const note = `APY每日派息:${today}`;
     const accounts = await requestSupabase('accounts?select=*');
     const eligibleAccounts = accounts
       .map((account) => ({ account, breakdown: getDailyInterestBreakdown(account) }))
-      .filter(({ breakdown }) => breakdown.total > 0);
+      .filter(({ account, breakdown }) => !isRealtimeBalanceAccount(account) && breakdown.total > 0);
     const created = [];
 
     for (const { account, breakdown } of eligibleAccounts) {
@@ -255,7 +270,7 @@ export default async function handler(_req, res) {
           subtitle: platformMeta.label,
           tag: '理财',
           tagType: 'investment',
-          amount: `+${formatAmount(interest)}`,
+          amount: `+${formatPayoutAmount(interest)}`,
           isIncome: true,
           time: `${hours}:${minutes}`,
           fullDate: `${year}年${month}月${day}日 ${hours}:${minutes}`,

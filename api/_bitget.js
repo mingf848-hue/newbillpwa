@@ -287,6 +287,16 @@ const groupEarnTotals = (records) => {
   return Array.from(byCoin.values()).sort((a, b) => b.amountNumber - a.amountNumber);
 };
 
+const dedupeEarnRecords = (records) => {
+  const seen = new Set();
+  return records.filter((record) => {
+    const key = `${record.source}:${record.queryType}:${record.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const loadBitgetEarnIncome = async ({ startTime, endTime, coin = '', includeSharkfin = true } = {}) => {
   if (!startTime || !endTime) throw new Error('Missing Bitget Earn income date range');
 
@@ -333,13 +343,15 @@ export const loadBitgetEarnIncome = async ({ startTime, endTime, coin = '', incl
     throw new Error(warnings.join(' | '));
   }
 
+  const dedupedRecords = dedupeEarnRecords(records);
+
   return {
     success: true,
     source: 'bitget',
     startTime,
     endTime,
-    records,
-    totals: groupEarnTotals(records),
+    records: dedupedRecords,
+    totals: groupEarnTotals(dedupedRecords),
     warnings,
     requestTime,
   };

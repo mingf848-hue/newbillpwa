@@ -2658,6 +2658,7 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
   const [selectedIcon, setSelectedIcon] = useState<string>('cash');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const bitgetSyncInFlightRef = useRef(false);
   const [bitgetSync, setBitgetSync] = useState({
     loading: false,
     assets: [],
@@ -2721,7 +2722,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
 
   const syncBitgetAssets = async (mode = 'detail', options = {}) => {
     const { silent = false, applyToForm = true } = options;
-    if (bitgetSync.loading || liveBitgetSync.loading) return;
+    if (bitgetSyncInFlightRef.current || bitgetSync.loading || liveBitgetSync.loading) return;
+    bitgetSyncInFlightRef.current = true;
     const accountType = 'all';
     const isLiveMode = mode === 'live';
 
@@ -2752,6 +2754,8 @@ const AssetsPage = ({ setIsMessageCenterOpen, accounts, transactions = [], excha
         setBitgetSync((prev) => ({ ...prev, loading: false, error: message }));
       }
       if (!silent) notify?.(message);
+    } finally {
+      bitgetSyncInFlightRef.current = false;
     }
   };
 
