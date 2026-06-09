@@ -399,6 +399,50 @@ const INCOME_CATEGORIES = [
 ];
 
 const RECORD_TAG_TYPE_MAP = { '餐饮': 'shopping', '交通': 'transport', '购物': 'shopping', '娱乐': 'shopping', '住房': 'shopping', '家庭': 'shopping', '医疗': 'shopping', '教育': 'shopping', '理财': 'investment', '工资': 'investment', '奖金': 'investment', '兼职': 'investment', '报销': 'investment', '其他': 'shopping', '转账': 'transfer' };
+const RECORD_PREFERENCES_KEY = 'bitledger_record_preferences';
+const DEFAULT_RECORD_PREFERENCES = {
+  activeTab: '支出',
+  expenseCategory: '餐饮',
+  incomeCategory: '工资',
+  accountId: '',
+  accountName: '',
+};
+
+const categoryExists = (items, category) => items.some((item) => item.name === category);
+
+const normalizeRecordPreferences = (preferences = {}) => ({
+  activeTab: preferences.activeTab === '收入' ? '收入' : '支出',
+  expenseCategory: categoryExists(EXPENSE_CATEGORIES, preferences.expenseCategory) ? preferences.expenseCategory : DEFAULT_RECORD_PREFERENCES.expenseCategory,
+  incomeCategory: categoryExists(INCOME_CATEGORIES, preferences.incomeCategory) ? preferences.incomeCategory : DEFAULT_RECORD_PREFERENCES.incomeCategory,
+  accountId: preferences.accountId ? String(preferences.accountId) : '',
+  accountName: preferences.accountName ? String(preferences.accountName) : '',
+});
+
+const readRecordPreferences = () => {
+  if (typeof window === 'undefined') return DEFAULT_RECORD_PREFERENCES;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(RECORD_PREFERENCES_KEY) || '{}');
+    return normalizeRecordPreferences(parsed);
+  } catch {
+    return DEFAULT_RECORD_PREFERENCES;
+  }
+};
+
+const writeRecordPreferences = (preferences) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(RECORD_PREFERENCES_KEY, JSON.stringify(normalizeRecordPreferences(preferences)));
+  } catch {}
+};
+
+const formatQuickAmountLabel = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '0';
+  return amount.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+};
 
 const normalizeMoneyExpression = (value) => String(value || '')
   .replace(/,/g, '')
@@ -499,7 +543,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const [activeModal, setActiveModal] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
-  const [recordActiveTab, setRecordActiveTab] = useState('支出');
+  const recordPreferencesRef = useRef(readRecordPreferences());
+  const [recordActiveTab, setRecordActiveTab] = useState(() => recordPreferencesRef.current.activeTab);
   const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -513,8 +558,8 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
   const receiptInputRef = useRef(null);
 
   // Record form state
-  const [recordCategory, setRecordCategory] = useState('餐饮');
-  const [recordCategoryIncome, setRecordCategoryIncome] = useState('工资');
+  const [recordCategory, setRecordCategory] = useState(() => recordPreferencesRef.current.expenseCategory);
+  const [recordCategoryIncome, setRecordCategoryIncome] = useState(() => recordPreferencesRef.current.incomeCategory);
   const [recordAccount, setRecordAccount] = useState(null);
   const [recordDate, setRecordDate] = useState(() => new Date());
   const [recordNote, setRecordNote] = useState('');
@@ -747,6 +792,29 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     [transactions]
   );
 
+  const recordQuickAmounts = useMemo(() => {
+    const isIncome = recordActiveTab === '收入';
+    const category = isIncome ? recordCategoryIncome : recordCategory;
+    const accountName = recordAccount?.name || '';
+    const recentAmounts = [...transactions]
+      .filter((tx) => {
+        if (tx.isIncome !== isIncome) return false;
+        if (tx.tag !== category) return false;
+        if (accountName && tx.paymentMethod !== accountName && tx.subtitle !== accountName) return false;
+        return Math.abs(parseMoneyNumber(tx.amount)) > 0;
+      })
+      .sort((a, b) => (parseTransactionDateTime(b.fullDate)?.getTime() || 0) - (parseTransactionDateTime(a.fullDate)?.getTime() || 0))
+      .map((tx) => Math.abs(parseMoneyNumber(tx.amount)))
+      .filter((amount) => amount > 0);
+    const defaults = isIncome ? [100, 500, 1000, 5000] : [10, 50, 100, 200];
+    const unique = [];
+    [...recentAmounts, ...defaults].forEach((amount) => {
+      const normalized = Number(amount.toFixed(2));
+      if (!unique.some((item) => Math.abs(item - normalized) < 0.01)) unique.push(normalized);
+    });
+    return unique.slice(0, 4);
+  }, [transactions, recordActiveTab, recordCategory, recordCategoryIncome, recordAccount]);
+
   const resolveAccountByHint = (hint) => {
     if (!accounts.length) return null;
     const text = String(hint || '').trim().toLowerCase();
@@ -833,10 +901,47 @@ export default function RebuiltHomePage({ setIsMessageCenterOpen, transactions =
     };
   };
 
+  const resolveRecordAccountFromPreferences = (preferences = recordPreferencesRef.current) => {
+    if (!accounts.length) return null;
+    return accounts.find((account) => preferences.accountId && String(account.id) === String(preferences.accountId)) ||
+      accounts.find((account) => preferences.accountName && account.name === preferences.accountName) ||
+      accounts[0];
+  };
+
+  const persistRecordPreferences = ({ activeTab = recordActiveTab, expenseCategory = recordCategory, incomeCategory = recordCategoryIncome, account = recordAccount } = {}) => {
+    const preferences = normalizeRecordPreferences({
+      activeTab,
+      expenseCategory,
+      incomeCategory,
+      accountId: account?.id || '',
+      accountName: account?.name || '',
+    });
+    recordPreferencesRef.current = preferences;
+    writeRecordPreferences(preferences);
+    return preferences;
+  };
+
+  const openRecordModal = () => {
+    const preferences = readRecordPreferences();
+    recordPreferencesRef.current = preferences;
+    setRecordActiveTab(preferences.activeTab);
+    setRecordCategory(preferences.expenseCategory);
+    setRecordCategoryIncome(preferences.incomeCategory);
+    setRecordAccount(resolveRecordAccountFromPreferences(preferences));
+    setRecordDate(new Date());
+    setInputValue('');
+    setRecordNote('');
+    setRecordTag('');
+    setActivePicker(null);
+    setActiveModal('record');
+    setShowInlineKeyboard(false);
+  };
+
   // Init account selections when accounts load
   useEffect(() => {
     if (accounts.length > 0) {
-      if (!recordAccount) setRecordAccount(accounts[0]);
+      const currentAccountExists = recordAccount && accounts.some((account) => account.id === recordAccount.id);
+      if (!currentAccountExists) setRecordAccount(resolveRecordAccountFromPreferences());
       if (!transferOutAccount) setTransferOutAccount(accounts[0]);
       if (!transferInAccount && accounts.length > 1) setTransferInAccount(accounts[1]);
       else if (!transferInAccount) setTransferInAccount(accounts[0]);
@@ -1085,6 +1190,7 @@ ${transcript}
 
   const handleSaveRecord = async () => {
     if (isSavingRecord) return;
+    if (!createTransaction) { notify?.('当前无法保存，请稍后重试'); return; }
     const amount = evaluateMoneyExpression(inputValue);
     if (!amount) { notify?.('请输入有效金额'); setShowInlineKeyboard(true); return; }
     setInputValue(formatExpressionResult(amount));
@@ -1094,23 +1200,30 @@ ${transcript}
     const { dateLabel, fullDate, time } = formatTransactionDate(recordDate);
     setIsSavingRecord(true);
     try {
-    await saveTransaction({
-      dateLabel,
-      iconBg: account ? `bg-[#1677ff]` : (isIncome ? 'bg-[#10b981]' : 'bg-[#1677ff]'),
-      iconType: account ? (account.icon || 'landmark') : (isIncome ? 'landmark' : 'alipay'),
-      title: category + (recordNote ? `（${recordNote}）` : ''),
-      subtitle: account ? account.name : (isIncome ? '收入账户' : '支出账户'),
-      tag: category,
-      tagType: RECORD_TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
-      amount: `${isIncome ? '+' : '-'}${formatMoney(amount)}`,
-      isIncome,
-      time,
-      fullDate,
-      currency: account ? (account.currency || 'CNY') : 'CNY',
-      paymentMethod: account ? account.name : '默认账户',
-      note: recordNote
-    });
-    notify?.('已保存');
+      await createTransaction({
+        dateLabel,
+        iconBg: account ? `bg-[#1677ff]` : (isIncome ? 'bg-[#10b981]' : 'bg-[#1677ff]'),
+        iconType: account ? (account.icon || 'landmark') : (isIncome ? 'landmark' : 'alipay'),
+        title: category + (recordNote ? `（${recordNote}）` : ''),
+        subtitle: account ? account.name : (isIncome ? '收入账户' : '支出账户'),
+        tag: category,
+        tagType: RECORD_TAG_TYPE_MAP[category] || (isIncome ? 'investment' : 'shopping'),
+        amount: `${isIncome ? '+' : '-'}${formatMoney(amount)}`,
+        isIncome,
+        time,
+        fullDate,
+        currency: account ? (account.currency || 'CNY') : 'CNY',
+        paymentMethod: account ? account.name : '默认账户',
+        note: recordNote
+      });
+      persistRecordPreferences({ activeTab: recordActiveTab, expenseCategory: recordCategory, incomeCategory: recordCategoryIncome, account });
+      setInputValue('');
+      setRecordNote('');
+      setRecordTag('');
+      setRecordDate(new Date());
+      setActivePicker(null);
+      setShowInlineKeyboard(false);
+      notify?.('已保存，可继续记下一笔');
     } catch (e) {
       notify?.('保存失败，请重试');
     } finally {
@@ -1144,6 +1257,15 @@ ${transcript}
     try {
       for (const [index, item] of aiDraft.items.entries()) {
         await createTransaction(buildTransactionFromAiItem(item, index));
+      }
+      const lastItem = aiDraft.items[aiDraft.items.length - 1];
+      if (lastItem) {
+        persistRecordPreferences({
+          activeTab: lastItem.isIncome ? '收入' : '支出',
+          expenseCategory: lastItem.isIncome ? recordCategory : lastItem.category,
+          incomeCategory: lastItem.isIncome ? lastItem.category : recordCategoryIncome,
+          account: lastItem.account || recordAccount,
+        });
       }
       notify?.(`AI 记账成功${aiDraft.items.length > 1 ? `，已保存 ${aiDraft.items.length} 笔` : ''}`);
       closeModals();
@@ -1234,6 +1356,17 @@ ${transcript}
   };
 
   const changeCalendarYear = (delta) => setSelectedYear((prev) => prev + delta);
+  const jumpToCurrentMonth = () => {
+    const now = new Date();
+    setSelectedYear(now.getFullYear());
+    setSelectedMonth(now.getMonth() + 1);
+    setCalendarView('月');
+    setIsCalendarOpen(false);
+  };
+  const openCalendarSelector = (view = '月') => {
+    setCalendarView(view);
+    setIsCalendarOpen(true);
+  };
   const toggleRecordPicker = (picker) => {
     setActivePicker((current) => current === picker ? null : picker);
   };
@@ -1513,14 +1646,17 @@ ${transcript}
                     </div>
                   )}
                   <div className="flex items-center justify-between mt-[16px] px-[4px]">
-                    <button onClick={() => { setSelectedMonth(4); setSelectedYear(2026); }} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">本月</button>
+                    <button onClick={jumpToCurrentMonth} className="text-[14px] text-[#1677ff] font-medium px-[8px] py-[4px] active:opacity-60">本月</button>
                     <button onClick={() => setIsCalendarOpen(false)} className="bg-[#1677ff] text-white px-[20px] py-[8px] rounded-[10px] text-[13px] font-semibold active:bg-[#1565d8] shadow-[0_2px_10px_rgba(22,119,255,0.2)]">确定</button>
                   </div>
                 </div>
               </>
             )}
           </div>
-          <div className="flex bg-white rounded-[6px] p-[2.5px] shadow-sm"><span className="px-[12px] py-[2px] text-[12px] font-semibold text-[#1677ff] bg-[#f0f5ff] rounded-[4px]">月</span><span className="px-[12px] py-[2px] text-[12px] font-medium text-[#8e8e93]">年</span></div>
+          <div className="flex bg-white rounded-[6px] p-[2.5px] shadow-sm">
+            <button onClick={() => openCalendarSelector('月')} className={`px-[12px] py-[2px] text-[12px] rounded-[4px] active:opacity-70 ${calendarView === '月' && isCalendarOpen ? 'font-semibold text-[#1677ff] bg-[#f0f5ff]' : 'font-medium text-[#8e8e93]'}`}>月</button>
+            <button onClick={() => openCalendarSelector('年')} className={`px-[12px] py-[2px] text-[12px] rounded-[4px] active:opacity-70 ${calendarView === '年' && isCalendarOpen ? 'font-semibold text-[#1677ff] bg-[#f0f5ff]' : 'font-medium text-[#8e8e93]'}`}>年</button>
+          </div>
         </div>
 
         {/* 余额卡片 */}
@@ -1539,7 +1675,7 @@ ${transcript}
         </div>
 
         <div className="flex justify-between items-center px-[12px] py-[6px]">
-          <div onClick={() => { setRecordDate(new Date()); setInputValue(''); setRecordNote(''); setRecordTag(''); setActivePicker(null); setActiveModal('record'); setShowInlineKeyboard(false); }} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
+          <div onClick={openRecordModal} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><PenLine className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">记一笔</span></div>
           <div onClick={() => setActiveModal('budget')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#10b981] rounded-full flex items-center justify-center shadow-md shadow-green-100/50"><PieChartIcon className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">预算</span></div>
           <div onClick={() => setActiveModal('transfer')} className="flex flex-col items-center space-y-[6px] cursor-pointer active:scale-90 transition-transform"><div className="w-[44px] h-[44px] bg-[#8b5cf6] rounded-full flex items-center justify-center shadow-md shadow-purple-100/50"><ArrowRightLeft className="w-[20px] h-[20px] text-white" /></div><span className="text-[11px] font-medium text-[#1c1c1e]">转账</span></div>
           <div onPointerDown={handleAiStart} onPointerUp={handleAiEnd} onPointerCancel={handleAiEnd} className="flex flex-col items-center space-y-[6px] relative active:scale-95 transition-transform cursor-pointer touch-none"><div className="w-[44px] h-[44px] bg-[#1677ff] rounded-full flex items-center justify-center shadow-md shadow-blue-100/50"><Mic className="w-[20px] h-[20px] text-white" strokeWidth={2} /><div className="absolute -top-[2px] -right-[4px] bg-gradient-to-r from-[#ff6b8b] to-[#ff8787] text-white text-[7px] font-extrabold px-[3px] py-[1.5px] rounded-full border border-white leading-none">AI</div></div><span className="text-[11px] font-medium text-[#1c1c1e]">智记</span></div>
@@ -1780,13 +1916,13 @@ ${transcript}
             </div>
             <div className="px-[24px] pb-[10px] flex space-x-[12px]">
               <button onClick={closeModals} className="flex-1 h-[44px] rounded-[10px] border border-gray-200 font-medium active:bg-gray-50 transition-colors">取消</button>
-              <button disabled={isSavingRecord} onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '保存'}</button>
+              <button disabled={isSavingRecord} onClick={handleSaveRecord} className="flex-1 h-[44px] bg-[#1677ff] text-white rounded-[10px] font-medium active:bg-blue-700 transition-colors disabled:opacity-60">{isSavingRecord ? '保存中…' : '保存并继续'}</button>
             </div>
           </div>
 
           <div className={`absolute top-0 left-0 right-0 w-full h-full bg-[#f4f5f8] transition-transform duration-300 ease-out flex flex-col pb-[16px] pt-[8px] ${showInlineKeyboard ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
             <div className="px-[16px] pb-[8px] flex justify-between space-x-[8px]">
-              {[10, 50, 100, 200].map(val => (<button key={val} onClick={() => addQuickAmount(val)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{val}</button>))}
+              {recordQuickAmounts.map(val => (<button key={val} onClick={() => addQuickAmount(val)} className="flex-1 bg-white h-[36px] rounded-[8px] text-[13px] font-medium text-[#1c1c1e] shadow-sm active:bg-gray-100 transition-colors">+{formatQuickAmountLabel(val)}</button>))}
             </div>
             <div className="px-[16px] pb-[8px]">
               <div className="bg-white rounded-[10px] px-[10px] flex items-center shadow-sm h-[36px]">
